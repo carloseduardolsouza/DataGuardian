@@ -314,17 +314,22 @@ const createDatasourceSchema = z.object({
 
 ### Scripts npm disponíveis
 
-| Script              | Descrição                                        |
-|---------------------|--------------------------------------------------|
-| `npm run dev`       | Inicia com hot-reload (tsx watch)                |
-| `npm run build`     | Compila TypeScript para `dist/`                  |
-| `npm start`         | Executa o build compilado (`node dist/index.js`) |
-| `npm test`          | Executa todos os testes                          |
-| `npm run test:unit` | Apenas testes unitários                          |
-| `npm run test:int`  | Apenas testes de integração                      |
-| `npm run lint`      | ESLint em todo o projeto                         |
-| `npm run format`    | Prettier em todo o projeto                       |
-| `npm run typecheck` | TypeScript sem emitir arquivos (`tsc --noEmit`)  |
+| Script                  | Descrição                                           |
+|-------------------------|-----------------------------------------------------|
+| `npm run dev`           | Inicia com hot-reload (`tsx watch`)                 |
+| `npm run build`         | Compila TypeScript para `dist/`                     |
+| `npm start`             | Executa o build compilado (`node dist/index.js`)    |
+| `npm test`              | Executa todos os testes (Vitest)                    |
+| `npm run test:unit`     | Apenas testes unitários                             |
+| `npm run test:coverage` | Testes com relatório de cobertura                   |
+| `npm run lint`          | ESLint em todo o projeto                            |
+| `npm run format`        | Prettier em todo o projeto                          |
+| `npm run typecheck`     | TypeScript sem emitir arquivos (`tsc --noEmit`)     |
+| `npm run db:generate`   | Gera o Prisma Client após alterar schema            |
+| `npm run db:migrate`    | Cria e aplica uma nova migration (dev)              |
+| `npm run db:deploy`     | Aplica migrations pendentes (produção)              |
+| `npm run db:studio`     | Abre o Prisma Studio (GUI do banco)                 |
+| `npm run db:seed`       | Popula o banco com dados de seed                    |
 
 ### Variáveis de ambiente para desenvolvimento
 
@@ -671,14 +676,21 @@ startMeuWorker();
 ## Scripts Úteis
 
 ```bash
+# ── Banco de Dados ──────────────────────────────────────────
+# Instalar dependências
+npm install
+
+# Gerar o Prisma Client após alterar schema.prisma
+npm run db:generate
+
+# Criar e aplicar uma migration (dev)
+npm run db:migrate
+
 # Resetar o banco de desenvolvimento (APAGA TUDO)
 npx prisma migrate reset --force
 
-# Gerar o Prisma Client após alterar o schema
-npx prisma generate
-
 # Abrir o Prisma Studio (GUI para o banco)
-npx prisma studio
+npm run db:studio
 
 # Verificar status das migrations
 npx prisma migrate status
@@ -686,15 +698,43 @@ npx prisma migrate status
 # Formatar o schema.prisma
 npx prisma format
 
-# Ver todos os jobs na fila Redis
-redis-cli -u "$REDIS_URL" lrange backup-queue 0 -1
-
-# Limpar todas as filas Redis (dev apenas)
-redis-cli -u "$REDIS_URL" FLUSHDB
+# ── Desenvolvimento ──────────────────────────────────────────
+# Iniciar em modo desenvolvimento (hot-reload)
+npm run dev
 
 # Build de produção
 npm run build
 
 # Verificar tipos sem compilar
 npm run typecheck
+
+# ── Redis (quando workers estiverem ativos) ──────────────────
+# Ver todos os jobs na fila Redis
+redis-cli -u "$REDIS_URL" lrange backup-queue 0 -1
+
+# Limpar todas as filas Redis (dev apenas)
+redis-cli -u "$REDIS_URL" FLUSHDB
+
+# ── Testar a API após iniciar ────────────────────────────────
+# Status do sistema
+curl http://localhost:3000/api/health | jq
+
+# Criar um datasource PostgreSQL
+curl -X POST http://localhost:3000/api/datasources \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Banco Dev",
+    "type": "postgres",
+    "connection_config": {
+      "host": "localhost",
+      "port": 5432,
+      "database": "myapp",
+      "username": "postgres",
+      "password": "senha"
+    },
+    "tags": ["dev"]
+  }' | jq
+
+# Listar datasources
+curl http://localhost:3000/api/datasources | jq
 ```

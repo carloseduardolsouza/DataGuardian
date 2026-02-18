@@ -1,0 +1,18 @@
+{
+  "app": {
+    "port": 3000,
+    "logLevel": "info"
+  },
+  "workers": {
+    "maxConcurrentBackups": 3,
+    "schedulerIntervalMs": 60000,
+    "healthCheckIntervalMs": 300000,
+    "cleanupCron": "0 4 * * *",
+    "tempDirectory": "/tmp/dataguardian"
+  },
+  "retention": {
+    "defaultKeepDaily": 7,
+    "defaultKeepWeekly": 4,
+    "defaultKeepMonthly": 12
+  }
+}

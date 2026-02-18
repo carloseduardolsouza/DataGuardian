@@ -809,6 +809,3 @@ Com essa arquitetura definida, podemos começar a implementação na seguinte or
    - Mais storages (S3, SSH, MinIO)
    - HealthWorker + CleanupWorker
 
----
-
-**Pronto para começar?** 🚀

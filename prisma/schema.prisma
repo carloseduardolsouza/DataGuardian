@@ -1,0 +1,235 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ──────────────────────────────────────────
+// Enums
+// ──────────────────────────────────────────
+
+enum DatasourceType {
+  postgres
+  mysql
+  mongodb
+  sqlserver
+  sqlite
+  files
+}
+
+enum DatasourceStatus {
+  healthy
+  warning
+  critical
+  unknown
+}
+
+enum StorageLocationType {
+  local
+  s3
+  ssh
+  minio
+  backblaze
+}
+
+enum StorageLocationStatus {
+  healthy
+  full
+  unreachable
+}
+
+enum ExecutionStatus {
+  queued
+  running
+  completed
+  failed
+  cancelled
+}
+
+enum BackupType {
+  full
+  incremental
+  differential
+}
+
+enum HealthCheckStatus {
+  ok
+  timeout
+  auth_failed
+  unreachable
+  error
+}
+
+enum NotificationType {
+  backup_success
+  backup_failed
+  connection_lost
+  connection_restored
+  storage_full
+  storage_unreachable
+  health_degraded
+  cleanup_completed
+}
+
+enum NotificationSeverity {
+  info
+  warning
+  critical
+}
+
+enum NotificationEntityType {
+  datasource
+  backup_job
+  storage_location
+  system
+}
+
+// ──────────────────────────────────────────
+// Models
+// ──────────────────────────────────────────
+
+model Datasource {
+  id                 String           @id @default(uuid())
+  name               String           @db.VarChar(255)
+  type               DatasourceType
+  connectionConfig   Json             @map("connection_config")
+  status             DatasourceStatus @default(unknown)
+  lastHealthCheckAt  DateTime?        @map("last_health_check_at")
+  enabled            Boolean          @default(true)
+  tags               String[]
+  createdAt          DateTime         @default(now()) @map("created_at")
+  updatedAt          DateTime         @updatedAt @map("updated_at")
+
+  backupJobs       BackupJob[]
+  healthChecks     HealthCheck[]
+  backupExecutions BackupExecution[]
+
+  @@map("datasources")
+}
+
+model StorageLocation {
+  id               String                @id @default(uuid())
+  name             String                @db.VarChar(255)
+  type             StorageLocationType
+  config           Json
+  isDefault        Boolean               @default(false) @map("is_default")
+  availableSpaceGb Decimal?              @db.Decimal(10, 2) @map("available_space_gb")
+  status           StorageLocationStatus @default(healthy)
+  createdAt        DateTime              @default(now()) @map("created_at")
+  updatedAt        DateTime              @updatedAt @map("updated_at")
+
+  backupJobs       BackupJob[]
+  backupExecutions BackupExecution[]
+
+  @@map("storage_locations")
+}
+
+model BackupJob {
+  id                String          @id @default(uuid())
+  name              String          @db.VarChar(255)
+  datasourceId      String          @map("datasource_id")
+  storageLocationId String          @map("storage_location_id")
+  scheduleCron      String          @db.VarChar(100) @map("schedule_cron")
+  scheduleTimezone  String          @db.VarChar(50) @default("UTC") @map("schedule_timezone")
+  enabled           Boolean         @default(true)
+  retentionPolicy   Json            @map("retention_policy")
+  backupOptions     Json            @map("backup_options")
+  lastExecutionAt   DateTime?       @map("last_execution_at")
+  nextExecutionAt   DateTime?       @map("next_execution_at")
+  createdAt         DateTime        @default(now()) @map("created_at")
+  updatedAt         DateTime        @updatedAt @map("updated_at")
+
+  datasource       Datasource      @relation(fields: [datasourceId], references: [id])
+  storageLocation  StorageLocation @relation(fields: [storageLocationId], references: [id])
+  backupExecutions BackupExecution[]
+
+  @@index([nextExecutionAt])
+  @@map("backup_jobs")
+}
+
+model BackupExecution {
+  id                  String          @id @default(uuid())
+  jobId               String          @map("job_id")
+  datasourceId        String          @map("datasource_id")
+  storageLocationId   String          @map("storage_location_id")
+  status              ExecutionStatus @default(queued)
+  startedAt           DateTime?       @map("started_at")
+  finishedAt          DateTime?       @map("finished_at")
+  durationSeconds     Int?            @map("duration_seconds")
+  sizeBytes           BigInt?         @map("size_bytes")
+  compressedSizeBytes BigInt?         @map("compressed_size_bytes")
+  backupPath          String?         @map("backup_path")
+  backupType          BackupType      @default(full) @map("backup_type")
+  filesCount          Int?            @map("files_count")
+  errorMessage        String?         @map("error_message")
+  errorStack          String?         @map("error_stack")
+  metadata            Json?
+  createdAt           DateTime        @default(now()) @map("created_at")
+
+  job             BackupJob       @relation(fields: [jobId], references: [id])
+  datasource      Datasource      @relation(fields: [datasourceId], references: [id])
+  storageLocation StorageLocation @relation(fields: [storageLocationId], references: [id])
+  chunks          BackupChunk[]
+
+  @@index([jobId, createdAt(sort: Desc)])
+  @@index([status])
+  @@map("backup_executions")
+}
+
+model BackupChunk {
+  id          String   @id @default(uuid())
+  executionId String   @map("execution_id")
+  chunkNumber Int      @map("chunk_number")
+  filePath    String   @map("file_path")
+  sizeBytes   BigInt   @map("size_bytes")
+  checksum    String   @db.VarChar(64)
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  execution BackupExecution @relation(fields: [executionId], references: [id], onDelete: Cascade)
+
+  @@unique([executionId, chunkNumber])
+  @@map("backup_chunks")
+}
+
+model HealthCheck {
+  id           String            @id @default(uuid())
+  datasourceId String            @map("datasource_id")
+  checkedAt    DateTime          @default(now()) @map("checked_at")
+  status       HealthCheckStatus
+  latencyMs    Int?              @map("latency_ms")
+  errorMessage String?           @map("error_message")
+  metadata     Json?
+
+  datasource Datasource @relation(fields: [datasourceId], references: [id], onDelete: Cascade)
+
+  @@index([datasourceId, checkedAt(sort: Desc)])
+  @@map("health_checks")
+}
+
+model Notification {
+  id         String                 @id @default(uuid())
+  type       NotificationType
+  severity   NotificationSeverity
+  entityType NotificationEntityType @map("entity_type")
+  entityId   String                 @map("entity_id")
+  title      String                 @db.VarChar(255)
+  message    String
+  metadata   Json?
+  readAt     DateTime?              @map("read_at")
+  createdAt  DateTime               @default(now()) @map("created_at")
+
+  @@index([createdAt(sort: Desc), readAt])
+  @@map("notifications")
+}
+
+model SystemSetting {
+  key         String   @id @db.VarChar(100)
+  value       Json
+  description String?
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("system_settings")
+}

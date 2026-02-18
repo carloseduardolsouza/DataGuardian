@@ -1,0 +1,10 @@
+{
+  "app": {
+    "logLevel": "info"
+  },
+  "workers": {
+    "maxConcurrentBackups": 5,
+    "schedulerIntervalMs": 60000,
+    "healthCheckIntervalMs": 300000
+  }
+}
