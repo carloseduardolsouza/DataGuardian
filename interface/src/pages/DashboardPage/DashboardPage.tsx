@@ -3,6 +3,7 @@ import Sidebar, { type NavKey } from '../../components/Sidebar/Sidebar';
 import DatasourcesPage from '../DatasourcesPage/DatasourcesPage';
 import StoragePage     from '../StoragePage/StoragePage';
 import BackupJobsPage  from '../BackupJobsPage/BackupJobsPage';
+import ExecutionsPage  from '../ExecutionsPage/ExecutionsPage';
 import styles from './DashboardPage.module.css';
 
 interface Props {
@@ -111,7 +112,7 @@ export default function DashboardPage({ theme, onToggleTheme, onLogout }: Props)
 
         {/* Conteúdo — páginas com layout próprio usam contentFull */}
         <main className={
-          activePage === 'datasources' || activePage === 'storage' || activePage === 'backup-jobs'
+          activePage === 'datasources' || activePage === 'storage' || activePage === 'backup-jobs' || activePage === 'executions'
             ? styles.contentFull
             : styles.content
         }>
@@ -119,7 +120,8 @@ export default function DashboardPage({ theme, onToggleTheme, onLogout }: Props)
           {activePage === 'datasources'  && <DatasourcesPage />}
           {activePage === 'storage'      && <StoragePage />}
           {activePage === 'backup-jobs'  && <BackupJobsPage />}
-          {activePage !== 'dashboard' && activePage !== 'datasources' && activePage !== 'storage' && activePage !== 'backup-jobs' && (
+          {activePage === 'executions'   && <ExecutionsPage />}
+          {activePage !== 'dashboard' && activePage !== 'datasources' && activePage !== 'storage' && activePage !== 'backup-jobs' && activePage !== 'executions' && (
             <EmptyPage page={activePage} />
           )}
         </main>

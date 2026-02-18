@@ -1,0 +1,534 @@
+/* ── ExecutionsPage ──────────────────────────────────────────── */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* ── Cabeçalho ────────────────────────────────── */
+.pageHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-5) var(--space-6);
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+
+.pageTitle {
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text);
+}
+
+.pageSub {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  margin-top: 2px;
+}
+
+.deleteSelectedBtn {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 8px var(--space-4);
+  background: var(--color-danger-muted);
+  border: 1px solid var(--color-danger);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-danger);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+.deleteSelectedBtn:hover { background: var(--color-danger); color: white; }
+
+/* ── Barra de filtros ─────────────────────────── */
+.filterBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-6);
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+/* ── Status tabs ──────────────────────────────── */
+.statusTabs {
+  display: flex;
+  gap: var(--space-1);
+}
+
+.tab {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 5px var(--space-4);
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+}
+.tab:hover { background: var(--color-surface-elevated); color: var(--color-text); }
+
+.tab.tabActive {
+  background: var(--color-primary-muted);
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+  font-weight: var(--font-weight-medium);
+}
+
+/* Cores por status no tab ativo */
+.tab_running.tabActive   { background: var(--color-info-muted);    border-color: var(--color-info);    color: var(--color-info); }
+.tab_completed.tabActive { background: var(--color-success-muted);  border-color: var(--color-success);  color: var(--color-success); }
+.tab_failed.tabActive    { background: var(--color-danger-muted);   border-color: var(--color-danger);   color: var(--color-danger); }
+.tab_cancelled.tabActive { background: var(--color-warning-muted);  border-color: var(--color-warning);  color: var(--color-warning); }
+
+.tabCount {
+  font-size: var(--font-size-xs);
+  background: var(--color-surface-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  padding: 0 6px;
+  min-width: 18px;
+  text-align: center;
+}
+
+.tabActive .tabCount {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: white;
+}
+
+.tab_failed.tabActive .tabCount    { background: var(--color-danger);  border-color: var(--color-danger);  color: white; }
+.tab_running.tabActive .tabCount   { background: var(--color-info);    border-color: var(--color-info);    color: white; }
+.tab_completed.tabActive .tabCount { background: var(--color-success);  border-color: var(--color-success);  color: white; }
+.tab_cancelled.tabActive .tabCount { background: var(--color-warning);  border-color: var(--color-warning);  color: white; }
+
+/* ── Filtros direita ──────────────────────────── */
+.filterRight {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.filterSelect {
+  padding: 6px var(--space-3);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  color: var(--color-text);
+  outline: none;
+  cursor: pointer;
+  transition: border-color var(--transition-fast);
+}
+.filterSelect:focus { border-color: var(--color-primary); }
+
+.dateRange {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.dateInput {
+  padding: 6px var(--space-3);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  color: var(--color-text);
+  outline: none;
+  transition: border-color var(--transition-fast);
+  /* Remove calendário colorido nativo em dark mode */
+  color-scheme: dark;
+}
+.dateInput:focus { border-color: var(--color-primary); }
+
+.dateSep { font-size: var(--font-size-xs); color: var(--color-text-muted); }
+
+.clearBtn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px var(--space-3);
+  background: none;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+.clearBtn:hover { border-color: var(--color-danger); color: var(--color-danger); background: var(--color-danger-muted); }
+
+/* ── Tabela ───────────────────────────────────── */
+.tableWrap {
+  flex: 1;
+  overflow-y: auto;
+  background: var(--color-bg);
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table th {
+  position: sticky;
+  top: 0;
+  padding: var(--space-3) var(--space-4);
+  text-align: left;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semi);
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  white-space: nowrap;
+  z-index: 1;
+}
+
+.table td {
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--font-size-sm);
+  color: var(--color-text);
+  border-bottom: 1px solid var(--color-border-subtle);
+  vertical-align: middle;
+}
+
+.table tr:last-child td { border-bottom: none; }
+.table tbody tr:hover:not(.errorRow):not(.progressRow) td { background: var(--color-surface-elevated); }
+
+.selectedRow td  { background: var(--color-primary-muted) !important; }
+.runningRow > td { background: color-mix(in srgb, var(--color-info-muted) 30%, transparent); }
+
+.checkCol   { width: 36px; }
+.actionsCol { width: 72px; text-align: right; }
+
+/* ── Células ──────────────────────────────────── */
+.jobCell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.jobName {
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text);
+  white-space: nowrap;
+}
+.jobId {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-subtle);
+  font-family: 'JetBrains Mono', 'Consolas', monospace;
+}
+
+.dsCell {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.dsIcon {
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  font-weight: 800;
+  font-family: monospace;
+  flex-shrink: 0;
+}
+.dsIcon.postgres  { background: #336791; color: white; }
+.dsIcon.mysql     { background: #4479A1; color: white; }
+.dsIcon.mongodb   { background: #47A248; color: white; }
+.dsIcon.sqlite    { background: #044a64; color: white; }
+.dsIcon.sqlserver { background: #CC2927; color: white; }
+
+.dsName { font-size: var(--font-size-sm); color: var(--color-text); }
+
+.storageList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.storageChip {
+  font-size: var(--font-size-xs);
+  padding: 1px 7px;
+  background: var(--color-surface-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+.dateCell { white-space: nowrap; font-size: var(--font-size-sm); color: var(--color-text-muted); }
+.monoCell { font-family: 'JetBrains Mono', 'Consolas', monospace; font-size: var(--font-size-sm); color: var(--color-text-muted); white-space: nowrap; }
+
+.runningText { color: var(--color-info); font-style: italic; font-family: inherit; }
+
+/* ── Badges de status ─────────────────────────── */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: var(--radius-full);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  white-space: nowrap;
+}
+
+.badge::before {
+  content: '';
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.badgeSuccess  { background: var(--color-success-muted); color: var(--color-success); }
+.badgeSuccess::before  { background: var(--color-success); }
+
+.badgeFailed   { background: var(--color-danger-muted);  color: var(--color-danger); }
+.badgeFailed::before   { background: var(--color-danger); }
+
+.badgeRunning  { background: var(--color-info-muted);    color: var(--color-info); }
+.badgeRunning::before  {
+  background: var(--color-info);
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+.badgeCancelled { background: var(--color-warning-muted); color: var(--color-warning); }
+.badgeCancelled::before { background: var(--color-warning); }
+
+.badgeQueued   { background: var(--color-surface-elevated); color: var(--color-text-muted); }
+.badgeQueued::before   { background: var(--color-text-subtle); }
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.4; transform: scale(0.7); }
+}
+
+/* ── Linha de erro inline ─────────────────────── */
+.errorRow td {
+  padding: 0 var(--space-4) var(--space-3);
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.errorInline {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-danger-muted);
+  border: 1px solid var(--color-danger);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-xs);
+  color: var(--color-danger);
+}
+
+.errorInline svg { flex-shrink: 0; }
+.errorInline span { flex: 1; line-height: 1.4; }
+
+.logsLink {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: var(--font-size-xs);
+  color: var(--color-danger);
+  font-weight: var(--font-weight-semi);
+  white-space: nowrap;
+  text-decoration: underline;
+  padding: 0;
+  opacity: 0.8;
+  transition: opacity var(--transition-fast);
+}
+.logsLink:hover { opacity: 1; }
+
+/* ── Linha de progresso inline ────────────────── */
+.progressRow td {
+  padding: 0 var(--space-4) var(--space-3);
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.progressWrap {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.progressBar {
+  flex: 1;
+  height: 5px;
+  background: var(--color-border);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+
+.progressFill {
+  height: 100%;
+  background: var(--color-info);
+  border-radius: var(--radius-full);
+  transition: width 0.6s ease;
+  animation: shimmer 1.5s linear infinite;
+  background-image: linear-gradient(
+    90deg,
+    var(--color-info) 0%,
+    color-mix(in srgb, var(--color-info) 70%, white) 50%,
+    var(--color-info) 100%
+  );
+  background-size: 200% 100%;
+}
+
+@keyframes shimmer {
+  from { background-position: 200% 0; }
+  to   { background-position: -200% 0; }
+}
+
+.progressPct {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semi);
+  color: var(--color-info);
+  min-width: 36px;
+  text-align: right;
+}
+
+/* ── Botões de ação ───────────────────────────── */
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+.actionBtn {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  color: var(--color-text-muted);
+  transition: all var(--transition-fast);
+  opacity: 0;
+}
+
+.table tr:hover .actionBtn { opacity: 1; }
+
+.actionBtn:hover {
+  background: var(--color-surface-elevated);
+  border-color: var(--color-border);
+  color: var(--color-text);
+}
+
+.deleteBtn:hover {
+  background: var(--color-danger-muted) !important;
+  border-color: var(--color-danger) !important;
+  color: var(--color-danger) !important;
+}
+
+.actionBtn:disabled { opacity: 0.2 !important; cursor: not-allowed; }
+
+/* ── Empty state ──────────────────────────────── */
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  height: 50vh;
+  color: var(--color-text-muted);
+}
+
+.empty p    { font-size: var(--font-size-md); font-weight: var(--font-weight-semi); color: var(--color-text); }
+.empty span { font-size: var(--font-size-sm); }
+
+/* ── Paginação ────────────────────────────────── */
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) var(--space-6);
+  background: var(--color-surface);
+  border-top: 1px solid var(--color-border);
+  flex-shrink: 0;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.pagLeft {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.pagInfo {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+.pagSelect {
+  padding: 4px var(--space-3);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  color: var(--color-text);
+  outline: none;
+  cursor: pointer;
+}
+
+.pagButtons {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.pagBtn {
+  min-width: 32px;
+  height: 32px;
+  padding: 0 var(--space-2);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.pagBtn:hover:not(:disabled) { background: var(--color-surface-elevated); color: var(--color-text); border-color: var(--color-primary); }
+.pagBtn:disabled { opacity: 0.3; cursor: not-allowed; }
+.pagBtn.pagBtnActive {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: white;
+  font-weight: var(--font-weight-semi);
+}
+
+.pagEllipsis {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  padding: 0 4px;
+}
