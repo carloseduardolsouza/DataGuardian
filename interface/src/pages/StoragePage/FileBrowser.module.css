@@ -1,0 +1,353 @@
+/* ── FileBrowser — painel direito ─────────────────────────────── */
+
+.browser {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--color-bg);
+  position: relative;
+}
+
+/* ── Toolbar / breadcrumb ─────────────────────── */
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: 0 var(--space-5);
+  height: 48px;
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+
+.breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  overflow: hidden;
+}
+
+.crumbPart {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--color-text-muted);
+}
+
+.crumbPart svg { flex-shrink: 0; }
+
+.crumbBtn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: none;
+  border: none;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: var(--radius-sm);
+  transition: color var(--transition-fast), background var(--transition-fast);
+  white-space: nowrap;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.crumbBtn:hover { color: var(--color-text); background: var(--color-surface-elevated); }
+
+.crumbBtn.crumbActive {
+  color: var(--color-text);
+  font-weight: var(--font-weight-medium);
+  cursor: default;
+}
+
+.crumbBtn.crumbActive:hover { background: none; }
+
+/* ── Toolbar right ────────────────────────────── */
+.toolbarRight {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+
+.deleteSelectedBtn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  background: var(--color-danger-muted);
+  color: var(--color-danger);
+  border: 1px solid var(--color-danger);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+.deleteSelectedBtn:hover { background: var(--color-danger); color: white; }
+
+.refreshBtn {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-surface-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  color: var(--color-text-muted);
+  transition: color var(--transition-fast), background var(--transition-fast);
+}
+
+.refreshBtn:hover { color: var(--color-primary); background: var(--color-primary-muted); border-color: var(--color-primary); }
+
+/* ── Tabela ───────────────────────────────────── */
+.tableWrap {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table th {
+  position: sticky;
+  top: 0;
+  padding: var(--space-3) var(--space-4);
+  text-align: left;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semi);
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  white-space: nowrap;
+}
+
+.table td {
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--font-size-sm);
+  color: var(--color-text);
+  border-bottom: 1px solid var(--color-border-subtle);
+  white-space: nowrap;
+}
+
+.table tr:last-child td { border-bottom: none; }
+
+.table tbody tr:hover td { background: var(--color-surface-elevated); }
+
+.table .selectedRow td { background: var(--color-primary-muted); }
+
+/* ── Colunas especiais ─────────────────────────── */
+.checkCol { width: 36px; }
+.nameCol  { cursor: pointer; user-select: none; }
+.sortable { cursor: pointer; user-select: none; }
+.actionsCol { width: 48px; text-align: center; }
+
+.muted { color: var(--color-text-muted); }
+
+/* ── Nome de arquivo / pasta ──────────────────── */
+.fileCell { display: flex; align-items: center; }
+
+.folderBtn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-primary);
+  padding: 0;
+  transition: opacity var(--transition-fast);
+}
+
+.folderBtn svg { color: #e8ac30; }
+.folderBtn:hover { opacity: 0.75; }
+
+.folderCount {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  background: var(--color-surface-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  padding: 0 6px;
+  font-weight: var(--font-weight-normal);
+}
+
+.fileRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--color-text);
+}
+
+.fileRow svg { color: var(--color-text-subtle); flex-shrink: 0; }
+
+.fileName {
+  font-family: 'JetBrains Mono', 'Consolas', monospace;
+  font-size: var(--font-size-xs);
+}
+
+/* ── Botão de excluir individual ──────────────── */
+.deleteBtn {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  color: var(--color-text-subtle);
+  transition: color var(--transition-fast), background var(--transition-fast), border-color var(--transition-fast);
+  opacity: 0;
+}
+
+.table tr:hover .deleteBtn { opacity: 1; }
+
+.deleteBtn:hover {
+  color: var(--color-danger);
+  background: var(--color-danger-muted);
+  border-color: var(--color-danger);
+}
+
+/* ── Pasta vazia ──────────────────────────────── */
+.emptyDir {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  height: 60%;
+  color: var(--color-text-muted);
+}
+
+.emptyDir p { font-size: var(--font-size-md); font-weight: var(--font-weight-semi); color: var(--color-text); }
+
+.backLink {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: var(--font-size-sm);
+  color: var(--color-primary);
+  padding: 0;
+}
+
+/* ── Barra de status ──────────────────────────── */
+.statusBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px var(--space-5);
+  background: var(--color-surface);
+  border-top: 1px solid var(--color-border);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+}
+
+.selectionInfo {
+  color: var(--color-primary);
+  font-weight: var(--font-weight-medium);
+}
+
+/* ── Modal de confirmação ─────────────────────── */
+.overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  backdrop-filter: blur(2px);
+}
+
+.dialog {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-lg);
+  padding: var(--space-8) var(--space-8);
+  max-width: 420px;
+  width: 90%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.dialogIconWrap {
+  width: 52px;
+  height: 52px;
+  background: var(--color-danger-muted);
+  border-radius: var(--radius-full);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-danger);
+}
+
+.dialogIconWrap svg { width: 22px; height: 22px; }
+
+.dialogTitle {
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text);
+  text-align: center;
+}
+
+.dialogText {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  text-align: center;
+  line-height: 1.6;
+}
+
+.dialogActions {
+  display: flex;
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+}
+
+.cancelBtn {
+  padding: 8px var(--space-5);
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  font-weight: var(--font-weight-medium);
+  transition: background var(--transition-fast);
+}
+
+.cancelBtn:hover { background: var(--color-surface-elevated); color: var(--color-text); }
+
+.confirmDeleteBtn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px var(--space-5);
+  background: var(--color-danger);
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  color: white;
+  cursor: pointer;
+  font-weight: var(--font-weight-semi);
+  transition: opacity var(--transition-fast);
+}
+
+.confirmDeleteBtn:hover { opacity: 0.85; }

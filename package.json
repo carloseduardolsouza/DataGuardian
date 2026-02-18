@@ -4,9 +4,7 @@
   "description": "Self-hosted open-source backup manager for databases and files",
   "main": "dist/index.js",
   "scripts": {
-    "dev": "tsx watch --env-file=.env src/index.ts",
-    "dev:ui": "npm run dev --prefix interface",
-    "dev:all": "concurrently --names \"API,UI\" --prefix-colors \"blue,magenta\" --kill-others-on-fail \"npm run dev\" \"npm run dev:ui\"",
+    "dev": "concurrently --names \"API,UI\" --prefix-colors \"blue,magenta\" --kill-others-on-fail \"tsx watch --env-file=.env src/index.ts\" \"npm run dev --prefix interface\"",
     "build": "tsc",
     "build:all": "concurrently --names \"API,UI\" \"npm run build\" \"npm run build --prefix interface\"",
     "start": "node dist/index.js",

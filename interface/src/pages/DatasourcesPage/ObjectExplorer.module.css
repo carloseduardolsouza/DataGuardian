@@ -1,0 +1,227 @@
+/* ── ObjectExplorer — painel central (árvore) ─────────────── */
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--color-bg);
+}
+
+/* ── Cabeçalho ────────────────────────────────── */
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) var(--space-3);
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+
+.headerLeft {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.title {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semi);
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.dbName {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text);
+}
+
+.refreshBtn {
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  color: var(--color-text-muted);
+  transition: all var(--transition-fast);
+}
+
+.refreshBtn:hover {
+  background: var(--color-primary-muted);
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.refreshBtn svg {
+  width: 13px;
+  height: 13px;
+}
+
+/* ── Estado vazio / offline ───────────────────── */
+.empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-6);
+  text-align: center;
+}
+
+.emptyIcon {
+  color: var(--color-text-subtle);
+  opacity: 0.5;
+}
+
+.emptyText {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+}
+
+.emptyHint {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-subtle);
+}
+
+/* ── Árvore ───────────────────────────────────── */
+.tree {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-2) 0;
+}
+
+/* ── Schema row ───────────────────────────────── */
+.schemaRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 5px var(--space-3);
+  cursor: pointer;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semi);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  user-select: none;
+  transition: color var(--transition-fast);
+}
+
+.schemaRow:hover {
+  color: var(--color-text);
+}
+
+.chevron {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+  transition: transform var(--transition-fast);
+}
+
+.chevron.open {
+  transform: rotate(90deg);
+}
+
+/* ── Table row ────────────────────────────────── */
+.tableRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 5px var(--space-3) 5px calc(var(--space-3) + 20px);
+  cursor: pointer;
+  font-size: var(--font-size-sm);
+  color: var(--color-text);
+  border-radius: 0;
+  transition: background var(--transition-fast), color var(--transition-fast);
+  user-select: none;
+  border: none;
+  background: transparent;
+  width: 100%;
+  text-align: left;
+}
+
+.tableRow:hover {
+  background: var(--color-surface-elevated);
+}
+
+.tableRow.active {
+  background: var(--color-primary-muted);
+  color: var(--color-primary);
+  font-weight: var(--font-weight-medium);
+}
+
+.tableIcon {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+}
+
+.tableRow.active .tableIcon {
+  color: var(--color-primary);
+}
+
+.tableName {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tableRowCount {
+  font-size: var(--font-size-2xs);
+  color: var(--color-text-subtle);
+  flex-shrink: 0;
+}
+
+/* ── Column rows (quando tabela expandida) ────── */
+.columnsWrap {
+  padding-left: calc(var(--space-3) + 32px);
+}
+
+.columnRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 3px var(--space-3) 3px 0;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+}
+
+.colIcon {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+}
+
+.colName {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.colType {
+  font-size: var(--font-size-2xs);
+  color: var(--color-text-subtle);
+  font-family: monospace;
+}
+
+.colBadge {
+  font-size: 9px;
+  padding: 0 4px;
+  border-radius: 3px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.colBadge.pk { background: var(--color-warning-muted); color: var(--color-warning); }
+.colBadge.fk { background: var(--color-info-muted);    color: var(--color-info); }
+.colBadge.uk { background: var(--color-primary-muted); color: var(--color-primary); }

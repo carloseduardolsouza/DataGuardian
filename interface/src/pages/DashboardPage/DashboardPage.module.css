@@ -85,6 +85,14 @@
   overflow-y: auto;
 }
 
+/* Modo full-height sem padding — usado por páginas com layout próprio */
+.contentFull {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
 /* ── Seção de cards de stats ──────────────────── */
 .statsGrid {
   display: grid;

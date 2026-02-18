@@ -1,0 +1,259 @@
+/* ── StorageList — painel esquerdo ───────────────────────────────── */
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--color-surface);
+}
+
+/* ── Cabeçalho ────────────────────────────────── */
+.header {
+  padding: var(--space-4) var(--space-4) var(--space-3);
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+
+.headerTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-3);
+}
+
+.title {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semi);
+  color: var(--color-text);
+}
+
+.addBtn {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-primary-muted);
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  color: var(--color-primary);
+  transition: background var(--transition-fast);
+}
+
+.addBtn:hover {
+  background: var(--color-primary);
+  color: var(--color-text-on-primary);
+}
+
+.addBtn svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* ── Busca ────────────────────────────────────── */
+.searchWrap {
+  position: relative;
+}
+
+.searchIcon {
+  position: absolute;
+  left: 9px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 13px;
+  height: 13px;
+  color: var(--color-text-subtle);
+  pointer-events: none;
+}
+
+.searchInput {
+  width: 100%;
+  padding: 6px 10px 6px 28px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-sm);
+  color: var(--color-text);
+  outline: none;
+  transition: border-color var(--transition-fast);
+  box-sizing: border-box;
+}
+
+.searchInput::placeholder { color: var(--color-text-subtle); }
+.searchInput:focus        { border-color: var(--color-primary); }
+
+/* ── Lista ────────────────────────────────────── */
+.list {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-2);
+}
+
+.empty {
+  text-align: center;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  padding: var(--space-8) 0;
+}
+
+/* ── Card ─────────────────────────────────────── */
+.card {
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  border: 1.5px solid transparent;
+  margin-bottom: var(--space-1);
+  transition: background var(--transition-fast), border-color var(--transition-fast);
+}
+
+.card:hover   { background: var(--color-surface-elevated); }
+.card.selected {
+  background: var(--color-primary-muted);
+  border-color: var(--color-primary);
+}
+
+/* ── Topo do card ─────────────────────────────── */
+.cardTop {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.typeIcon {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  font-family: 'JetBrains Mono', 'Consolas', monospace;
+  flex-shrink: 0;
+}
+
+.typeIcon.local     { background: #2d6a4f; color: #b7e4c7; }
+.typeIcon.ssh       { background: #1b4332; color: #74c69d; }
+.typeIcon.s3        { background: #7b2d00; color: #ffba08; }
+.typeIcon.minio     { background: #b5179e; color: #f7c5f0; }
+.typeIcon.backblaze { background: #0f4c81; color: #90e0ef; }
+
+.cardMeta {
+  flex: 1;
+  min-width: 0;
+}
+
+.cardNameRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: 2px;
+}
+
+.cardName {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semi);
+  color: var(--color-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.defaultBadge {
+  font-size: var(--font-size-2xs);
+  padding: 1px 5px;
+  border-radius: var(--radius-full);
+  background: var(--color-primary-muted);
+  color: var(--color-primary);
+  font-weight: var(--font-weight-semi);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.cardPath {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
+}
+
+/* ── Status dot ───────────────────────────────── */
+.statusDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-top: 4px;
+}
+
+.statusDot.healthy  { background: var(--color-success); box-shadow: 0 0 0 2px var(--color-success-muted); }
+.statusDot.warning  { background: var(--color-warning); box-shadow: 0 0 0 2px var(--color-warning-muted); }
+.statusDot.critical { background: var(--color-danger);  box-shadow: 0 0 0 2px var(--color-danger-muted); }
+.statusDot.unknown  { background: var(--color-text-subtle); }
+
+/* ── Disco ────────────────────────────────────── */
+.diskWrap {
+  margin-bottom: var(--space-2);
+}
+
+.diskBar {
+  height: 5px;
+  background: var(--color-border);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+  margin-bottom: 4px;
+}
+
+.diskFill {
+  height: 100%;
+  border-radius: var(--radius-full);
+  transition: width var(--transition-base);
+}
+
+.diskFill.ok      { background: var(--color-success); }
+.diskFill.warning { background: var(--color-warning); }
+.diskFill.danger  { background: var(--color-danger); }
+
+.diskText {
+  display: flex;
+  justify-content: space-between;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+}
+
+.diskTotal { color: var(--color-text-subtle); }
+
+.pctBadge {
+  display: inline-block;
+  font-size: var(--font-size-2xs);
+  font-weight: var(--font-weight-semi);
+  padding: 1px 5px;
+  border-radius: var(--radius-full);
+  margin-top: 3px;
+}
+
+.pctBadge.ok      { background: var(--color-success-muted); color: var(--color-success); }
+.pctBadge.warning { background: var(--color-warning-muted); color: var(--color-warning); }
+.pctBadge.danger  { background: var(--color-danger-muted);  color: var(--color-danger); }
+
+/* ── Rodapé do card ───────────────────────────── */
+.cardFooter {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.footerMeta {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.offlineText { color: var(--color-danger); }

@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import Sidebar, { type NavKey } from '../../components/Sidebar/Sidebar';
+import DatasourcesPage from '../DatasourcesPage/DatasourcesPage';
+import StoragePage     from '../StoragePage/StoragePage';
 import styles from './DashboardPage.module.css';
 
 interface Props {
@@ -106,11 +108,16 @@ export default function DashboardPage({ theme, onToggleTheme, onLogout }: Props)
           </div>
         </header>
 
-        {/* Conteúdo — mostra Dashboard se for a página inicial */}
-        <main className={styles.content}>
-          {activePage === 'dashboard' ? (
-            <DashboardContent />
-          ) : (
+        {/* Conteúdo — páginas com layout próprio usam contentFull */}
+        <main className={
+          activePage === 'datasources' || activePage === 'storage'
+            ? styles.contentFull
+            : styles.content
+        }>
+          {activePage === 'dashboard'   && <DashboardContent />}
+          {activePage === 'datasources' && <DatasourcesPage />}
+          {activePage === 'storage'     && <StoragePage />}
+          {activePage !== 'dashboard' && activePage !== 'datasources' && activePage !== 'storage' && (
             <EmptyPage page={activePage} />
           )}
         </main>
