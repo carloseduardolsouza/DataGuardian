@@ -321,6 +321,8 @@ backup-manager/
 │   ├── migrations/                # Migrations automáticas
 │   └── seed.ts                    # Dados iniciais (opcional)
 │
+├── interface/                     # interface em react
+│
 ├── src/
 │   │
 │   ├── api/                       # Express REST API
@@ -401,6 +403,7 @@ backup-manager/
 ├── config/
 │   ├── default.json               # Configs padrão
 │   └── production.json            # Configs de produção
+│   └── development.json           # Configs de desenvolvimento
 │
 ├── docker/
 │   ├── Dockerfile                 # Build da aplicação
