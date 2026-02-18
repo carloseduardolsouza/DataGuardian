@@ -2,10 +2,6 @@ import { Request, Response, NextFunction } from 'express';
 import { ZodSchema, ZodError } from 'zod';
 import { AppError } from './error-handler';
 
-// ──────────────────────────────────────────
-// Factory de middleware de validação com Zod
-// ──────────────────────────────────────────
-
 type RequestPart = 'body' | 'params' | 'query';
 
 /**

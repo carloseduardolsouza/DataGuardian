@@ -1,30 +1,35 @@
-version: '3.8'
+version: "3.8"
 
 services:
   # Banco de metadados
   postgres:
     image: postgres:16-alpine
-    container_name: backup-manager-db
+    container_name: data-guardian-postgres
     restart: unless-stopped
+    env_file:
+      - .env
     environment:
       POSTGRES_DB: backup_manager
-      POSTGRES_USER: backup
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-backup123}
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-DataGuardian123!}
     volumes:
       - postgres-data:/var/lib/postgresql/data
     ports:
       - "5432:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U backup"]
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - data-guardian-network
 
-  # Redis para filas
+  # Redis para filas e cache
   redis:
     image: redis:7-alpine
-    container_name: backup-manager-redis
+    container_name: data-guardian-redis
     restart: unless-stopped
+    command: ["redis-server", "--save", "60", "1", "--loglevel", "warning"]
     volumes:
       - redis-data:/data
     ports:
@@ -34,42 +39,55 @@ services:
       interval: 10s
       timeout: 3s
       retries: 5
+    networks:
+      - data-guardian-network
 
   # Aplicação (API + Workers)
   app:
     build:
       context: .
       dockerfile: docker/Dockerfile
-    container_name: backup-manager-app
+    container_name: data-guardian-app
     restart: unless-stopped
-    ports:
-      - "3000:3000"
-    volumes:
-      # Volume para backups locais
-      - backup-storage:/var/backups
-      # Volume para configs persistentes
-      - ./config:/app/config:ro
+    env_file:
+      - .env
     environment:
       NODE_ENV: production
-      DATABASE_URL: postgresql://backup:${DB_PASSWORD:-backup123}@postgres:5432/backup_manager
+      DATABASE_URL: postgresql://root:${DB_PASSWORD}@postgres:5432/backup_manager
       REDIS_URL: redis://redis:6379
       PORT: 3000
       LOG_LEVEL: info
+    ports:
+      - "3000:3000"
+    volumes:
+      - backup-storage:/var/backups
+      - ./config:/app/config:ro
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/health"]
+      test:
+        [
+          "CMD",
+          "wget",
+          "--quiet",
+          "--tries=1",
+          "--spider",
+          "http://localhost:3000/health",
+        ]
       interval: 30s
       timeout: 10s
       retries: 3
+    networks:
+      - data-guardian-network
 
 volumes:
   postgres-data:
-    driver: local
   redis-data:
-    driver: local
   backup-storage:
-    driver: local
+
+networks:
+  data-guardian-network:
+    driver: bridge

@@ -1,0 +1,68 @@
+import { Request, Response, NextFunction } from 'express';
+import {
+  listStorageLocations,
+  createStorageLocation,
+  findStorageLocationById,
+  updateStorageLocation,
+  deleteStorageLocation,
+  testStorageConnection,
+} from '../models/storage-location.model';
+import { getPaginationParams, buildPaginatedResponse } from '../../utils/config';
+
+export const StorageLocationController = {
+  async list(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { page, limit, skip } = getPaginationParams(req.query);
+      const { type, status } = req.query as Record<string, string | undefined>;
+      const { items, total } = await listStorageLocations({ type, status }, skip, limit);
+      res.json(buildPaginatedResponse(items, total, page, limit));
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async create(req: Request, res: Response, next: NextFunction) {
+    try {
+      const storageLocation = await createStorageLocation(req.body);
+      res.status(201).json(storageLocation);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async findById(req: Request, res: Response, next: NextFunction) {
+    try {
+      const storageLocation = await findStorageLocationById(req.params.id);
+      res.json(storageLocation);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async update(req: Request, res: Response, next: NextFunction) {
+    try {
+      const storageLocation = await updateStorageLocation(req.params.id, req.body);
+      res.json(storageLocation);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async remove(req: Request, res: Response, next: NextFunction) {
+    try {
+      await deleteStorageLocation(req.params.id);
+      res.status(204).send();
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async testConnection(req: Request, res: Response, next: NextFunction) {
+    try {
+      const result = await testStorageConnection(req.params.id);
+      res.status(501).json(result);
+    } catch (err) {
+      next(err);
+    }
+  },
+};

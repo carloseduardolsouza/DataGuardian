@@ -1,6 +1,6 @@
 import { prisma } from './lib/prisma';
 import { createApp } from './api/server';
-import { seedDefaultSettings } from './api/routes/system';
+import { seedDefaultSettings } from './api/models/system.model';
 import { config } from './utils/config';
 import { logger } from './utils/logger';
 
