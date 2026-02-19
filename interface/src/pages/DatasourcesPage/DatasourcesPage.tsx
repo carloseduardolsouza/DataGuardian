@@ -58,10 +58,40 @@ function getSchemaPrerequisiteError(
   return null;
 }
 
+const SCHEMA_CACHE_PREFIX = 'dg-schema-cache:v1:';
+
+function getSchemaCacheKey(datasourceId: string) {
+  return `${SCHEMA_CACHE_PREFIX}${datasourceId}`;
+}
+
+function readSchemaCache(datasourceId: string): ApiSchema[] | null {
+  try {
+    const raw = localStorage.getItem(getSchemaCacheKey(datasourceId));
+    if (!raw) return null;
+
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return null;
+    return parsed as ApiSchema[];
+  } catch {
+    return null;
+  }
+}
+
+function writeSchemaCache(datasourceId: string, schemas: ApiSchema[]) {
+  try {
+    localStorage.setItem(getSchemaCacheKey(datasourceId), JSON.stringify(schemas));
+  } catch {
+    /* sem acesso ao localStorage */
+  }
+}
+
 interface DetailProps {
   datasource: ApiDatasource;
   detail: ApiDatasourceDetail | null;
   loadingDetail: boolean;
+  loadingSchema: boolean;
+  schemaError: string | null;
+  schemaCount: number;
   onEdit: () => void;
   onDelete: () => void;
   onTest: () => void;
@@ -73,12 +103,29 @@ function DatasourceDetail({
   datasource,
   detail,
   loadingDetail,
+  loadingSchema,
+  schemaError,
+  schemaCount,
   onEdit,
   onDelete,
   onTest,
   testing,
   testResult,
 }: DetailProps) {
+  const connectionStatusLabel = STATUS_LABELS[datasource.status] ?? 'Desconhecido';
+  const connectionStatusClass = styles[`status_${datasource.status}`];
+
+  const schemaStatus = loadingSchema
+    ? { label: 'Atualizando...', cls: styles.status_warning }
+    : schemaError
+      ? { label: 'Erro', cls: styles.status_critical }
+      : { label: `${schemaCount} schema(s)`, cls: styles.status_healthy };
+
+  const canRunQuery =
+    !loadingDetail
+    && !schemaError
+    && (datasource.type === 'postgres' || datasource.type === 'mysql');
+
   return (
     <div className={styles.detailPanel}>
       <div className={styles.detailHeader}>
@@ -116,6 +163,30 @@ function DatasourceDetail({
             : 'Falha na conexao'}
         </div>
       )}
+
+      <div className={styles.detailSection}>
+        <p className={styles.detailSectionTitle}>Status do Banco</p>
+        <div className={styles.statusGrid}>
+          <div className={styles.statusItem}>
+            <span className={styles.statusItemLabel}>Conexao</span>
+            <span className={`${styles.statusItemValue} ${connectionStatusClass}`}>
+              {connectionStatusLabel}
+            </span>
+          </div>
+          <div className={styles.statusItem}>
+            <span className={styles.statusItemLabel}>Schema</span>
+            <span className={`${styles.statusItemValue} ${schemaStatus.cls}`}>
+              {schemaStatus.label}
+            </span>
+          </div>
+          <div className={styles.statusItem}>
+            <span className={styles.statusItemLabel}>Query SQL</span>
+            <span className={`${styles.statusItemValue} ${canRunQuery ? styles.status_healthy : styles.status_warning}`}>
+              {canRunQuery ? 'Disponivel' : 'Indisponivel'}
+            </span>
+          </div>
+        </div>
+      </div>
 
       <div className={styles.detailSection}>
         <p className={styles.detailSectionTitle}>Configuracao de Conexao</p>
@@ -210,22 +281,36 @@ export default function DatasourcesPage() {
     void loadDatasources();
   }, [loadDatasources]);
 
-  const loadSchema = useCallback(async (ds: ApiDatasource, dsDetail: ApiDatasourceDetail | null) => {
-    setSchemas([]);
+  const loadSchema = useCallback(async (
+    ds: ApiDatasource,
+    dsDetail: ApiDatasourceDetail | null,
+    forceRefresh = false,
+  ) => {
     setSchemaError(null);
     setSelectedTable(null);
 
     const configError = getSchemaPrerequisiteError(ds, dsDetail);
     if (configError) {
+      setSchemas([]);
       setSchemaError(configError);
       return;
+    }
+
+    if (!forceRefresh) {
+      const cachedSchemas = readSchemaCache(ds.id);
+      if (cachedSchemas) {
+        setSchemas(cachedSchemas);
+        return;
+      }
     }
 
     try {
       setLoadingSchema(true);
       const data = await datasourceApi.schema(ds.id);
       setSchemas(data);
+      writeSchemaCache(ds.id, data);
     } catch (err) {
+      setSchemas([]);
       setSchemaError(err instanceof Error ? err.message : 'Erro ao carregar schema');
     } finally {
       setLoadingSchema(false);
@@ -244,7 +329,7 @@ export default function DatasourcesPage() {
           datasourceApi.getById(ds.id),
         ]);
         setDetail(detailData);
-        await loadSchema(ds, detailData);
+        await loadSchema(ds, detailData, false);
       } catch {
         setDetail(null);
         setSchemaError('Erro ao carregar detalhes da conexao.');
@@ -357,6 +442,9 @@ export default function DatasourcesPage() {
             datasource={selectedDs}
             detail={detail}
             loadingDetail={loadingDetail}
+            loadingSchema={loadingSchema}
+            schemaError={schemaError}
+            schemaCount={schemas.length}
             onEdit={() => handleEdit(selectedDs)}
             onDelete={() => handleDelete(selectedDs)}
             onTest={handleTest}
@@ -383,7 +471,7 @@ export default function DatasourcesPage() {
                 error={schemaError}
                 selectedTable={selectedTable}
                 onSelectTable={setSelectedTable}
-                onRefresh={() => void loadSchema(selectedDs, detail)}
+                onRefresh={() => void loadSchema(selectedDs, detail, true)}
               />
             </div>
             <div className={styles.queryPane}>

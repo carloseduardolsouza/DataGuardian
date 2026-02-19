@@ -32,6 +32,14 @@ export default function DatasourceList({
     ds.tags.some(t => t.toLowerCase().includes(search.toLowerCase())),
   );
 
+  const statusCounts = filtered.reduce<Record<'healthy' | 'warning' | 'critical' | 'unknown', number>>(
+    (acc, ds) => {
+      acc[ds.status] += 1;
+      return acc;
+    },
+    { healthy: 0, warning: 0, critical: 0, unknown: 0 },
+  );
+
   return (
     <div className={styles.panel}>
       {/* Cabeçalho */}
@@ -51,6 +59,20 @@ export default function DatasourceList({
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
+        </div>
+        <div className={styles.statusSummary}>
+          <span className={`${styles.summaryBadge} ${styles.status_healthy}`}>
+            Saudavel: {statusCounts.healthy}
+          </span>
+          <span className={`${styles.summaryBadge} ${styles.status_warning}`}>
+            Atencao: {statusCounts.warning}
+          </span>
+          <span className={`${styles.summaryBadge} ${styles.status_critical}`}>
+            Critico: {statusCounts.critical}
+          </span>
+          <span className={`${styles.summaryBadge} ${styles.status_unknown}`}>
+            Desconhecido: {statusCounts.unknown}
+          </span>
         </div>
       </div>
 
