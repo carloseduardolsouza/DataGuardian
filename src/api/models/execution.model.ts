@@ -268,5 +268,16 @@ export async function retryExecutionUpload(id: string) {
     );
   }
 
-  return retryExecutionUploadNow(id);
+  try {
+    return await retryExecutionUploadNow(id);
+  } catch (err) {
+    if (err instanceof AppError && err.errorCode === 'EXECUTION_ALREADY_PROCESSING') {
+      return {
+        execution_id: id,
+        status: 'running',
+        message: 'Execucao ja esta em andamento',
+      };
+    }
+    throw err;
+  }
 }

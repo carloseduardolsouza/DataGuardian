@@ -1,67 +1,72 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { AppError } from '../middlewares/error-handler';
+import { getDefaultTempDirectory } from '../../utils/runtime';
 
-// ──────────────────────────────────────────
-// Configurações padrão do sistema
-// ──────────────────────────────────────────
-
-export const DEFAULT_SETTINGS: Record<string, { value: unknown; description: string }> = {
-  'notifications.email_enabled': {
-    value:       false,
-    description: 'Habilitar envio de alertas por e-mail',
-  },
-  'notifications.email_smtp_config': {
-    value: {
-      host:     '',
-      port:     587,
-      user:     '',
-      password: '',
-      from:     '',
-      to:       [],
+export function getDefaultSettings(): Record<string, { value: unknown; description: string }> {
+  return {
+    'notifications.email_enabled': {
+      value: false,
+      description: 'Habilitar envio de alertas por e-mail',
     },
-    description: 'Configuração do servidor SMTP para envio de e-mails',
-  },
-  'notifications.webhook_url': {
-    value:       null,
-    description: 'URL de webhook para notificações (Slack, Discord, etc.)',
-  },
-  'system.max_concurrent_backups': {
-    value:       3,
-    description: 'Número máximo de backups executando em paralelo',
-  },
-  'system.temp_directory': {
-    value:       '/tmp/dataguardian',
-    description: 'Diretório temporário para staging durante o backup',
-  },
-  'system.health_check_interval_ms': {
-    value:       300000,
-    description: 'Intervalo em milissegundos entre health checks (padrão: 5 min)',
-  },
-  'system.scheduler_interval_ms': {
-    value:       60000,
-    description: 'Intervalo em milissegundos do scheduler (padrão: 1 min)',
-  },
-};
-
-// ──────────────────────────────────────────
-// Helper: garante que as configurações padrão existam
-// ──────────────────────────────────────────
+    'notifications.email_smtp_config': {
+      value: {
+        host: '',
+        port: 587,
+        user: '',
+        password: '',
+        from: '',
+        to: [],
+      },
+      description: 'Configuracao do servidor SMTP para envio de e-mails',
+    },
+    'notifications.webhook_url': {
+      value: null,
+      description: 'URL de webhook para notificacoes (Slack, Discord, etc.)',
+    },
+    'notifications.whatsapp_enabled': {
+      value: false,
+      description: 'Habilitar envio de notificacoes importantes via WhatsApp',
+    },
+    'notifications.whatsapp_evolution_config': {
+      value: {
+        api_url: 'http://localhost:8080',
+        api_key: '',
+        instance: '',
+        to: [],
+        important_only: true,
+      },
+      description: 'Configuracao da Evolution API para notificacoes WhatsApp',
+    },
+    'system.max_concurrent_backups': {
+      value: 3,
+      description: 'Numero maximo de backups executando em paralelo',
+    },
+    'system.temp_directory': {
+      value: getDefaultTempDirectory(),
+      description: 'Diretorio temporario para staging durante o backup',
+    },
+    'system.health_check_interval_ms': {
+      value: 300000,
+      description: 'Intervalo em milissegundos entre health checks (padrao: 5 min)',
+    },
+    'system.scheduler_interval_ms': {
+      value: 60000,
+      description: 'Intervalo em milissegundos do scheduler (padrao: 1 min)',
+    },
+  };
+}
 
 export async function seedDefaultSettings(): Promise<void> {
-  const upserts = Object.entries(DEFAULT_SETTINGS).map(([key, { value, description }]) =>
+  const upserts = Object.entries(getDefaultSettings()).map(([key, { value, description }]) =>
     prisma.systemSetting.upsert({
-      where:  { key },
+      where: { key },
       update: {},
       create: { key, value: value as Prisma.InputJsonValue, description },
     }),
   );
   await Promise.all(upserts);
 }
-
-// ──────────────────────────────────────────
-// Model functions
-// ──────────────────────────────────────────
 
 type SettingsMap = Record<string, { value: unknown; description: string | null; updated_at: string }>;
 
@@ -72,66 +77,106 @@ export interface SystemSettingItem {
   updated_at: string;
 }
 
-function maskSmtpPassword(settings: SettingsMap): SettingsMap {
+function maskSensitiveSettings(settings: SettingsMap): SettingsMap {
   const result = { ...settings };
+
   const smtpKey = 'notifications.email_smtp_config';
   if (result[smtpKey]) {
-    const v = { ...(result[smtpKey].value as Record<string, unknown>) };
-    if (v.password) v.password = '**********';
-    result[smtpKey] = { ...result[smtpKey], value: v };
+    const value = { ...(result[smtpKey].value as Record<string, unknown>) };
+    if (value.password) value.password = '**********';
+    result[smtpKey] = { ...result[smtpKey], value };
   }
+
+  const waKey = 'notifications.whatsapp_evolution_config';
+  if (result[waKey]) {
+    const value = { ...(result[waKey].value as Record<string, unknown>) };
+    if (value.api_key) value.api_key = '**********';
+    result[waKey] = { ...result[waKey], value };
+  }
+
   return result;
 }
 
-function maskSmtpPasswordForItem(item: SystemSettingItem): SystemSettingItem {
-  if (item.key !== 'notifications.email_smtp_config') return item;
-  const value = { ...(item.value as Record<string, unknown>) };
-  if (value.password) value.password = '**********';
-  return { ...item, value };
+function maskSensitiveSettingItem(item: SystemSettingItem): SystemSettingItem {
+  if (item.key === 'notifications.email_smtp_config') {
+    const value = { ...(item.value as Record<string, unknown>) };
+    if (value.password) value.password = '**********';
+    return { ...item, value };
+  }
+
+  if (item.key === 'notifications.whatsapp_evolution_config') {
+    const value = { ...(item.value as Record<string, unknown>) };
+    if (value.api_key) value.api_key = '**********';
+    return { ...item, value };
+  }
+
+  return item;
 }
 
 async function normalizeSmtpConfigValueForPersist(value: unknown): Promise<Prisma.InputJsonValue> {
-  const smtpKey = 'notifications.email_smtp_config';
+  const key = 'notifications.email_smtp_config';
   const incoming = (value ?? {}) as Record<string, unknown>;
-  const current = await prisma.systemSetting.findUnique({ where: { key: smtpKey } });
+  const current = await prisma.systemSetting.findUnique({ where: { key } });
   const currentValue = (current?.value ?? {}) as Record<string, unknown>;
 
   const merged = { ...incoming };
   const incomingPassword = merged.password;
-
   if (incomingPassword === '**********' || incomingPassword === '' || incomingPassword === undefined) {
-    if (currentValue.password) {
-      merged.password = currentValue.password;
-    } else {
-      delete merged.password;
-    }
+    if (currentValue.password) merged.password = currentValue.password;
+    else delete merged.password;
   }
 
   return merged as Prisma.InputJsonValue;
 }
 
+async function normalizeWhatsappConfigValueForPersist(value: unknown): Promise<Prisma.InputJsonValue> {
+  const key = 'notifications.whatsapp_evolution_config';
+  const incoming = (value ?? {}) as Record<string, unknown>;
+  const current = await prisma.systemSetting.findUnique({ where: { key } });
+  const currentValue = (current?.value ?? {}) as Record<string, unknown>;
+
+  const merged = { ...incoming };
+  const incomingApiKey = merged.api_key;
+  if (incomingApiKey === '**********' || incomingApiKey === '' || incomingApiKey === undefined) {
+    if (currentValue.api_key) merged.api_key = currentValue.api_key;
+    else delete merged.api_key;
+  }
+
+  return merged as Prisma.InputJsonValue;
+}
+
+async function normalizeSettingValueForPersist(key: string, value: unknown): Promise<Prisma.InputJsonValue> {
+  if (key === 'notifications.email_smtp_config') {
+    return normalizeSmtpConfigValueForPersist(value);
+  }
+  if (key === 'notifications.whatsapp_evolution_config') {
+    return normalizeWhatsappConfigValueForPersist(value);
+  }
+  return value as Prisma.InputJsonValue;
+}
+
 export async function getSystemSettings(): Promise<SettingsMap> {
   const settings = await prisma.systemSetting.findMany({ orderBy: { key: 'asc' } });
-
   const result: SettingsMap = {};
-  for (const s of settings) {
-    result[s.key] = {
-      value:       s.value,
-      description: s.description,
-      updated_at:  s.updatedAt.toISOString(),
+
+  for (const setting of settings) {
+    result[setting.key] = {
+      value: setting.value,
+      description: setting.description,
+      updated_at: setting.updatedAt.toISOString(),
     };
   }
 
-  return maskSmtpPassword(result);
+  return maskSensitiveSettings(result);
 }
 
 export async function getSystemSettingByKey(key: string): Promise<SystemSettingItem> {
   const setting = await prisma.systemSetting.findUnique({ where: { key } });
   if (!setting) {
-    throw new AppError('NOT_FOUND', 404, `Configuração '${key}' não encontrada.`);
+    throw new AppError('NOT_FOUND', 404, `Configuracao '${key}' nao encontrada.`);
   }
 
-  return maskSmtpPasswordForItem({
+  return maskSensitiveSettingItem({
     key: setting.key,
     value: setting.value,
     description: setting.description,
@@ -146,18 +191,18 @@ export async function createSystemSetting(data: {
 }): Promise<SystemSettingItem> {
   const existing = await prisma.systemSetting.findUnique({ where: { key: data.key } });
   if (existing) {
-    throw new AppError('CONFLICT', 409, `Configuração '${data.key}' já existe.`);
+    throw new AppError('CONFLICT', 409, `Configuracao '${data.key}' ja existe.`);
   }
 
   const created = await prisma.systemSetting.create({
     data: {
       key: data.key,
-      value: data.value as Prisma.InputJsonValue,
+      value: await normalizeSettingValueForPersist(data.key, data.value),
       description: data.description ?? null,
     },
   });
 
-  return maskSmtpPasswordForItem({
+  return maskSensitiveSettingItem({
     key: created.key,
     value: created.value,
     description: created.description,
@@ -166,34 +211,34 @@ export async function createSystemSetting(data: {
 }
 
 export async function updateSystemSettings(updates: Record<string, unknown>): Promise<SettingsMap> {
-  const upserts = await Promise.all(Object.entries(updates).map(async ([key, value]) =>
-    prisma.systemSetting.upsert({
-      where:  { key },
-      create: {
-        key,
-        value:       key === 'notifications.email_smtp_config'
-          ? await normalizeSmtpConfigValueForPersist(value)
-          : value as Prisma.InputJsonValue,
-        description: DEFAULT_SETTINGS[key]?.description ?? null,
-      },
-      update: {
-        value: key === 'notifications.email_smtp_config'
-          ? await normalizeSmtpConfigValueForPersist(value)
-          : value as Prisma.InputJsonValue,
-      },
-    }),
-  ));
+  const defaults = getDefaultSettings();
+
+  const upserts = await Promise.all(
+    Object.entries(updates).map(async ([key, value]) =>
+      prisma.systemSetting.upsert({
+        where: { key },
+        create: {
+          key,
+          value: await normalizeSettingValueForPersist(key, value),
+          description: defaults[key]?.description ?? null,
+        },
+        update: {
+          value: await normalizeSettingValueForPersist(key, value),
+        },
+      }),
+    ),
+  );
 
   const result: SettingsMap = {};
-  for (const s of upserts) {
-    result[s.key] = {
-      value:       s.value,
-      description: s.description,
-      updated_at:  s.updatedAt.toISOString(),
+  for (const setting of upserts) {
+    result[setting.key] = {
+      value: setting.value,
+      description: setting.description,
+      updated_at: setting.updatedAt.toISOString(),
     };
   }
 
-  return result;
+  return maskSensitiveSettings(result);
 }
 
 export async function updateSystemSettingByKey(
@@ -202,22 +247,20 @@ export async function updateSystemSettingByKey(
 ): Promise<SystemSettingItem> {
   const current = await prisma.systemSetting.findUnique({ where: { key } });
   if (!current) {
-    throw new AppError('NOT_FOUND', 404, `Configuração '${key}' não encontrada.`);
+    throw new AppError('NOT_FOUND', 404, `Configuracao '${key}' nao encontrada.`);
   }
 
   const updated = await prisma.systemSetting.update({
     where: { key },
     data: {
       ...(patch.value !== undefined && {
-        value: key === 'notifications.email_smtp_config'
-          ? await normalizeSmtpConfigValueForPersist(patch.value)
-          : patch.value as Prisma.InputJsonValue,
+        value: await normalizeSettingValueForPersist(key, patch.value),
       }),
       ...(patch.description !== undefined && { description: patch.description }),
     },
   });
 
-  return maskSmtpPasswordForItem({
+  return maskSensitiveSettingItem({
     key: updated.key,
     value: updated.value,
     description: updated.description,
@@ -228,7 +271,7 @@ export async function updateSystemSettingByKey(
 export async function deleteSystemSettingByKey(key: string): Promise<void> {
   const existing = await prisma.systemSetting.findUnique({ where: { key } });
   if (!existing) {
-    throw new AppError('NOT_FOUND', 404, `Configuração '${key}' não encontrada.`);
+    throw new AppError('NOT_FOUND', 404, `Configuracao '${key}' nao encontrada.`);
   }
 
   await prisma.systemSetting.delete({ where: { key } });
@@ -241,20 +284,19 @@ export async function testSmtpConnection() {
 
   if (!emailEnabled?.value) {
     return {
-      status:  400,
+      status: 400,
       body: {
-        error:   'EMAIL_NOT_CONFIGURED',
-        message: 'E-mail não está habilitado. Configure notifications.email_enabled = true e o SMTP antes de testar.',
+        error: 'EMAIL_NOT_CONFIGURED',
+        message: 'E-mail nao esta habilitado. Configure notifications.email_enabled = true e o SMTP antes de testar.',
       },
     };
   }
 
-  // TODO: Implementar envio real via nodemailer quando disponível.
   return {
     status: 501,
     body: {
-      error:   'NOT_IMPLEMENTED',
-      message: 'Envio de e-mail de teste ainda não implementado. Será ativado junto com o sistema de notificações.',
+      error: 'NOT_IMPLEMENTED',
+      message: 'Envio de e-mail de teste ainda nao implementado. Sera ativado junto com o sistema de notificacoes.',
     },
   };
 }

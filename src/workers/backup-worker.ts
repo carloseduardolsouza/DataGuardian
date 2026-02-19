@@ -1,6 +1,5 @@
 ﻿import { createHash } from 'node:crypto';
 import { createReadStream, promises as fs } from 'node:fs';
-import * as os from 'node:os';
 import * as path from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import { DatasourceType, Prisma } from '@prisma/client';
@@ -8,6 +7,8 @@ import { Worker } from 'bullmq';
 import { prisma } from '../lib/prisma';
 import { logger } from '../utils/logger';
 import { testDatasourceConnection } from '../api/models/datasource.model';
+import { AppError } from '../api/middlewares/error-handler';
+import { createNotification } from '../utils/notifications';
 import { markWorkerError, markWorkerRunning, markWorkerStopped } from './worker-registry';
 import { createStorageAdapter } from '../core/storage/storage-factory';
 import { executeBackupDump } from '../core/backup/executor';
@@ -19,6 +20,7 @@ import {
   type BackupQueueJobData,
 } from '../queue/queues';
 import { getBullConnection } from '../queue/redis-client';
+import { config } from '../utils/config';
 
 const processing = new Set<string>();
 let worker: Worker<BackupQueueJobData> | null = null;
@@ -56,6 +58,60 @@ interface UploadContextMetadata {
   manifest_relative_path: string;
   strategy: 'replicate' | 'fallback';
   targets: StorageTarget[];
+}
+
+function extractMissingBinary(message: string) {
+  const match = message.match(/Binario '([^']+)' nao encontrado no PATH/i);
+  return match?.[1] ?? null;
+}
+
+function buildMissingBinaryGuide(binary: string) {
+  const normalizedBinary = binary.toLowerCase();
+  if (process.platform === 'win32') {
+    if (normalizedBinary === 'docker') {
+      return [
+        `1. Instale o Docker Desktop para Windows.`,
+        `2. Abra o Docker Desktop e aguarde o status "Engine running".`,
+        `3. Reinicie o processo da API.`,
+        `4. Valide com: docker --version`,
+        `5. Tente novamente o backup.`,
+      ].join('\n');
+    }
+
+    return [
+      `1. Abra o PowerShell como Administrador.`,
+      `2. Execute: winget install -e --id PostgreSQL.PostgreSQL --accept-package-agreements --accept-source-agreements`,
+      `3. Feche e abra novamente o terminal/servico da API.`,
+      `4. Valide com: ${binary} --version`,
+      `5. Tente novamente o backup (ou Retry Upload).`,
+    ].join('\n');
+  }
+
+  if (process.platform === 'linux') {
+    return [
+      `1. Instale o client do banco no host da API (ex: apt-get install -y postgresql-client).`,
+      `2. Reinicie o processo da API.`,
+      `3. Valide com: ${binary} --version`,
+      `4. Tente novamente o backup.`,
+    ].join('\n');
+  }
+
+  if (process.platform === 'darwin') {
+    return [
+      `1. Instale com Homebrew: brew install libpq`,
+      `2. Faça link do binario: brew link --force libpq`,
+      `3. Reinicie o processo da API.`,
+      `4. Valide com: ${binary} --version`,
+      `5. Tente novamente o backup.`,
+    ].join('\n');
+  }
+
+  return [
+    `1. Instale manualmente o binario '${binary}' no sistema onde a API executa.`,
+    `2. Garanta que ele esteja no PATH.`,
+    `3. Reinicie o processo da API.`,
+    `4. Execute novamente o backup.`,
+  ].join('\n');
 }
 
 function sanitizeSegment(value: string) {
@@ -285,6 +341,10 @@ async function processExecution(executionId: string) {
   const startedAt = Date.now();
   let tempDir: string | null = null;
   let artifactFilesReady = false;
+  let notificationEntityType: 'backup_job' | 'system' = 'system';
+  let notificationEntityId = 'system';
+  let notificationJobId: string | null = null;
+  let notificationDatasourceId: string | null = null;
 
   try {
     const execution = await prisma.backupExecution.findUniqueOrThrow({
@@ -303,6 +363,10 @@ async function processExecution(executionId: string) {
       }
     }
     runtimeMetadata.execution_logs = executionLogs;
+    notificationEntityType = 'backup_job';
+    notificationEntityId = execution.job.id;
+    notificationJobId = execution.job.id;
+    notificationDatasourceId = execution.datasourceId;
 
     pushLog('info', `Job '${execution.job.name}' iniciado para datasource '${execution.datasource.name}'`, true);
 
@@ -323,7 +387,7 @@ async function processExecution(executionId: string) {
     pushLog('info', `Estrategia de storage '${strategy}' com ${targets.length} destino(s)`, true);
     pushLog('info', `Compressao configurada: ${compression}`, true);
 
-    tempDir = path.join(os.tmpdir(), 'dataguardian', execution.id);
+    tempDir = path.join(config.workers.tempDirectory, execution.id);
     await fs.mkdir(tempDir, { recursive: true });
 
     const rawDumpFile = path.join(tempDir, 'backup.raw');
@@ -495,6 +559,32 @@ async function processExecution(executionId: string) {
       },
     });
 
+    const missingBinary = extractMissingBinary(message);
+    if (missingBinary) {
+      const guide = buildMissingBinaryGuide(missingBinary);
+      await createNotification({
+        type: 'backup_failed',
+        severity: 'critical',
+        entityType: notificationEntityType,
+        entityId: notificationEntityId,
+        title: `Acao necessaria: instalar binario '${missingBinary}'`,
+        message: [
+          `O backup falhou porque o binario '${missingBinary}' nao foi encontrado no PATH.`,
+          '',
+          'Passo a passo para corrigir:',
+          guide,
+        ].join('\n'),
+        metadata: {
+          execution_id: executionId,
+          job_id: notificationJobId,
+          datasource_id: notificationDatasourceId,
+          missing_binary: missingBinary,
+          platform: process.platform,
+          error_message: message,
+        },
+      });
+    }
+
     logger.error({ err, executionId }, 'Falha ao processar execucao de backup');
     if (artifactFilesReady) {
       shouldCleanupTempDir = false;
@@ -513,7 +603,7 @@ export async function triggerBackupExecutionNow(executionId: string) {
 
 export async function retryExecutionUploadNow(executionId: string) {
   if (processing.has(executionId)) {
-    throw new Error('Execucao ja esta em processamento');
+    throw new AppError('EXECUTION_ALREADY_PROCESSING', 409, 'Execucao ja esta em processamento');
   }
   processing.add(executionId);
 
@@ -529,18 +619,56 @@ export async function retryExecutionUploadNow(executionId: string) {
     });
 
     if (execution.status !== 'failed') {
-      throw new Error(`Execucao ${executionId} nao esta em status failed`);
+      throw new AppError(
+        'EXECUTION_NOT_RETRIABLE',
+        409,
+        `Execucao ${executionId} nao esta em status failed`,
+      );
     }
 
     const metadataObj = toMetadataObject(execution.metadata);
     const artifacts = toMetadataObject(metadataObj.local_artifacts) as unknown as Partial<LocalArtifactsMetadata>;
     const uploadContext = toMetadataObject(metadataObj.upload_context) as unknown as Partial<UploadContextMetadata>;
 
-    if (!artifacts.compressed_file || !artifacts.manifest_file || !artifacts.temp_dir) {
-      throw new Error('Nao ha artefatos locais para retomar envio');
-    }
-    if (!uploadContext.backup_relative_path || !uploadContext.manifest_relative_path) {
-      throw new Error('Contexto de upload ausente para retomar envio');
+    const hasLocalArtifacts = Boolean(artifacts.compressed_file && artifacts.manifest_file && artifacts.temp_dir);
+    const hasUploadContext = Boolean(uploadContext.backup_relative_path && uploadContext.manifest_relative_path);
+
+    if (!hasLocalArtifacts || !hasUploadContext) {
+      const requeued = await prisma.backupExecution.updateMany({
+        where: { id: executionId, status: 'failed' },
+        data: {
+          status: 'queued',
+          startedAt: null,
+          finishedAt: null,
+          errorMessage: null,
+        },
+      });
+
+      if (requeued.count === 0) {
+        throw new AppError('EXECUTION_NOT_RETRIABLE', 409, 'Nao foi possivel retomar a execucao');
+      }
+
+      processing.delete(executionId);
+      await processExecution(executionId);
+
+      const refreshed = await prisma.backupExecution.findUniqueOrThrow({
+        where: { id: executionId },
+        select: { status: true, errorMessage: true },
+      });
+
+      if (refreshed.status !== 'completed') {
+        throw new AppError(
+          'RETRY_UPLOAD_REBUILD_FAILED',
+          409,
+          refreshed.errorMessage || 'Nao foi possivel reconstruir artefatos para retomar envio',
+        );
+      }
+
+      return {
+        execution_id: executionId,
+        status: 'completed',
+        message: 'Artefatos locais ausentes; execucao refeita e upload concluido com sucesso',
+      };
     }
 
     const targets = Array.isArray(uploadContext.targets)
@@ -560,7 +688,7 @@ export async function retryExecutionUploadNow(executionId: string) {
     });
 
     if (claimed.count === 0) {
-      throw new Error('Nao foi possivel retomar a execucao');
+      throw new AppError('EXECUTION_NOT_RETRIABLE', 409, 'Nao foi possivel retomar a execucao');
     }
 
     const executionLogs = readExecutionLogs(execution.metadata);
@@ -588,15 +716,18 @@ export async function retryExecutionUploadNow(executionId: string) {
       void persistLogs();
     };
 
-    await fs.access(artifacts.compressed_file);
-    await fs.access(artifacts.manifest_file);
+    const compressedFilePath = String(artifacts.compressed_file);
+    const manifestFilePath = String(artifacts.manifest_file);
+
+    await fs.access(compressedFilePath);
+    await fs.access(manifestFilePath);
 
     pushLog('info', 'Retomando envio do dump ja gerado', true);
     pushLog('info', `Estrategia de storage '${strategy}' com ${targets.length} destino(s)`, true);
 
     const { successes, failures } = await uploadBackupArtifacts({
-      compressedFile: artifacts.compressed_file,
-      manifestFile: artifacts.manifest_file,
+      compressedFile: compressedFilePath,
+      manifestFile: manifestFilePath,
       backupRelativePath: String(uploadContext.backup_relative_path),
       manifestRelativePath: String(uploadContext.manifest_relative_path),
       targets,
@@ -608,13 +739,17 @@ export async function retryExecutionUploadNow(executionId: string) {
     runtimeMetadata.storage_failures = failures;
 
     if (successes.length === 0) {
-      throw new Error(`Nenhum storage disponivel para salvar backup (${strategy})`);
+      throw new AppError(
+        'STORAGE_UNAVAILABLE',
+        503,
+        `Nenhum storage disponivel para salvar backup (${strategy})`,
+      );
     }
 
-    const compressedStat = await fs.stat(artifacts.compressed_file);
+    const compressedStat = await fs.stat(compressedFilePath);
     const checksumValue =
       String(runtimeMetadata.checksum ?? '').replace(/^sha256:/, '')
-      || await computeSha256(artifacts.compressed_file);
+      || await computeSha256(compressedFilePath);
     const rawSize = Number(runtimeMetadata.total_size_bytes ?? execution.sizeBytes ?? 0);
     const durationSeconds = 1;
     const finishedAt = new Date();

@@ -1,6 +1,7 @@
-﻿import { spawn } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { createWriteStream, promises as fs } from 'node:fs';
 import * as path from 'node:path';
+import { tryAutoInstallBinary } from '../../../utils/binary-installer';
 
 export interface EngineRunCallbacks {
   onProgress?: (bytesWritten: number) => void;
@@ -48,7 +49,25 @@ async function existsFile(filePath: string) {
   }
 }
 
-export async function resolveBinaryPath(command: string) {
+async function commandExists(commandPath: string) {
+  return new Promise<boolean>((resolve) => {
+    const child = spawn(commandPath, ['--version'], {
+      stdio: 'ignore',
+      windowsHide: true,
+    });
+
+    child.once('error', (err) => {
+      const code = (err as NodeJS.ErrnoException).code;
+      resolve(code !== 'ENOENT');
+    });
+
+    child.once('close', () => {
+      resolve(true);
+    });
+  });
+}
+
+async function resolveWindowsBinaryPath(command: string) {
   if (process.platform !== 'win32') {
     return command;
   }
@@ -116,6 +135,26 @@ export async function resolveBinaryPath(command: string) {
   return command;
 }
 
+export async function resolveBinaryPath(
+  command: string,
+  allowAutoInstall = true,
+  onLog?: (line: string) => void,
+) {
+  const commandPath = await resolveWindowsBinaryPath(command);
+  if (await commandExists(commandPath)) {
+    return commandPath;
+  }
+
+  if (allowAutoInstall) {
+    const installed = await tryAutoInstallBinary(command, onLog);
+    if (installed) {
+      return resolveBinaryPath(command, false, onLog);
+    }
+  }
+
+  return commandPath;
+}
+
 export async function spawnCommandToFile(params: {
   command: string;
   args: string[];
@@ -123,7 +162,11 @@ export async function spawnCommandToFile(params: {
   outputFile: string;
   callbacks?: EngineRunCallbacks;
 }) {
-  const commandPath = await resolveBinaryPath(params.command);
+  const commandPath = await resolveBinaryPath(
+    params.command,
+    true,
+    (line) => params.callbacks?.onEngineLog?.(`[installer] ${line}`),
+  );
   await fs.mkdir(path.dirname(params.outputFile), { recursive: true });
 
   await new Promise<void>((resolve, reject) => {
@@ -188,3 +231,5 @@ export async function spawnCommandToFile(params: {
     });
   });
 }
+
+

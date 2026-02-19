@@ -1,3 +1,5 @@
+import { getDefaultTempDirectory } from './runtime';
+
 // ──────────────────────────────────────────
 // Configuração centralizada via env vars
 // ──────────────────────────────────────────
@@ -41,7 +43,7 @@ export const config = {
     schedulerIntervalMs:  parseInt(process.env.SCHEDULER_INTERVAL_MS ?? '60000', 10),
     healthCheckIntervalMs: parseInt(process.env.HEALTH_CHECK_INTERVAL_MS ?? '300000', 10),
     cleanupCron: process.env.CLEANUP_CRON ?? '0 4 * * *',
-    tempDirectory: process.env.TEMP_DIRECTORY ?? '/tmp/dataguardian',
+    tempDirectory: process.env.TEMP_DIRECTORY ?? getDefaultTempDirectory(),
   },
 } as const;
 

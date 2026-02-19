@@ -5,6 +5,7 @@ import * as net from 'node:net';
 import { prisma } from '../../lib/prisma';
 import { AppError } from '../middlewares/error-handler';
 import { createStorageAdapter } from '../../core/storage/storage-factory';
+import { normalizeLocalStoragePath } from '../../utils/runtime';
 import {
   SENSITIVE_STORAGE_FIELDS,
   StorageTypeValue,
@@ -199,7 +200,8 @@ function normalizeStorageConfig(
 ): JsonMap {
   switch (type) {
     case 'local': {
-      const normalizedPath = getString(cfg, 'path', type, { fallback: existing?.path });
+      const normalizedPathInput = getString(cfg, 'path', type, { fallback: existing?.path });
+      const normalizedPath = normalizeLocalStoragePath(normalizedPathInput);
       const maxSize = getNumber(cfg, 'max_size_gb', type, {
         required: false,
         positive: true,

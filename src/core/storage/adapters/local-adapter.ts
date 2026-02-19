@@ -3,6 +3,7 @@ import * as path from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import { Transform } from 'node:stream';
 import type { StorageAdapter, StorageTestResult, UploadOptions, UploadResult } from './base-adapter';
+import { normalizeLocalStoragePath } from '../../../utils/runtime';
 
 export interface LocalAdapterConfig {
   path: string;
@@ -11,11 +12,14 @@ export interface LocalAdapterConfig {
 
 export class LocalStorageAdapter implements StorageAdapter {
   readonly type = 'local';
+  private readonly rootPath: string;
 
-  constructor(private readonly config: LocalAdapterConfig) {}
+  constructor(private readonly config: LocalAdapterConfig) {
+    this.rootPath = normalizeLocalStoragePath(config.path);
+  }
 
   async upload(localFilePath: string, relativePath: string, options?: UploadOptions): Promise<UploadResult> {
-    const destination = path.join(this.config.path, ...relativePath.split('/'));
+    const destination = path.join(this.rootPath, ...relativePath.split('/'));
     await fs.mkdir(path.dirname(destination), { recursive: true });
 
     const stat = await fs.stat(localFilePath);
@@ -48,18 +52,18 @@ export class LocalStorageAdapter implements StorageAdapter {
   }
 
   async download(relativePath: string, localDestinationPath: string): Promise<void> {
-    const origin = path.join(this.config.path, ...relativePath.split('/'));
+    const origin = path.join(this.rootPath, ...relativePath.split('/'));
     await fs.mkdir(path.dirname(localDestinationPath), { recursive: true });
     await fs.copyFile(origin, localDestinationPath);
   }
 
   async delete(relativePath: string): Promise<void> {
-    const target = path.join(this.config.path, ...relativePath.split('/'));
+    const target = path.join(this.rootPath, ...relativePath.split('/'));
     await fs.rm(target, { force: true });
   }
 
   async list(prefix = ''): Promise<string[]> {
-    const root = path.join(this.config.path, ...prefix.split('/').filter(Boolean));
+    const root = path.join(this.rootPath, ...prefix.split('/').filter(Boolean));
     const results: string[] = [];
 
     const walk = async (directory: string) => {
@@ -70,7 +74,7 @@ export class LocalStorageAdapter implements StorageAdapter {
           await walk(fullPath);
           continue;
         }
-        const rel = path.relative(this.config.path, fullPath).split(path.sep).join('/');
+        const rel = path.relative(this.rootPath, fullPath).split(path.sep).join('/');
         results.push(rel);
       }
     };
@@ -80,7 +84,7 @@ export class LocalStorageAdapter implements StorageAdapter {
   }
 
   async exists(relativePath: string): Promise<boolean> {
-    const fullPath = path.join(this.config.path, ...relativePath.split('/'));
+    const fullPath = path.join(this.rootPath, ...relativePath.split('/'));
     try {
       await fs.access(fullPath);
       return true;
@@ -95,10 +99,10 @@ export class LocalStorageAdapter implements StorageAdapter {
 
   async testConnection(): Promise<StorageTestResult> {
     const startedAt = Date.now();
-    await fs.mkdir(this.config.path, { recursive: true });
-    const stat = await fs.stat(this.config.path);
+    await fs.mkdir(this.rootPath, { recursive: true });
+    const stat = await fs.stat(this.rootPath);
     if (!stat.isDirectory()) {
-      throw new Error(`Path '${this.config.path}' nao e um diretorio valido`);
+      throw new Error(`Path '${this.rootPath}' nao e um diretorio valido`);
     }
 
     return {

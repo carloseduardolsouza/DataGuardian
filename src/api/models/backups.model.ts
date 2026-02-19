@@ -1,6 +1,5 @@
 import { spawn } from 'node:child_process';
 import { createReadStream, createWriteStream, promises as fs } from 'node:fs';
-import * as os from 'node:os';
 import * as path from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import { createGunzip } from 'node:zlib';
@@ -11,6 +10,8 @@ import { AppError } from '../middlewares/error-handler';
 import { createStorageAdapter } from '../../core/storage/storage-factory';
 import { resolveBinaryPath } from '../../core/backup/engines/base-engine';
 import { logger } from '../../utils/logger';
+import { config } from '../../utils/config';
+import { normalizeLocalStoragePath } from '../../utils/runtime';
 
 type StorageBackupStatus = 'available' | 'missing' | 'unreachable' | 'unknown';
 type ExecutionLogLevel = 'info' | 'warn' | 'error' | 'debug' | 'success';
@@ -105,7 +106,7 @@ function inferRelativePathFromBackupPath(
     const localBase = asString(config.path);
     if (!localBase) return null;
 
-    const base = normalizeSlash(localBase).replace(/\/+$/, '');
+    const base = normalizeSlash(normalizeLocalStoragePath(localBase)).replace(/\/+$/, '');
     if (normalized.startsWith(`${base}/`)) {
       return trimLeadingSlash(normalized.slice(base.length + 1));
     }
@@ -158,7 +159,11 @@ async function runSpawnCommand(params: {
   inputFile?: string;
   onLog?: (line: string) => void;
 }) {
-  const commandPath = await resolveBinaryPath(params.command);
+  const commandPath = await resolveBinaryPath(
+    params.command,
+    true,
+    (line) => params.onLog?.(`[installer] ${line}`),
+  );
 
   await new Promise<void>((resolve, reject) => {
     const child = spawn(commandPath, params.args, {
@@ -422,7 +427,12 @@ async function runRestoreExecutionInBackground(params: {
     pushLog('info', `Progresso restore: ${currentPhase}...`, true);
   }, 5000);
 
-  const restoreRoot = path.join(os.tmpdir(), 'dataguardian', 'restore', params.restoreExecutionId, Date.now().toString());
+  const restoreRoot = path.join(
+    config.workers.tempDirectory,
+    'restore',
+    params.restoreExecutionId,
+    Date.now().toString(),
+  );
   let downloadedFile = '';
   let restoreInputFile = '';
   let chosenStorage: StorageSnapshotEntry | null = null;
