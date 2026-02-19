@@ -3,7 +3,8 @@ import { prisma } from '../../lib/prisma';
 import { AppError } from '../middlewares/error-handler';
 import { validateCron } from '../../core/scheduler/cron-parser';
 import { calculateNextExecution } from '../../core/scheduler/job-scheduler';
-import { triggerBackupExecutionNow } from '../../workers/backup-worker';
+import { enqueueBackupExecution } from '../../queue/queues';
+import { ensureRedisAvailable } from '../../queue/redis-client';
 import { logger } from '../../utils/logger';
 
 // ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬
@@ -313,6 +314,16 @@ export async function deleteBackupJob(id: string) {
 }
 
 export async function runBackupJob(id: string) {
+  const redisReady = await ensureRedisAvailable();
+  if (!redisReady) {
+    throw new AppError(
+      'SERVICE_UNAVAILABLE',
+      503,
+      'Redis indisponivel: backups manuais e agendamentos estao temporariamente desativados',
+      { warning: 'Inicie/restaure o Redis para executar backups.' },
+    );
+  }
+
   const job = await prisma.backupJob.findUniqueOrThrow({ where: { id } });
 
   const execution = await prisma.backupExecution.create({
@@ -325,16 +336,24 @@ export async function runBackupJob(id: string) {
     },
   });
 
-  void triggerBackupExecutionNow(execution.id).catch((err) => {
-    logger.error(
-      { err, executionId: execution.id, jobId: job.id },
-      'Falha no disparo de backup sob demanda',
-    );
-  });
+  try {
+    await enqueueBackupExecution(execution.id, 'manual');
+  } catch (err) {
+    await prisma.backupExecution.update({
+      where: { id: execution.id },
+      data: {
+        status: 'failed',
+        finishedAt: new Date(),
+        errorMessage: 'Falha ao enfileirar backup no Redis',
+      },
+    });
+    logger.error({ err, executionId: execution.id, jobId: job.id }, 'Falha no enqueue de backup sob demanda');
+    throw new AppError('SERVICE_UNAVAILABLE', 503, 'Falha ao iniciar backup no momento');
+  }
 
   return {
     execution_id: execution.id,
-    message:      'Backup iniciado sob demanda',
-    status:       'running',
+    message:      'Backup enfileirado para execucao imediata',
+    status:       'queued',
   };
 }

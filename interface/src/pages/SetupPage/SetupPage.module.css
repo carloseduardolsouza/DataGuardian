@@ -1,19 +1,16 @@
-/* ── LoginPage — estilos isolados via CSS Modules ─────────── */
-
-.root {
+﻿.root {
   min-height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
   background:
-    radial-gradient(circle at 12% 20%, var(--color-primary-muted) 0%, transparent 40%),
-    radial-gradient(circle at 88% 8%, var(--color-info-muted) 0%, transparent 32%),
+    radial-gradient(circle at 10% 80%, var(--color-success-muted) 0%, transparent 40%),
+    radial-gradient(circle at 95% 20%, var(--color-primary-muted) 0%, transparent 34%),
     var(--color-bg);
   position: relative;
   padding: var(--space-6);
 }
 
-/* ── Botão de tema (canto superior direito) ─── */
 .themeToggle {
   position: absolute;
   top: var(--space-6);
@@ -28,7 +25,6 @@
   border-radius: var(--radius-md);
   cursor: pointer;
   color: var(--color-text-muted);
-  transition: background var(--transition-fast), color var(--transition-fast);
 }
 
 .themeToggle:hover {
@@ -36,10 +32,9 @@
   color: var(--color-text);
 }
 
-/* ── Card central ─────────────────────────────── */
 .card {
   width: 100%;
-  max-width: 420px;
+  max-width: 460px;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-xl);
@@ -47,7 +42,6 @@
   box-shadow: var(--shadow-lg);
 }
 
-/* ── Marca ────────────────────────────────────── */
 .brand {
   display: flex;
   flex-direction: column;
@@ -64,36 +58,20 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-bottom: var(--space-1);
-}
-
-.logoWrap svg {
-  width: 32px;
-  height: 32px;
 }
 
 .brandName {
-  font-size: var(--font-size-xl);
-  font-weight: var(--font-weight-bold);
+  font-size: var(--font-size-lg);
   color: var(--color-text);
-  letter-spacing: -0.4px;
+  font-weight: var(--font-weight-semi);
+  text-align: center;
 }
 
 .brandSub {
-  font-size: var(--font-size-sm);
   color: var(--color-text-muted);
-  font-weight: var(--font-weight-normal);
+  font-size: var(--font-size-sm);
 }
 
-/* ── Título do formulário ─────────────────────── */
-.formTitle {
-  font-size: var(--font-size-lg);
-  font-weight: var(--font-weight-semi);
-  color: var(--color-text);
-  margin-bottom: var(--space-6);
-}
-
-/* ── Formulário ───────────────────────────────── */
 .form {
   display: flex;
   flex-direction: column;
@@ -108,8 +86,8 @@
 
 .label {
   font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-medium);
   color: var(--color-text-muted);
+  font-weight: var(--font-weight-medium);
 }
 
 .input {
@@ -121,13 +99,7 @@
   font-size: var(--font-size-base);
   color: var(--color-text);
   outline: none;
-  transition:
-    border-color var(--transition-fast),
-    box-shadow var(--transition-fast);
-}
-
-.input::placeholder {
-  color: var(--color-text-subtle);
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
 }
 
 .input:focus {
@@ -135,9 +107,7 @@
   box-shadow: 0 0 0 3px var(--color-primary-muted);
 }
 
-/* ── Erro ─────────────────────────────────────── */
 .error {
-  font-size: var(--font-size-sm);
   color: var(--color-danger);
   background: var(--color-danger-muted);
   border-radius: var(--radius-sm);
@@ -145,34 +115,24 @@
   display: flex;
   align-items: center;
   gap: var(--space-2);
+  font-size: var(--font-size-sm);
 }
 
-/* ── Botão de submit ──────────────────────────── */
 .submitBtn {
   width: 100%;
   margin-top: var(--space-2);
   padding: 11px var(--space-4);
-  background: var(--color-primary);
-  color: var(--color-text-on-primary);
   border: none;
   border-radius: var(--radius-md);
+  background: var(--color-primary);
+  color: var(--color-text-on-primary);
   font-size: var(--font-size-base);
   font-weight: var(--font-weight-semi);
   cursor: pointer;
-  transition:
-    background var(--transition-fast),
-    transform var(--transition-fast),
-    box-shadow var(--transition-fast);
 }
 
 .submitBtn:hover:not(:disabled) {
   background: var(--color-primary-hover);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px var(--color-primary-muted);
-}
-
-.submitBtn:active:not(:disabled) {
-  transform: translateY(0);
 }
 
 .submitBtn:disabled {
@@ -185,7 +145,7 @@
   width: 14px;
   height: 14px;
   border: 2px solid rgba(255, 255, 255, 0.4);
-  border-top-color: white;
+  border-top-color: var(--color-text-on-primary);
   border-radius: 50%;
   animation: spin 0.7s linear infinite;
   margin-right: var(--space-2);
@@ -194,12 +154,4 @@
 
 @keyframes spin {
   to { transform: rotate(360deg); }
-}
-
-/* ── Rodapé ───────────────────────────────────── */
-.footer {
-  margin-top: var(--space-6);
-  text-align: center;
-  font-size: var(--font-size-sm);
-  color: var(--color-text-subtle);
 }

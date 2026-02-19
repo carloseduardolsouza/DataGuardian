@@ -2,6 +2,22 @@
 // Configuração centralizada via env vars
 // ──────────────────────────────────────────
 
+function buildRedisUrl(rawUrl: string, password?: string) {
+  if (!password) return rawUrl;
+  try {
+    const url = new URL(rawUrl);
+    if (!url.password) {
+      url.password = password;
+    }
+    return url.toString();
+  } catch {
+    return rawUrl;
+  }
+}
+
+const redisPassword = process.env.REDIS_PASSWORD?.trim();
+const redisUrl = buildRedisUrl(process.env.REDIS_URL ?? 'redis://localhost:6379', redisPassword);
+
 export const config = {
   env: (process.env.NODE_ENV ?? 'development') as 'development' | 'production' | 'test',
   port: parseInt(process.env.PORT ?? '3000', 10),
@@ -12,7 +28,8 @@ export const config = {
   },
 
   redis: {
-    url: process.env.REDIS_URL ?? 'redis://localhost:6379',
+    url: redisUrl,
+    password: redisPassword ?? '',
   },
 
   cors: {

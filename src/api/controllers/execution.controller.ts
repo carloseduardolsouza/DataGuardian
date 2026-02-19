@@ -5,6 +5,7 @@ import {
   getExecutionLogs,
   cancelExecution,
   deleteExecution,
+  retryExecutionUpload,
 } from '../models/execution.model';
 import { getPaginationParams, buildPaginatedResponse } from '../../utils/config';
 
@@ -56,6 +57,15 @@ export const ExecutionController = {
     try {
       await deleteExecution(String(req.params.id));
       res.status(204).send();
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async retryUpload(req: Request, res: Response, next: NextFunction) {
+    try {
+      const result = await retryExecutionUpload(String(req.params.id));
+      res.json(result);
     } catch (err) {
       next(err);
     }

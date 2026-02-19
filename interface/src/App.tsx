@@ -1,9 +1,11 @@
-﻿import { useState } from 'react';
+﻿import { useEffect, useState } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import LoginPage from './pages/LoginPage/LoginPage';
+import SetupPage from './pages/SetupPage/SetupPage';
 import DashboardPage from './pages/DashboardPage/DashboardPage';
 import { ROUTE_PATHS, type NavKey } from './components/Sidebar/Sidebar';
 import { ToastProvider } from './components/Toast/ToastProvider';
+import { authApi } from './services/api';
 
 type Theme = 'dark' | 'light';
 
@@ -23,22 +25,45 @@ function getInitialTheme(): Theme {
     const stored = localStorage.getItem('dg-theme') as Theme | null;
     if (stored === 'light' || stored === 'dark') return stored;
   } catch {
-    /* sem acesso ao localStorage */
+    // noop
   }
   return 'dark';
 }
 
-function getInitialAuth(): boolean {
-  try {
-    return localStorage.getItem('dg-authenticated') === 'true';
-  } catch {
-    return false;
-  }
-}
-
 export default function App() {
   const [theme, setTheme] = useState<Theme>(getInitialTheme);
-  const [isAuthenticated, setIsAuthenticated] = useState(getInitialAuth);
+  const [loadingAuth, setLoadingAuth] = useState(true);
+  const [hasUser, setHasUser] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [currentUsername, setCurrentUsername] = useState<string | null>(null);
+
+  useEffect(() => {
+    const bootstrapAuth = async () => {
+      try {
+        const status = await authApi.status();
+        setHasUser(status.has_user);
+        setIsAuthenticated(status.authenticated);
+        setCurrentUsername(status.user?.username ?? null);
+      } catch {
+        setHasUser(false);
+        setIsAuthenticated(false);
+        setCurrentUsername(null);
+      } finally {
+        setLoadingAuth(false);
+      }
+    };
+
+    void bootstrapAuth();
+  }, []);
+
+  useEffect(() => {
+    const handler = () => {
+      setIsAuthenticated(false);
+      setCurrentUsername(null);
+    };
+    window.addEventListener('dg:unauthorized', handler);
+    return () => window.removeEventListener('dg:unauthorized', handler);
+  }, []);
 
   const toggleTheme = () => {
     setTheme((current) => {
@@ -46,84 +71,102 @@ export default function App() {
       try {
         localStorage.setItem('dg-theme', next);
       } catch {
-        /* noop */
+        // noop
       }
       return next;
     });
   };
 
-  const handleLogin = () => {
+  const handleLogin = async (payload: { username: string; password: string }) => {
+    const response = await authApi.login(payload);
+    setHasUser(true);
     setIsAuthenticated(true);
+    setCurrentUsername(response.user.username);
+  };
+
+  const handleSetup = async (payload: { username: string; password: string }) => {
+    const response = await authApi.setup(payload);
+    setHasUser(true);
+    setIsAuthenticated(true);
+    setCurrentUsername(response.user.username);
+  };
+
+  const handleLogout = async () => {
     try {
-      localStorage.setItem('dg-authenticated', 'true');
-    } catch {
-      /* noop */
+      await authApi.logout();
+    } finally {
+      setIsAuthenticated(false);
+      setCurrentUsername(null);
     }
   };
 
-  const handleLogout = () => {
-    setIsAuthenticated(false);
-    try {
-      localStorage.removeItem('dg-authenticated');
-    } catch {
-      /* noop */
-    }
-  };
+  if (loadingAuth) {
+    return (
+      <div data-theme={theme} style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', background: 'var(--color-bg)', color: 'var(--color-text-muted)' }}>
+        Verificando autenticacao...
+      </div>
+    );
+  }
 
   return (
     <div data-theme={theme} style={{ minHeight: '100vh' }}>
       <ToastProvider>
         <Routes>
-          <Route
-            path="/"
-            element={
-              <Navigate
-                to={isAuthenticated ? ROUTE_PATHS.dashboard : '/login'}
-                replace
-              />
-            }
-          />
-          <Route
-            path="/login"
-            element={
-              isAuthenticated ? (
-                <Navigate to={ROUTE_PATHS.dashboard} replace />
-              ) : (
-                <LoginPage
-                  onLogin={handleLogin}
-                  theme={theme}
-                  onToggleTheme={toggleTheme}
-                />
-              )
-            }
-          />
-          {APP_PAGES.map((page) => (
-            <Route
-              key={page}
-              path={ROUTE_PATHS[page]}
-              element={
-                isAuthenticated ? (
-                  <DashboardPage
-                    activePage={page}
+          {!hasUser && (
+            <>
+              <Route
+                path="/setup"
+                element={
+                  <SetupPage
+                    onSetup={handleSetup}
                     theme={theme}
                     onToggleTheme={toggleTheme}
-                    onLogout={handleLogout}
                   />
-                ) : (
-                  <Navigate to="/login" replace />
-                )
-              }
-            />
-          ))}
-          <Route
-            path="*"
-            element={
-              <Navigate
-                to={isAuthenticated ? ROUTE_PATHS.dashboard : '/login'}
-                replace
+                }
               />
-            }
-          />
+              <Route path="*" element={<Navigate to="/setup" replace />} />
+            </>
+          )}
+
+          {hasUser && !isAuthenticated && (
+            <>
+              <Route
+                path="/login"
+                element={
+                  <LoginPage
+                    onLogin={handleLogin}
+                    theme={theme}
+                    onToggleTheme={toggleTheme}
+                  />
+                }
+              />
+              <Route path="*" element={<Navigate to="/login" replace />} />
+            </>
+          )}
+
+          {hasUser && isAuthenticated && (
+            <>
+              <Route path="/" element={<Navigate to={ROUTE_PATHS.dashboard} replace />} />
+              <Route path="/login" element={<Navigate to={ROUTE_PATHS.dashboard} replace />} />
+              <Route path="/setup" element={<Navigate to={ROUTE_PATHS.dashboard} replace />} />
+              {APP_PAGES.map((page) => (
+                <Route
+                  key={page}
+                  path={ROUTE_PATHS[page]}
+                  element={
+                    <DashboardPage
+                      activePage={page}
+                      theme={theme}
+                      onToggleTheme={toggleTheme}
+                      onLogout={handleLogout}
+                      currentUsername={currentUsername ?? undefined}
+                    />
+                  }
+                />
+              ))}
+              <Route path="*" element={<Navigate to={ROUTE_PATHS.dashboard} replace />} />
+            </>
+          )}
         </Routes>
       </ToastProvider>
     </div>

@@ -7,6 +7,8 @@ import { startBackupWorker, stopBackupWorker } from './workers/backup-worker';
 import { startSchedulerWorker, stopSchedulerWorker } from './workers/scheduler-worker';
 import { startHealthWorker, stopHealthWorker } from './workers/health-worker';
 import { startCleanupWorker, stopCleanupWorker } from './workers/cleanup-worker';
+import { closeQueues } from './queue/queues';
+import { closeRedis, connectRedis, ensureRedisAvailable } from './queue/redis-client';
 
 async function bootstrap() {
   logger.info('Iniciando DataGuardian...');
@@ -17,6 +19,16 @@ async function bootstrap() {
   } catch (err) {
     logger.fatal({ err }, 'Falha ao conectar ao PostgreSQL. Verifique DATABASE_URL.');
     process.exit(1);
+  }
+
+  try {
+    await connectRedis();
+    logger.info('Conectado ao Redis');
+  } catch (err) {
+    logger.warn(
+      { err },
+      'Redis indisponivel. Servicos de fila (Scheduler/Backup) foram desativados.',
+    );
   }
 
   try {
@@ -34,18 +46,60 @@ async function bootstrap() {
     logger.info(`Ambiente: ${config.env}`);
   });
 
-  startSchedulerWorker();
-  startBackupWorker();
+  let queueServicesEnabled = false;
+  let redisMonitorTimer: NodeJS.Timeout | null = null;
+  let redisMonitorRunning = false;
+
+  const startQueueServices = () => {
+    if (queueServicesEnabled) return;
+    startSchedulerWorker();
+    startBackupWorker();
+    queueServicesEnabled = true;
+    logger.info('Servicos de fila ativados (Scheduler/Backup)');
+  };
+
+  const stopQueueServices = async () => {
+    if (!queueServicesEnabled) return;
+    stopSchedulerWorker();
+    await stopBackupWorker();
+    await closeQueues();
+    queueServicesEnabled = false;
+    logger.warn('Servicos de fila desativados por indisponibilidade do Redis');
+  };
+
+  const syncQueueServicesWithRedis = async () => {
+    if (redisMonitorRunning) return;
+    redisMonitorRunning = true;
+    try {
+      const ready = await ensureRedisAvailable();
+      if (ready) {
+        startQueueServices();
+      } else {
+        await stopQueueServices();
+      }
+    } finally {
+      redisMonitorRunning = false;
+    }
+  };
+
   startHealthWorker();
   startCleanupWorker();
+  await syncQueueServicesWithRedis();
+  redisMonitorTimer = setInterval(() => {
+    void syncQueueServicesWithRedis();
+  }, 15_000);
 
   const shutdown = async (signal: string) => {
     logger.info(`Sinal ${signal} recebido. Encerrando servidor...`);
     server.close(async () => {
       stopHealthWorker();
-      stopSchedulerWorker();
-      stopBackupWorker();
       stopCleanupWorker();
+      if (redisMonitorTimer) {
+        clearInterval(redisMonitorTimer);
+        redisMonitorTimer = null;
+      }
+      await stopQueueServices();
+      await closeRedis();
       await prisma.$disconnect();
       logger.info('Servidor encerrado com sucesso');
       process.exit(0);

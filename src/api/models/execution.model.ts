@@ -2,6 +2,7 @@ import { Prisma, ExecutionStatus, DatasourceType, StorageLocationType, BackupTyp
 import { prisma } from '../../lib/prisma';
 import { AppError } from '../middlewares/error-handler';
 import { bigIntToSafe } from '../../utils/config';
+import { retryExecutionUploadNow } from '../../workers/backup-worker';
 
 type ExecutionLogLevel = 'info' | 'warn' | 'error' | 'debug' | 'success';
 
@@ -246,4 +247,22 @@ export async function deleteExecution(id: string) {
     prisma.backupChunk.deleteMany({ where: { executionId: id } }),
     prisma.backupExecution.delete({ where: { id } }),
   ]);
+}
+
+export async function retryExecutionUpload(id: string) {
+  const execution = await prisma.backupExecution.findUniqueOrThrow({
+    where: { id },
+    select: { id: true, status: true },
+  });
+
+  if (execution.status !== 'failed') {
+    throw new AppError(
+      'EXECUTION_NOT_RETRIABLE',
+      409,
+      `Execucao com status '${execution.status}' nao pode retomar upload`,
+      { current_status: execution.status },
+    );
+  }
+
+  return retryExecutionUploadNow(id);
 }

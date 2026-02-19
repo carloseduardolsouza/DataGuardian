@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+﻿import { useEffect, useMemo, useState } from 'react';
 import { datasourceApi, executionsApi } from '../../services/api';
 import type { ApiDatasource, ApiExecution } from '../../services/api';
 import { DS_ABBR } from '../../constants';
@@ -19,9 +19,9 @@ interface PaginationState {
 }
 
 function formatBytes(value: number | string | null) {
-  if (value === null) return '—';
+  if (value === null) return 'â€”';
   const bytes = typeof value === 'string' ? Number(value) : value;
-  if (!Number.isFinite(bytes) || bytes <= 0) return '—';
+  if (!Number.isFinite(bytes) || bytes <= 0) return 'â€”';
   const units = ['B', 'KB', 'MB', 'GB', 'TB'];
   const index = Math.min(units.length - 1, Math.floor(Math.log(bytes) / Math.log(1024)));
   const amount = bytes / 1024 ** index;
@@ -29,14 +29,14 @@ function formatBytes(value: number | string | null) {
 }
 
 function formatDuration(secs: number | null) {
-  if (secs === null) return '—';
+  if (secs === null) return 'â€”';
   if (secs < 60) return `${secs}s`;
   if (secs < 3600) return `${Math.floor(secs / 60)}m ${secs % 60}s`;
   return `${Math.floor(secs / 3600)}h ${Math.floor((secs % 3600) / 60)}m`;
 }
 
 function formatDateTime(iso: string | null) {
-  if (!iso) return '—';
+  if (!iso) return 'â€”';
   return new Date(iso).toLocaleString('pt-BR', {
     day: '2-digit', month: '2-digit', year: '2-digit',
     hour: '2-digit', minute: '2-digit',
@@ -139,7 +139,7 @@ export default function ExecutionsPage() {
       setPagination(response.pagination);
       setSelected(new Set());
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erro ao carregar execuções');
+      setError(err instanceof Error ? err.message : 'Erro ao carregar execuÃ§Ãµes');
     } finally {
       setLoading(false);
     }
@@ -209,7 +209,7 @@ export default function ExecutionsPage() {
       await executionsApi.remove(id);
       await Promise.all([loadExecutions(), loadCounts()]);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erro ao remover execução');
+      setError(err instanceof Error ? err.message : 'Erro ao remover execuÃ§Ã£o');
     }
   }
 
@@ -218,7 +218,16 @@ export default function ExecutionsPage() {
       await executionsApi.cancel(id);
       await Promise.all([loadExecutions(), loadCounts()]);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erro ao cancelar execução');
+      setError(err instanceof Error ? err.message : 'Erro ao cancelar execuÃ§Ã£o');
+    }
+  }
+
+  async function retryUploadExecution(id: string) {
+    try {
+      await executionsApi.retryUpload(id);
+      await Promise.all([loadExecutions(), loadCounts()]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao retomar envio do dump');
     }
   }
 
@@ -229,7 +238,7 @@ export default function ExecutionsPage() {
     const failed = settled.filter((result) => result.status === 'rejected').length;
 
     if (failed > 0) {
-      setError(`${failed} execução(ões) não puderam ser removidas.`);
+      setError(`${failed} execuÃ§Ã£o(Ãµes) nÃ£o puderam ser removidas.`);
     }
 
     await Promise.all([loadExecutions(), loadCounts()]);
@@ -239,9 +248,9 @@ export default function ExecutionsPage() {
     <div className={styles.page}>
       <div className={styles.pageHeader}>
         <div>
-          <h2 className={styles.pageTitle}>Execuções</h2>
+          <h2 className={styles.pageTitle}>ExecuÃ§Ãµes</h2>
           <p className={styles.pageSub}>
-            {counts.all} execuções · {formatBytes(totalSize)} nesta página
+            {counts.all} execuÃ§Ãµes Â· {formatBytes(totalSize)} nesta pÃ¡gina
           </p>
         </div>
         {selected.size > 0 && (
@@ -257,7 +266,7 @@ export default function ExecutionsPage() {
             ['all', 'Todas', counts.all],
             ['running', 'Executando', counts.running],
             ['queued', 'Na fila', counts.queued],
-            ['completed', 'Concluídas', counts.completed],
+            ['completed', 'ConcluÃ­das', counts.completed],
             ['failed', 'Com erro', counts.failed],
             ['cancelled', 'Canceladas', counts.cancelled],
           ] as [StatusFilter, string, number][]).map(([status, label, count]) => (
@@ -292,7 +301,7 @@ export default function ExecutionsPage() {
               onChange={(event) => { setDateFrom(event.target.value); resetPage(); }}
               title="Data inicial"
             />
-            <span className={styles.dateSep}>→</span>
+            <span className={styles.dateSep}>â†’</span>
             <input
               className={styles.dateInput}
               type="date"
@@ -321,11 +330,11 @@ export default function ExecutionsPage() {
 
       <div className={styles.tableWrap}>
         {loading ? (
-          <div className={styles.empty}><SpinnerIcon /><p>Carregando execuções...</p></div>
+          <div className={styles.empty}><SpinnerIcon /><p>Carregando execuÃ§Ãµes...</p></div>
         ) : executions.length === 0 ? (
           <div className={styles.empty}>
             <EmptyExecIcon />
-            <p>Nenhuma execução encontrada</p>
+            <p>Nenhuma execuÃ§Ã£o encontrada</p>
             <span>Tente ajustar os filtros aplicados</span>
           </div>
         ) : (
@@ -343,8 +352,8 @@ export default function ExecutionsPage() {
                 <th>Job</th>
                 <th>Banco de dados</th>
                 <th>Storage</th>
-                <th>Início</th>
-                <th>Duração</th>
+                <th>InÃ­cio</th>
+                <th>DuraÃ§Ã£o</th>
                 <th>Tamanho</th>
                 <th>Status</th>
                 <th className={styles.actionsCol} />
@@ -360,6 +369,7 @@ export default function ExecutionsPage() {
                   onViewLog={() => setLogTargetId(execution.id)}
                   onDelete={() => void removeExecution(execution.id)}
                   onCancel={() => void cancelExecution(execution.id)}
+                  onRetryUpload={() => void retryUploadExecution(execution.id)}
                 />
               ))}
             </tbody>
@@ -372,7 +382,7 @@ export default function ExecutionsPage() {
           <span className={styles.pagInfo}>
             {pagination.total === 0
               ? '0 resultados'
-              : `${(pagination.page - 1) * pagination.limit + 1}–${Math.min(pagination.page * pagination.limit, pagination.total)} de ${pagination.total}`}
+              : `${(pagination.page - 1) * pagination.limit + 1}â€“${Math.min(pagination.page * pagination.limit, pagination.total)} de ${pagination.total}`}
           </span>
           <select
             className={styles.pagSelect}
@@ -382,13 +392,13 @@ export default function ExecutionsPage() {
               setPage(1);
             }}
           >
-            {PAGE_SIZES.map((size) => <option key={size} value={size}>{size} por página</option>)}
+            {PAGE_SIZES.map((size) => <option key={size} value={size}>{size} por pÃ¡gina</option>)}
           </select>
         </div>
 
         <div className={styles.pagButtons}>
-          <button className={styles.pagBtn} onClick={() => setPage(1)} disabled={pagination.page === 1}>«</button>
-          <button className={styles.pagBtn} onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={pagination.page === 1}>‹</button>
+          <button className={styles.pagBtn} onClick={() => setPage(1)} disabled={pagination.page === 1}>Â«</button>
+          <button className={styles.pagBtn} onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={pagination.page === 1}>â€¹</button>
 
           {Array.from({ length: pagination.totalPages }, (_, index) => index + 1)
             .filter((p) => p === 1 || p === pagination.totalPages || Math.abs(p - pagination.page) <= 1)
@@ -398,7 +408,7 @@ export default function ExecutionsPage() {
               return acc;
             }, [])
             .map((p, index) => p === '...'
-              ? <span key={`ellipsis-${index}`} className={styles.pagEllipsis}>…</span>
+              ? <span key={`ellipsis-${index}`} className={styles.pagEllipsis}>â€¦</span>
               : (
                 <button
                   key={p}
@@ -409,8 +419,8 @@ export default function ExecutionsPage() {
                 </button>
               ))}
 
-          <button className={styles.pagBtn} onClick={() => setPage((p) => Math.min(pagination.totalPages, p + 1))} disabled={pagination.page === pagination.totalPages}>›</button>
-          <button className={styles.pagBtn} onClick={() => setPage(pagination.totalPages)} disabled={pagination.page === pagination.totalPages}>»</button>
+          <button className={styles.pagBtn} onClick={() => setPage((p) => Math.min(pagination.totalPages, p + 1))} disabled={pagination.page === pagination.totalPages}>â€º</button>
+          <button className={styles.pagBtn} onClick={() => setPage(pagination.totalPages)} disabled={pagination.page === pagination.totalPages}>Â»</button>
         </div>
       </div>
 
@@ -434,6 +444,7 @@ function ExecRow({
   onViewLog,
   onDelete,
   onCancel,
+  onRetryUpload,
 }: {
   execution: ApiExecution;
   isSelected: boolean;
@@ -441,6 +452,7 @@ function ExecRow({
   onViewLog: () => void;
   onDelete: () => void;
   onCancel: () => void;
+  onRetryUpload: () => void;
 }) {
   const isRunning = execution.status === 'running';
   const isQueued = execution.status === 'queued';
@@ -478,12 +490,16 @@ function ExecRow({
         <td className={styles.monoCell}>{isRunning ? 'em andamento...' : formatDuration(execution.duration_seconds)}</td>
         <td className={styles.monoCell}>{formatBytes(execution.compressed_size_bytes ?? execution.size_bytes)}</td>
         <td><StatusBadge status={execution.status === 'completed' ? 'success' : execution.status} /></td>
-
         <td className={styles.actionsCol}>
           <div className={styles.actions}>
             <button className={styles.actionBtn} onClick={onViewLog} title="Ver logs"><LogIcon /></button>
             {(isRunning || isQueued) && (
               <button className={styles.actionBtn} onClick={onCancel} title="Cancelar execução"><CloseIcon /></button>
+            )}
+            {execution.status === 'failed' && (
+              <button className={styles.actionBtn} onClick={onRetryUpload} title="Retomar envio do dump">
+                R
+              </button>
             )}
             <button className={`${styles.actionBtn} ${styles.deleteBtn}`} onClick={onDelete} disabled={isRunning || isQueued} title="Excluir execução">
               <TrashIcon />
@@ -499,7 +515,7 @@ function ExecRow({
             <div className={styles.errorInline}>
               <ErrorIcon />
               <span>{execution.error_message}</span>
-              <button className={styles.logsLink} onClick={onViewLog}>Ver logs completos →</button>
+              <button className={styles.logsLink} onClick={onViewLog}>Ver logs completos â†’</button>
             </div>
           </td>
         </tr>
@@ -507,3 +523,8 @@ function ExecRow({
     </>
   );
 }
+
+
+
+
+

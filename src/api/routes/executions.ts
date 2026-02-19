@@ -13,4 +13,5 @@ executionsRouter.get(
 executionsRouter.get('/:id', ExecutionController.findById);
 executionsRouter.get('/:id/logs', ExecutionController.logs);
 executionsRouter.post('/:id/cancel', ExecutionController.cancel);
+executionsRouter.post('/:id/retry-upload', ExecutionController.retryUpload);
 executionsRouter.delete('/:id', ExecutionController.remove);

@@ -1,6 +1,7 @@
-﻿import { prisma } from '../../lib/prisma';
+import { prisma } from '../../lib/prisma';
 import { getWorkersSnapshot } from '../../workers/worker-registry';
 import { listStorageHealthEntries } from '../../core/health/storage-health-store';
+import { isRedisAvailable } from '../../queue/redis-client';
 
 export interface HealthHistoryFilters {
   datasource_id?: string;
@@ -43,8 +44,10 @@ export async function getSystemHealth() {
   ]);
 
   const workers = getWorkersSnapshot();
+  const redisStatus = isRedisAvailable() ? 'ok' : 'error';
   const hasWorkerError = Object.values(workers).some((worker) => worker.status === 'error');
-  const overallStatus = dbStatus === 'error' || hasWorkerError ? 'degraded' : 'ok';
+  const overallStatus =
+    dbStatus === 'error' || redisStatus === 'error' || hasWorkerError ? 'degraded' : 'ok';
 
   return {
     status: overallStatus,
@@ -52,7 +55,7 @@ export async function getSystemHealth() {
     uptime_seconds: Math.floor(process.uptime()),
     services: {
       database: dbStatus,
-      redis: 'unknown',
+      redis: redisStatus,
       workers: {
         backup: workers.backup.status,
         scheduler: workers.scheduler.status,
@@ -150,4 +153,5 @@ export async function getStorageHealthHistory(
     },
   };
 }
+
 

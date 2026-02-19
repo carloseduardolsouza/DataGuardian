@@ -38,6 +38,7 @@ interface Props {
   active: NavKey;
   onLogout: () => void;
   unreadNotifications?: number;
+  currentUsername?: string;
 }
 
 interface NavItem {
@@ -60,7 +61,8 @@ const systemNav: NavItem[] = [
   { key: 'settings', label: 'Configuracoes', icon: <SettingsIcon /> },
 ];
 
-export default function Sidebar({ active, onLogout, unreadNotifications = 0 }: Props) {
+export default function Sidebar({ active, onLogout, unreadNotifications = 0, currentUsername = 'Admin' }: Props) {
+  const avatar = currentUsername.trim().charAt(0).toUpperCase() || 'A';
   return (
     <aside className={styles.sidebar}>
       <div className={styles.header}>
@@ -105,10 +107,10 @@ export default function Sidebar({ active, onLogout, unreadNotifications = 0 }: P
 
       <div className={styles.footer}>
         <div className={styles.userRow}>
-          <div className={styles.avatar}>A</div>
+          <div className={styles.avatar}>{avatar}</div>
           <div className={styles.userInfo}>
-            <p className={styles.userName}>Admin</p>
-            <p className={styles.userRole}>Administrador</p>
+            <p className={styles.userName}>{currentUsername}</p>
+            <p className={styles.userRole}>Usuario unico</p>
           </div>
         </div>
         <button className={styles.logoutBtn} onClick={onLogout}>

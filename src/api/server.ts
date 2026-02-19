@@ -1,6 +1,7 @@
 import express, { Request, Response } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import cookieParser from 'cookie-parser';
 
 import { config } from '../utils/config';
 import { requestLogger } from './middlewares/logger';
@@ -13,6 +14,9 @@ import { executionsRouter }       from './routes/executions';
 import { healthRouter }           from './routes/health';
 import { notificationsRouter }    from './routes/notifications';
 import { systemRouter }           from './routes/system';
+import { authRouter }             from './routes/auth';
+import { dashboardRouter }        from './routes/dashboard';
+import { requireAuth }            from './middlewares/auth';
 
 // ──────────────────────────────────────────
 // Criação e configuração do app Express
@@ -31,6 +35,7 @@ export function createApp() {
   );
   app.use(express.json({ limit: '10mb' }));
   app.use(express.urlencoded({ extended: true }));
+  app.use(cookieParser());
 
   // ── Request logging ──
   app.use(requestLogger);
@@ -41,6 +46,8 @@ export function createApp() {
   });
 
   // ── Rotas da API ──
+  app.use('/api/auth',              authRouter);
+  app.use('/api',                   requireAuth);
   app.use('/api/datasources',       datasourcesRouter);
   app.use('/api/storage-locations', storageLocationsRouter);
   app.use('/api/backup-jobs',       backupJobsRouter);
@@ -48,6 +55,7 @@ export function createApp() {
   app.use('/api/health',            healthRouter);
   app.use('/api/notifications',     notificationsRouter);
   app.use('/api/system',            systemRouter);
+  app.use('/api/dashboard',         dashboardRouter);
 
   // ── Rota 404 ──
   app.use((_req: Request, res: Response) => {

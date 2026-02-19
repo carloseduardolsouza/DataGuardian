@@ -195,6 +195,35 @@ function mapDatasourceRuntimeError(
     );
   }
 
+  if (operation === 'query') {
+    if (driverCode === '42P01') {
+      return new AppError(
+        'QUERY_EXECUTION_FAILED',
+        422,
+        `Tabela ou relacao nao encontrada no datasource '${datasourceType}': ${message}`,
+        details,
+      );
+    }
+
+    if (
+      driverCode === '42601'
+      || driverCode === '42703'
+      || driverCode === '42883'
+      || driverCode === '42000'
+      || driverCode === 'ER_NO_SUCH_TABLE'
+      || driverCode === 'ER_BAD_FIELD_ERROR'
+      || driverCode === 'ER_PARSE_ERROR'
+      || driverCode === 'ER_BAD_DB_ERROR'
+    ) {
+      return new AppError(
+        'QUERY_EXECUTION_FAILED',
+        422,
+        `Query invalida para datasource '${datasourceType}': ${message}`,
+        details,
+      );
+    }
+  }
+
   if (operation === 'schema') {
     return new AppError(
       'SCHEMA_INTROSPECTION_FAILED',

@@ -1,33 +1,44 @@
 ﻿import { useState } from 'react';
 import { LogoIcon, SunIcon, MoonIcon, AlertIcon } from '../../components/Icons';
-import styles from './LoginPage.module.css';
+import styles from './SetupPage.module.css';
 
 interface Props {
-  onLogin: (payload: { username: string; password: string }) => Promise<void>;
+  onSetup: (payload: { username: string; password: string }) => Promise<void>;
   theme: 'dark' | 'light';
   onToggleTheme: () => void;
 }
 
-export default function LoginPage({ onLogin, theme, onToggleTheme }: Props) {
+export default function SetupPage({ onSetup, theme, onToggleTheme }: Props) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
 
-    if (!username.trim() || !password) {
-      setError('Preencha usuario e senha.');
+    if (!username.trim() || !password || !confirmPassword) {
+      setError('Preencha todos os campos.');
+      return;
+    }
+
+    if (password.length < 8) {
+      setError('A senha deve ter no minimo 8 caracteres.');
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      setError('A confirmacao de senha nao confere.');
       return;
     }
 
     try {
       setLoading(true);
       setError('');
-      await onLogin({ username: username.trim(), password });
+      await onSetup({ username: username.trim(), password });
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Falha ao efetuar login');
+      setError(err instanceof Error ? err.message : 'Falha ao criar usuario inicial');
     } finally {
       setLoading(false);
     }
@@ -49,17 +60,15 @@ export default function LoginPage({ onLogin, theme, onToggleTheme }: Props) {
           <div className={styles.logoWrap}>
             <LogoIcon width={32} height={32} />
           </div>
-          <h1 className={styles.brandName}>DataGuardian</h1>
-          <span className={styles.brandSub}>Acesso do administrador</span>
+          <h1 className={styles.brandName}>Configurar primeiro usuario</h1>
+          <span className={styles.brandSub}>Instancia sem usuario cadastrado</span>
         </div>
-
-        <p className={styles.formTitle}>Entrar</p>
 
         <form className={styles.form} onSubmit={handleSubmit} noValidate>
           <div className={styles.field}>
-            <label className={styles.label} htmlFor="username">Usuario</label>
+            <label className={styles.label} htmlFor="setup-username">Usuario</label>
             <input
-              id="username"
+              id="setup-username"
               className={styles.input}
               type="text"
               value={username}
@@ -72,15 +81,29 @@ export default function LoginPage({ onLogin, theme, onToggleTheme }: Props) {
           </div>
 
           <div className={styles.field}>
-            <label className={styles.label} htmlFor="password">Senha</label>
+            <label className={styles.label} htmlFor="setup-password">Senha</label>
             <input
-              id="password"
+              id="setup-password"
               className={styles.input}
               type="password"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
               placeholder="••••••••"
-              autoComplete="current-password"
+              autoComplete="new-password"
+              disabled={loading}
+            />
+          </div>
+
+          <div className={styles.field}>
+            <label className={styles.label} htmlFor="setup-password-confirm">Confirmar senha</label>
+            <input
+              id="setup-password-confirm"
+              className={styles.input}
+              type="password"
+              value={confirmPassword}
+              onChange={(event) => setConfirmPassword(event.target.value)}
+              placeholder="••••••••"
+              autoComplete="new-password"
               disabled={loading}
             />
           </div>
@@ -94,7 +117,7 @@ export default function LoginPage({ onLogin, theme, onToggleTheme }: Props) {
 
           <button className={styles.submitBtn} type="submit" disabled={loading}>
             {loading && <span className={styles.spinner} />}
-            {loading ? 'Entrando...' : 'Entrar'}
+            {loading ? 'Criando...' : 'Criar usuario e entrar'}
           </button>
         </form>
       </div>

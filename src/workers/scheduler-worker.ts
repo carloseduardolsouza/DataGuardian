@@ -3,15 +3,30 @@ import { logger } from '../utils/logger';
 import { config } from '../utils/config';
 import { calculateNextExecution } from '../core/scheduler/job-scheduler';
 import { markWorkerError, markWorkerRunning, markWorkerStopped } from './worker-registry';
+import { enqueueBackupExecution } from '../queue/queues';
+import { ensureRedisAvailable } from '../queue/redis-client';
 
 let timer: NodeJS.Timeout | null = null;
 let running = false;
+let lastRedisUnavailableWarnAt = 0;
 
 async function executeSchedulerCycle() {
   if (running) return;
   running = true;
 
   try {
+    const redisReady = await ensureRedisAvailable();
+    if (!redisReady) {
+      const now = Date.now();
+      if (now - lastRedisUnavailableWarnAt > 30_000) {
+        lastRedisUnavailableWarnAt = now;
+        logger.warn(
+          'Scheduler pausado: Redis indisponivel. Jobs nao serao enfileirados ate reconexao.',
+        );
+      }
+      return;
+    }
+
     const now = new Date();
     const dueJobs = await prisma.backupJob.findMany({
       where: {
@@ -50,8 +65,8 @@ async function executeSchedulerCycle() {
         continue;
       }
 
-      await prisma.$transaction([
-        prisma.backupExecution.create({
+      const execution = await prisma.$transaction(async (tx) => {
+        const createdExecution = await tx.backupExecution.create({
           data: {
             jobId: job.id,
             datasourceId: job.datasourceId,
@@ -59,12 +74,29 @@ async function executeSchedulerCycle() {
             status: 'queued',
             backupType: 'full',
           },
-        }),
-        prisma.backupJob.update({
+        });
+
+        await tx.backupJob.update({
           where: { id: job.id },
           data: { nextExecutionAt },
-        }),
-      ]);
+        });
+
+        return createdExecution;
+      });
+
+      try {
+        await enqueueBackupExecution(execution.id, 'scheduled');
+      } catch (err) {
+        await prisma.backupExecution.updateMany({
+          where: { id: execution.id, status: 'queued' },
+          data: {
+            status: 'failed',
+            finishedAt: new Date(),
+            errorMessage: 'Falha ao enfileirar backup no Redis',
+          },
+        });
+        throw err;
+      }
 
       enqueued += 1;
     }
