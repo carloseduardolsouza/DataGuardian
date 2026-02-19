@@ -6,6 +6,7 @@ import {
   updateStorageLocation,
   deleteStorageLocation,
   testStorageConnection,
+  testStorageConfig,
 } from '../models/storage-location.model';
 import { getPaginationParams, buildPaginatedResponse } from '../../utils/config';
 
@@ -60,7 +61,18 @@ export const StorageLocationController = {
   async testConnection(req: Request, res: Response, next: NextFunction) {
     try {
       const result = await testStorageConnection(String(req.params.id));
-      res.status(501).json(result);
+      res.status(200).json(result);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async testConfig(req: Request, res: Response, next: NextFunction) {
+    try {
+      const type = String(req.body.type) as Parameters<typeof testStorageConfig>[0];
+      const config = (req.body.config ?? {}) as Parameters<typeof testStorageConfig>[1];
+      const result = await testStorageConfig(type, config);
+      res.status(200).json(result);
     } catch (err) {
       next(err);
     }

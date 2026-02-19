@@ -1,6 +1,8 @@
 import { useState } from 'react';
+import type { ChangeEvent, ReactNode } from 'react';
 import type { StorageType } from '../../constants';
 import type { ApiStorageLocationDetail } from '../../services/api';
+import { storageApi } from '../../services/api';
 import styles from './AddStorageModal.module.css';
 import {
   CheckIcon, AlertIcon, PlugIcon, SpinnerIcon,
@@ -11,64 +13,55 @@ import Modal from '../../components/Modal/Modal';
 import { STORAGE_TYPES } from '../../constants';
 
 interface Props {
-  onClose:   () => void;
-  onSave:    (data: unknown, editId?: string) => void;
+  onClose: () => void;
+  onSave: (data: unknown, editId?: string) => Promise<void>;
   editData?: ApiStorageLocationDetail | null;
 }
 
-// ── S3 storage classes ───────────────────────────────────────────
 const S3_STORAGE_CLASSES = [
-  { value: 'STANDARD',     label: 'STANDARD — Acesso frequente' },
-  { value: 'STANDARD_IA',  label: 'STANDARD_IA — Acesso infrequente (recomendado)' },
-  { value: 'GLACIER',      label: 'GLACIER — Arquivamento (minutos para restaurar)' },
-  { value: 'DEEP_ARCHIVE', label: 'DEEP_ARCHIVE — Arquivamento profundo (horas)' },
+  { value: 'STANDARD', label: 'STANDARD - Acesso frequente' },
+  { value: 'STANDARD_IA', label: 'STANDARD_IA - Acesso infrequente (recomendado)' },
+  { value: 'GLACIER', label: 'GLACIER - Arquivamento (minutos para restaurar)' },
+  { value: 'DEEP_ARCHIVE', label: 'DEEP_ARCHIVE - Arquivamento profundo (horas)' },
 ];
 
-// ── Type icon mapping ────────────────────────────────────────────
-const TYPE_ICON: Record<StorageType, React.ReactNode> = {
-  local:     <LocalStorageIcon />,
-  ssh:       <SshIcon />,
-  s3:        <S3Icon />,
-  minio:     <MinioIcon />,
+const TYPE_ICON: Record<StorageType, ReactNode> = {
+  local: <LocalStorageIcon />,
+  ssh: <SshIcon />,
+  s3: <S3Icon />,
+  minio: <MinioIcon />,
   backblaze: <BackblazeIcon />,
 };
-
-// ── Formulário ────────────────────────────────────────────────────
 
 type AuthMethod = 'key' | 'password';
 
 interface FormState {
-  name:             string;
-  isDefault:        boolean;
-  // local
-  localPath:        string;
-  localMaxSizeGb:   string;
-  // ssh
-  sshHost:          string;
-  sshPort:          string;
-  sshUsername:      string;
-  sshAuthMethod:    AuthMethod;
-  sshPrivateKey:    string;
-  sshPassword:      string;
-  sshRemotePath:    string;
-  // s3
-  s3Endpoint:       string;
-  s3Bucket:         string;
-  s3Region:         string;
-  s3StorageClass:   string;
-  s3AccessKeyId:    string;
-  s3SecretKey:      string;
-  // minio
-  minioEndpoint:    string;
-  minioBucket:      string;
-  minioAccessKey:   string;
-  minioSecret:      string;
-  minioUseSsl:      boolean;
-  // backblaze
-  b2BucketName:     string;
-  b2BucketId:       string;
-  b2AppKeyId:       string;
-  b2AppKey:         string;
+  name: string;
+  isDefault: boolean;
+  localPath: string;
+  localMaxSizeGb: string;
+  sshHost: string;
+  sshPort: string;
+  sshUsername: string;
+  sshAuthMethod: AuthMethod;
+  sshPrivateKey: string;
+  sshPassword: string;
+  sshRemotePath: string;
+  s3Endpoint: string;
+  s3Bucket: string;
+  s3Region: string;
+  s3StorageClass: string;
+  s3AccessKeyId: string;
+  s3SecretKey: string;
+  minioEndpoint: string;
+  minioBucket: string;
+  minioAccessKey: string;
+  minioSecret: string;
+  minioUseSsl: boolean;
+  b2BucketName: string;
+  b2BucketId: string;
+  b2AppKeyId: string;
+  b2AppKey: string;
 }
 
 const INITIAL_FORM: FormState = {
@@ -76,7 +69,7 @@ const INITIAL_FORM: FormState = {
   localPath: '', localMaxSizeGb: '100',
   sshHost: '', sshPort: '22', sshUsername: '', sshAuthMethod: 'key',
   sshPrivateKey: '', sshPassword: '', sshRemotePath: '',
-  s3Endpoint: 'https://s3.amazonaws.com', s3Bucket: '', s3Region: 'us-east-1',
+  s3Endpoint: '', s3Bucket: '', s3Region: 'us-east-1',
   s3StorageClass: 'STANDARD_IA', s3AccessKeyId: '', s3SecretKey: '',
   minioEndpoint: '', minioBucket: '', minioAccessKey: '', minioSecret: '', minioUseSsl: false,
   b2BucketName: '', b2BucketId: '', b2AppKeyId: '', b2AppKey: '',
@@ -85,164 +78,255 @@ const INITIAL_FORM: FormState = {
 function initFormFromEdit(loc: ApiStorageLocationDetail): FormState {
   const cfg = loc.config;
   return {
-    name:      loc.name,
+    name: loc.name,
     isDefault: loc.is_default,
-    // local
-    localPath:      String(cfg.path ?? ''),
+    localPath: String(cfg.path ?? ''),
     localMaxSizeGb: String(cfg.max_size_gb ?? '100'),
-    // ssh
-    sshHost:       String(cfg.host ?? ''),
-    sshPort:       String(cfg.port ?? '22'),
-    sshUsername:   String(cfg.username ?? ''),
+    sshHost: String(cfg.host ?? ''),
+    sshPort: String(cfg.port ?? '22'),
+    sshUsername: String(cfg.username ?? ''),
     sshAuthMethod: (cfg.auth_method as AuthMethod) ?? 'key',
-    sshPrivateKey: '',  // sensitive — clear
-    sshPassword:   '',  // sensitive — clear
+    sshPrivateKey: '',
+    sshPassword: '',
     sshRemotePath: String(cfg.remote_path ?? ''),
-    // s3
-    s3Endpoint:     String(cfg.endpoint ?? 'https://s3.amazonaws.com'),
-    s3Bucket:       String(cfg.bucket ?? ''),
-    s3Region:       String(cfg.region ?? 'us-east-1'),
+    s3Endpoint: String(cfg.endpoint ?? ''),
+    s3Bucket: String(cfg.bucket ?? ''),
+    s3Region: String(cfg.region ?? 'us-east-1'),
     s3StorageClass: String(cfg.storage_class ?? 'STANDARD_IA'),
-    s3AccessKeyId:  String(cfg.access_key_id ?? ''),
-    s3SecretKey:    '',  // sensitive — clear
-    // minio
-    minioEndpoint:  String(cfg.endpoint ?? ''),
-    minioBucket:    String(cfg.bucket ?? ''),
+    s3AccessKeyId: String(cfg.access_key_id ?? ''),
+    s3SecretKey: '',
+    minioEndpoint: String(cfg.endpoint ?? ''),
+    minioBucket: String(cfg.bucket ?? ''),
     minioAccessKey: String(cfg.access_key ?? ''),
-    minioSecret:    '',  // sensitive — clear
-    minioUseSsl:    Boolean(cfg.use_ssl ?? false),
-    // backblaze
+    minioSecret: '',
+    minioUseSsl: Boolean(cfg.use_ssl ?? false),
     b2BucketName: String(cfg.bucket_name ?? ''),
-    b2BucketId:   String(cfg.bucket_id ?? ''),
-    b2AppKeyId:   String(cfg.application_key_id ?? ''),
-    b2AppKey:     '',  // sensitive — clear
+    b2BucketId: String(cfg.bucket_id ?? ''),
+    b2AppKeyId: String(cfg.application_key_id ?? ''),
+    b2AppKey: '',
   };
 }
-
-// ── Componente principal ──────────────────────────────────────────
 
 export default function AddStorageModal({ onClose, onSave, editData }: Props) {
   const isEdit = !!editData;
 
-  const [step, setStep]                 = useState<1 | 2>(isEdit ? 2 : 1);
+  const [step, setStep] = useState<1 | 2>(isEdit ? 2 : 1);
   const [selectedType, setSelectedType] = useState<StorageType | null>(
     isEdit ? editData.type as StorageType : null,
   );
-  const [form, setForm]   = useState<FormState>(
-    isEdit ? initFormFromEdit(editData) : INITIAL_FORM,
-  );
-  const [testing, setTesting]       = useState(false);
-  const [testResult, setTestResult] = useState<'ok' | 'error' | null>(null);
+  const [form, setForm] = useState<FormState>(isEdit ? initFormFromEdit(editData) : INITIAL_FORM);
+  const [testing, setTesting] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [testResult, setTestResult] = useState<{ kind: 'ok' | 'error'; message: string } | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
 
   const set = (key: keyof FormState) =>
-    (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
+    (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
       setForm(prev => ({ ...prev, [key]: e.target.value }));
+      setFormError(null);
+      setTestResult(null);
+    };
 
-  const setCheck = (key: keyof FormState) => (e: React.ChangeEvent<HTMLInputElement>) =>
+  const setCheck = (key: keyof FormState) => (e: ChangeEvent<HTMLInputElement>) => {
     setForm(prev => ({ ...prev, [key]: e.target.checked }));
-
-  const handleTest = () => {
-    setTesting(true);
+    setFormError(null);
     setTestResult(null);
-    setTimeout(() => {
-      setTesting(false);
-      setTestResult('ok');
-    }, 1500);
   };
 
-  const handleSave = () => {
-    let config: Record<string, unknown> = {};
+  const buildConfig = () => {
+    if (!selectedType) return {};
 
     if (selectedType === 'local') {
-      config = {
-        path:        form.localPath,
-        max_size_gb: parseInt(form.localMaxSizeGb) || 0,
+      return {
+        path: form.localPath,
+        ...(form.localMaxSizeGb.trim() ? { max_size_gb: Number(form.localMaxSizeGb) } : {}),
       };
-    } else if (selectedType === 'ssh') {
-      config = {
-        host:        form.sshHost,
-        port:        parseInt(form.sshPort) || 22,
-        username:    form.sshUsername,
-        auth_method: form.sshAuthMethod,
+    }
+
+    if (selectedType === 'ssh') {
+      return {
+        host: form.sshHost,
+        port: Number(form.sshPort) || 22,
+        username: form.sshUsername,
         remote_path: form.sshRemotePath,
         ...(form.sshAuthMethod === 'key' && form.sshPrivateKey ? { private_key: form.sshPrivateKey } : {}),
         ...(form.sshAuthMethod === 'password' && form.sshPassword ? { password: form.sshPassword } : {}),
       };
-    } else if (selectedType === 's3') {
-      config = {
-        endpoint:      form.s3Endpoint,
-        bucket:        form.s3Bucket,
-        region:        form.s3Region,
+    }
+
+    if (selectedType === 's3') {
+      return {
+        endpoint: form.s3Endpoint.trim() ? form.s3Endpoint : null,
+        bucket: form.s3Bucket,
+        region: form.s3Region,
         storage_class: form.s3StorageClass,
         access_key_id: form.s3AccessKeyId,
         ...(form.s3SecretKey ? { secret_access_key: form.s3SecretKey } : {}),
       };
-    } else if (selectedType === 'minio') {
-      config = {
-        endpoint:   form.minioEndpoint,
-        bucket:     form.minioBucket,
+    }
+
+    if (selectedType === 'minio') {
+      return {
+        endpoint: form.minioEndpoint,
+        bucket: form.minioBucket,
         access_key: form.minioAccessKey,
         ...(form.minioSecret ? { secret_key: form.minioSecret } : {}),
         use_ssl: form.minioUseSsl,
       };
-    } else if (selectedType === 'backblaze') {
-      config = {
-        bucket_name:        form.b2BucketName,
-        bucket_id:          form.b2BucketId,
-        application_key_id: form.b2AppKeyId,
-        ...(form.b2AppKey ? { application_key: form.b2AppKey } : {}),
-      };
     }
 
-    if (isEdit) {
-      onSave({
-        name:       form.name,
-        config:     config,
-        is_default: form.isDefault,
-      }, editData.id);
-    } else {
-      onSave({
-        name:       form.name,
-        type:       selectedType,
-        config:     config,
-        is_default: form.isDefault,
-      });
-    }
-    onClose();
+    return {
+      bucket_name: form.b2BucketName,
+      bucket_id: form.b2BucketId,
+      application_key_id: form.b2AppKeyId,
+      ...(form.b2AppKey ? { application_key: form.b2AppKey } : {}),
+    };
   };
 
-  /* ── Footer content ─────────────────────────────────────────── */
+  const validate = (): string | null => {
+    if (!selectedType) return 'Selecione o tipo de storage.';
+    if (!form.name.trim()) return 'Informe o nome do storage.';
+
+    if (selectedType === 'local') {
+      if (!form.localPath.trim()) return 'Informe o caminho absoluto do storage local.';
+      return null;
+    }
+
+    if (selectedType === 'ssh') {
+      if (!form.sshHost.trim()) return 'Informe o host do servidor SSH.';
+      if (!form.sshUsername.trim()) return 'Informe o usu�rio SSH.';
+      if (!form.sshRemotePath.trim()) return 'Informe o caminho remoto.';
+      if (!isEdit && form.sshAuthMethod === 'key' && !form.sshPrivateKey.trim()) return 'Informe a chave privada SSH.';
+      if (!isEdit && form.sshAuthMethod === 'password' && !form.sshPassword.trim()) return 'Informe a senha SSH.';
+      return null;
+    }
+
+    if (selectedType === 's3') {
+      if (!form.s3Bucket.trim()) return 'Informe o bucket S3.';
+      if (!form.s3Region.trim()) return 'Informe a regi�o S3.';
+      if (!form.s3AccessKeyId.trim()) return 'Informe o Access Key ID.';
+      if (!isEdit && !form.s3SecretKey.trim()) return 'Informe o Secret Access Key.';
+      return null;
+    }
+
+    if (selectedType === 'minio') {
+      if (!form.minioEndpoint.trim()) return 'Informe o endpoint do MinIO.';
+      if (!form.minioBucket.trim()) return 'Informe o bucket do MinIO.';
+      if (!form.minioAccessKey.trim()) return 'Informe o Access Key do MinIO.';
+      if (!isEdit && !form.minioSecret.trim()) return 'Informe o Secret Key do MinIO.';
+      return null;
+    }
+
+    if (!form.b2BucketName.trim()) return 'Informe o Bucket Name da Backblaze.';
+    if (!form.b2BucketId.trim()) return 'Informe o Bucket ID da Backblaze.';
+    if (!form.b2AppKeyId.trim()) return 'Informe o Application Key ID.';
+    if (!isEdit && !form.b2AppKey.trim()) return 'Informe a Application Key.';
+
+    return null;
+  };
+
+  const handleTest = async () => {
+    const validationError = validate();
+    if (validationError) {
+      setFormError(validationError);
+      return;
+    }
+
+    if (!selectedType) return;
+
+    try {
+      setTesting(true);
+      setFormError(null);
+      setTestResult(null);
+
+      const result = await storageApi.testConfig({
+        type: selectedType,
+        config: buildConfig(),
+      });
+
+      setTestResult({
+        kind: 'ok',
+        message: `Conex�o OK${result.latency_ms !== null ? ` - ${result.latency_ms}ms` : ''}`,
+      });
+    } catch (err) {
+      setTestResult({
+        kind: 'error',
+        message: err instanceof Error ? err.message : 'N�o foi poss�vel validar a conex�o.',
+      });
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  const handleSave = async () => {
+    const validationError = validate();
+    if (validationError) {
+      setFormError(validationError);
+      return;
+    }
+
+    if (!selectedType) return;
+
+    const config = buildConfig();
+
+    try {
+      setSaving(true);
+      setFormError(null);
+
+      if (isEdit) {
+        await onSave({
+          name: form.name.trim(),
+          config,
+          is_default: form.isDefault,
+        }, editData.id);
+      } else {
+        await onSave({
+          name: form.name.trim(),
+          type: selectedType,
+          config,
+          is_default: form.isDefault,
+        });
+      }
+
+      onClose();
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : 'Erro ao salvar storage.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const footerContent = (
     <>
       {step === 2 && !isEdit && (
-        <button className={styles.backBtn} onClick={() => { setStep(1); setTestResult(null); }}>
-          ← Voltar
+        <button className={styles.backBtn} onClick={() => { setStep(1); setTestResult(null); }} disabled={saving || testing}>
+          {'<- Voltar'}
         </button>
       )}
 
       <div className={styles.footerRight}>
-        <button className={styles.cancelBtn} onClick={onClose}>Cancelar</button>
+        <button className={styles.cancelBtn} onClick={onClose} disabled={saving || testing}>Cancelar</button>
 
         {step === 1 ? (
           <button
             className={styles.primaryBtn}
-            disabled={!selectedType}
+            disabled={!selectedType || saving || testing}
             onClick={() => setStep(2)}
           >
-            Próximo →
+            {'Pr�ximo ->'}
           </button>
         ) : (
           <>
             <button
               className={styles.testBtn}
               onClick={handleTest}
-              disabled={testing}
+              disabled={testing || saving}
             >
               {testing ? <SpinnerIcon /> : <PlugIcon />}
-              {testing ? 'Testando...' : 'Testar Conexão'}
+              {testing ? 'Testando...' : 'Testar Conex�o'}
             </button>
-            <button className={styles.primaryBtn} onClick={handleSave}>
-              {isEdit ? 'Salvar alterações' : 'Salvar'}
+            <button className={styles.primaryBtn} onClick={handleSave} disabled={saving || testing}>
+              {saving ? 'Salvando...' : isEdit ? 'Salvar altera��es' : 'Salvar'}
             </button>
           </>
         )}
@@ -253,12 +337,11 @@ export default function AddStorageModal({ onClose, onSave, editData }: Props) {
   return (
     <Modal
       title={isEdit ? 'Editar Storage' : 'Adicionar Storage'}
-      subtitle={step === 1 ? 'Escolha o tipo de armazenamento' : 'Configure a conexão'}
+      subtitle={step === 1 ? 'Escolha o tipo de armazenamento' : 'Configure a conex�o'}
       onClose={onClose}
       footer={footerContent}
       size="lg"
     >
-      {/* ── Steps indicator — only in create mode ─────────────── */}
       {!isEdit && (
         <div className={styles.steps}>
           <div className={`${styles.step} ${step >= 1 ? styles.stepDone : ''}`}>
@@ -268,12 +351,11 @@ export default function AddStorageModal({ onClose, onSave, editData }: Props) {
           <div className={styles.stepLine} />
           <div className={`${styles.step} ${step >= 2 ? styles.stepDone : ''}`}>
             <span className={styles.stepNum}>2</span>
-            <span>Configuração</span>
+            <span>Configura��o</span>
           </div>
         </div>
       )}
 
-      {/* STEP 1 — Seleção de tipo (apenas no modo criação) */}
       {step === 1 && !isEdit && (
         <div className={styles.typeGrid}>
           {STORAGE_TYPES.map(opt => (
@@ -295,15 +377,13 @@ export default function AddStorageModal({ onClose, onSave, editData }: Props) {
         </div>
       )}
 
-      {/* STEP 2 — Formulário dinâmico */}
       {step === 2 && selectedType && (
         <div className={styles.formArea}>
-          {/* Campos comuns */}
           <FormField label="Nome *">
             <input
               className={formStyles.input}
               type="text"
-              placeholder={`Ex: ${selectedType === 'ssh' ? 'NAS do escritório' : selectedType === 's3' ? 'S3 Produção' : 'Storage principal'}`}
+              placeholder={`Ex: ${selectedType === 'ssh' ? 'NAS do escrit�rio' : selectedType === 's3' ? 'S3 Produ��o' : 'Storage principal'}`}
               value={form.name}
               onChange={set('name')}
             />
@@ -311,24 +391,22 @@ export default function AddStorageModal({ onClose, onSave, editData }: Props) {
 
           <label className={formStyles.checkLabel}>
             <input type="checkbox" checked={form.isDefault} onChange={setCheck('isDefault')} />
-            <span>Definir como local de armazenamento padrão</span>
+            <span>Definir como local de armazenamento padr�o</span>
           </label>
 
           <div className={formStyles.divider} />
 
-          {/* ── Local ──────────────────────────────── */}
           {selectedType === 'local' && (
             <>
-              <FormField label="Caminho absoluto *" hint="Diretório no servidor onde os backups serão salvos">
+              <FormField label="Caminho absoluto *" hint="Diret�rio no servidor onde os backups ser�o salvos">
                 <input className={formStyles.input} type="text" placeholder="/backups" value={form.localPath} onChange={set('localPath')} />
               </FormField>
-              <FormField label="Tamanho máximo (GB)" hint="0 = sem limite">
-                <input className={formStyles.input} type="number" min="0" value={form.localMaxSizeGb} onChange={set('localMaxSizeGb')} />
+              <FormField label="Tamanho m�ximo (GB)" hint="Opcional. Ex: 500">
+                <input className={formStyles.input} type="number" min="1" value={form.localMaxSizeGb} onChange={set('localMaxSizeGb')} />
               </FormField>
             </>
           )}
 
-          {/* ── SSH / SFTP ─────────────────────────── */}
           {selectedType === 'ssh' && (
             <>
               <div className={formStyles.grid2}>
@@ -340,11 +418,11 @@ export default function AddStorageModal({ onClose, onSave, editData }: Props) {
                 </FormField>
               </div>
 
-              <FormField label="Usuário *">
+              <FormField label="Usu�rio *">
                 <input className={formStyles.input} type="text" placeholder="backup-user" value={form.sshUsername} onChange={set('sshUsername')} />
               </FormField>
 
-              <FormField label="Autenticação">
+              <FormField label="Autentica��o">
                 <div className={styles.radioGroup}>
                   <label className={styles.radioLabel}>
                     <input type="radio" name="authMethod" value="key" checked={form.sshAuthMethod === 'key'}
@@ -362,7 +440,7 @@ export default function AddStorageModal({ onClose, onSave, editData }: Props) {
               {form.sshAuthMethod === 'key' ? (
                 <FormField
                   label={isEdit ? 'Nova chave privada SSH' : 'Chave privada SSH *'}
-                  hint={isEdit ? 'Deixe em branco para manter a chave atual' : 'Conteúdo do arquivo id_rsa ou id_ed25519'}
+                  hint={isEdit ? 'Deixe em branco para manter a chave atual' : 'Conte�do do arquivo id_rsa ou id_ed25519'}
                 >
                   <textarea
                     className={`${formStyles.input} ${formStyles.textarea}`}
@@ -387,16 +465,15 @@ export default function AddStorageModal({ onClose, onSave, editData }: Props) {
                 </FormField>
               )}
 
-              <FormField label="Caminho remoto *" hint="Diretório no servidor SSH onde os backups serão salvos">
+              <FormField label="Caminho remoto *" hint="Diret�rio no servidor SSH onde os backups ser�o salvos">
                 <input className={formStyles.input} type="text" placeholder="/volume1/backups" value={form.sshRemotePath} onChange={set('sshRemotePath')} />
               </FormField>
             </>
           )}
 
-          {/* ── Amazon S3 ──────────────────────────── */}
           {selectedType === 's3' && (
             <>
-              <FormField label="Endpoint" hint="Altere para usar Wasabi, DigitalOcean Spaces, ou outro compatível">
+              <FormField label="Endpoint" hint="Deixe vazio para usar endpoint padr�o AWS S3">
                 <input className={formStyles.input} type="text" value={form.s3Endpoint} onChange={set('s3Endpoint')} />
               </FormField>
 
@@ -404,12 +481,12 @@ export default function AddStorageModal({ onClose, onSave, editData }: Props) {
                 <FormField label="Bucket *">
                   <input className={formStyles.input} type="text" placeholder="meu-bucket-backups" value={form.s3Bucket} onChange={set('s3Bucket')} />
                 </FormField>
-                <FormField label="Região">
+                <FormField label="Regi�o *">
                   <input className={formStyles.input} type="text" placeholder="us-east-1" value={form.s3Region} onChange={set('s3Region')} />
                 </FormField>
               </div>
 
-              <FormField label="Storage Class" hint="Define custo e tempo de recuperação dos arquivos">
+              <FormField label="Storage Class" hint="Define custo e tempo de recupera��o dos arquivos">
                 <select className={formStyles.select} value={form.s3StorageClass} onChange={set('s3StorageClass')}>
                   {S3_STORAGE_CLASSES.map(sc => (
                     <option key={sc.value} value={sc.value}>{sc.label}</option>
@@ -435,7 +512,6 @@ export default function AddStorageModal({ onClose, onSave, editData }: Props) {
             </>
           )}
 
-          {/* ── MinIO ──────────────────────────────── */}
           {selectedType === 'minio' && (
             <>
               <FormField label="Endpoint *" hint="URL do servidor MinIO, incluindo porta">
@@ -466,7 +542,6 @@ export default function AddStorageModal({ onClose, onSave, editData }: Props) {
             </>
           )}
 
-          {/* ── Backblaze B2 ───────────────────────── */}
           {selectedType === 'backblaze' && (
             <>
               <div className={formStyles.grid2}>
@@ -495,15 +570,20 @@ export default function AddStorageModal({ onClose, onSave, editData }: Props) {
             </>
           )}
 
-          {/* Resultado do teste de conexão */}
-          {testResult === 'ok' && (
-            <div className={styles.testOk}>
-              <CheckIcon /> Conexão estabelecida com sucesso!
+          {formError && (
+            <div className={styles.testError}>
+              <AlertIcon /> {formError}
             </div>
           )}
-          {testResult === 'error' && (
+
+          {testResult?.kind === 'ok' && (
+            <div className={styles.testOk}>
+              <CheckIcon /> {testResult.message}
+            </div>
+          )}
+          {testResult?.kind === 'error' && (
             <div className={styles.testError}>
-              <AlertIcon /> Não foi possível conectar. Verifique as credenciais.
+              <AlertIcon /> {testResult.message}
             </div>
           )}
         </div>

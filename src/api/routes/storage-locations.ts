@@ -16,6 +16,11 @@ const listQuerySchema = z.object({
   status: z.enum(["healthy", "full", "unreachable"]).optional(),
 });
 
+const testConfigSchema = z.object({
+  type: z.enum(["local", "s3", "ssh", "minio", "backblaze"]),
+  config: z.record(z.unknown()),
+});
+
 storageLocationsRouter.get(
   "/",
   validate(listQuerySchema, "query"),
@@ -25,6 +30,11 @@ storageLocationsRouter.post(
   "/",
   validate(createStorageLocationSchema),
   StorageLocationController.create,
+);
+storageLocationsRouter.post(
+  "/test",
+  validate(testConfigSchema),
+  StorageLocationController.testConfig,
 );
 storageLocationsRouter.get("/:id", StorageLocationController.findById);
 storageLocationsRouter.put(

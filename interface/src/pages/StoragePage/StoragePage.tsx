@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import type { ReactNode } from 'react';
 import { storageApi } from '../../services/api';
 import type { ApiStorageLocation, ApiStorageLocationDetail } from '../../services/api';
 import StorageList     from './StorageList';
@@ -81,7 +82,7 @@ function StorageDetail({
       {testResult && (
         <div className={`${styles.testResult} ${testResult.status === 'ok' ? styles.testOk : styles.testError}`}>
           {testResult.status === 'ok'
-            ? `✓ Conexão OK${testResult.latency_ms !== null ? ` — ${testResult.latency_ms}ms` : ''}${testResult.available_space_gb ? ` — ${testResult.available_space_gb} GB livres` : ''}`
+            ? `Conexão OK${testResult.latency_ms !== null ? ` - ${testResult.latency_ms}ms` : ''}${testResult.available_space_gb !== undefined ? ` - ${testResult.available_space_gb} GB livres` : ''}`
             : '✗ Falha na conexão'}
         </div>
       )}
@@ -215,14 +216,15 @@ export default function StoragePage() {
   const handleSave = async (data: unknown, editId?: string) => {
     if (editId) {
       const updated = await storageApi.update(editId, data as Parameters<typeof storageApi.update>[1]);
-      setLocations(prev => prev.map(l => l.id === editId ? updated : l));
-      if (selectedLoc?.id === editId) setSelectedLoc(updated);
+      await loadLocations();
+      if (selectedLoc?.id === editId) {
+        await handleSelect(updated);
+      }
     } else {
       const created = await storageApi.create(data as Parameters<typeof storageApi.create>[0]);
-      setLocations(prev => [...prev, created]);
+      await loadLocations();
+      await handleSelect(created);
     }
-    setShowModal(false);
-    setEditData(null);
   };
 
   // ── Test connection ─────────────────────────────────────────────
@@ -234,12 +236,17 @@ export default function StoragePage() {
       setTestResult(null);
       const r = await storageApi.test(selectedLoc.id);
       setTestResult({ status: r.status, available_space_gb: r.available_space_gb, latency_ms: r.latency_ms });
+      await loadLocations();
+      const updated = await storageApi.getById(selectedLoc.id);
+      setSelectedLoc(updated);
+      setDetail(updated);
     } catch {
       setTestResult({ status: 'error', latency_ms: null });
+      await loadLocations();
     } finally {
       setTesting(false);
     }
-  }, [selectedLoc]);
+  }, [selectedLoc, loadLocations]);
 
   // ── Summary ─────────────────────────────────────────────────────
 
@@ -328,7 +335,7 @@ function SummaryItem({
 }: {
   label: string;
   value: string;
-  icon: React.ReactNode;
+  icon: ReactNode;
   variant: 'neutral' | 'success' | 'warning' | 'danger';
 }) {
   return (

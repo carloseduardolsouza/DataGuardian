@@ -180,4 +180,16 @@ export const storageApi = {
       `/storage-locations/${id}/test`,
       { method: 'POST' },
     ),
+
+  testConfig: (data: {
+    type: StorageLocationType;
+    config: Record<string, unknown>;
+  }) =>
+    request<{ status: string; available_space_gb?: number; latency_ms: number | null }>(
+      '/storage-locations/test',
+      {
+        method: 'POST',
+        body: JSON.stringify(data),
+      },
+    ),
 };
