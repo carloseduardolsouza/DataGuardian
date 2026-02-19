@@ -4,9 +4,20 @@ import {
   scheduleLabel, nextRunLabel, lastRunLabel,
   formatBytes, formatDuration,
 } from './mockData';
-import type { MockBackupJob, JobStatus } from './mockData';
+import type { MockBackupJob } from './mockData';
 import JobFormModal from './JobFormModal';
 import styles from './BackupJobsPage.module.css';
+
+import { DS_ABBR, SL_ABBR } from '../../constants';
+import StatusBadge from '../../components/StatusBadge/StatusBadge';
+import {
+  PlusIcon,
+  PlayFilledIcon,
+  EditIcon,
+  ClockIcon,
+  NextIcon,
+  EmptyJobsIcon,
+} from '../../components/Icons';
 
 type Filter = 'all' | 'active' | 'inactive';
 
@@ -85,7 +96,7 @@ export default function BackupJobsPage() {
       <div className={styles.tableWrap}>
         {filtered.length === 0 ? (
           <div className={styles.empty}>
-            <EmptyIcon />
+            <EmptyJobsIcon />
             <p>Nenhum job encontrado</p>
             <button className={styles.newBtnSm} onClick={() => setShowCreate(true)}>
               <PlusIcon /> Criar primeiro job
@@ -214,7 +225,7 @@ export default function BackupJobsPage() {
                           onClick={() => runNow(job.id)}
                           disabled={!job.enabled || job.lastExecution?.status === 'running'}
                         >
-                          <PlayIcon />
+                          <PlayFilledIcon />
                         </button>
                         <button
                           className={styles.actionBtn}
@@ -244,32 +255,3 @@ export default function BackupJobsPage() {
     </div>
   );
 }
-
-/* ── Status badge ────────────────────────────────────────────────── */
-function StatusBadge({ status }: { status: JobStatus }) {
-  const map: Record<JobStatus, { label: string; cls: string }> = {
-    success: { label: 'Sucesso',  cls: 'success' },
-    failed:  { label: 'Falhou',   cls: 'danger'  },
-    running: { label: 'Rodando',  cls: 'running' },
-    never:   { label: 'Nunca',    cls: 'neutral' },
-  };
-  const { label, cls } = map[status];
-  return <span className={`${styles.badge} ${styles[cls]}`}>{label}</span>;
-}
-
-/* ── Abreviações ─────────────────────────────────────────────────── */
-const DS_ABBR: Record<string, string> = {
-  postgres: 'PG', mysql: 'MY', mongodb: 'MG', sqlserver: 'MS', sqlite: 'SL',
-};
-
-const SL_ABBR: Record<string, string> = {
-  local: 'HDD', ssh: 'SSH', s3: 'S3', minio: 'MIO', backblaze: 'B2',
-};
-
-/* ── Ícones ──────────────────────────────────────────────────────── */
-function PlusIcon()  { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>; }
-function PlayIcon()  { return <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="5 3 19 12 5 21"/></svg>; }
-function EditIcon()  { return <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>; }
-function ClockIcon() { return <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>; }
-function NextIcon()  { return <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 8 16 12 12 16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>; }
-function EmptyIcon() { return <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 8 12 12 14 14"/></svg>; }

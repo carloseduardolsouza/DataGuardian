@@ -1,0 +1,320 @@
+/* ── Steps indicator ───────────────────────────────────────────── */
+.steps {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-6);
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.step {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-subtle);
+  transition: color var(--transition-fast);
+}
+
+.stepDone {
+  color: var(--color-primary);
+  font-weight: var(--font-weight-medium);
+}
+
+.stepNum {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 1.5px solid var(--color-border);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semi);
+  transition: all var(--transition-fast);
+}
+
+.stepDone .stepNum {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: #fff;
+}
+
+.stepLine {
+  width: 40px;
+  height: 1.5px;
+  background: var(--color-border);
+  border-radius: 1px;
+}
+
+/* ── Type selection grid ──────────────────────────────────────── */
+.typeGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-3);
+}
+
+.typeCard {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-5) var(--space-3);
+  background: var(--color-bg);
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  text-align: center;
+}
+
+.typeCard:hover {
+  border-color: var(--color-primary);
+  background: var(--color-primary-muted);
+}
+
+.typeCardActive {
+  border-color: var(--color-primary);
+  background: var(--color-primary-muted);
+  box-shadow: 0 0 0 2px var(--color-primary-muted);
+}
+
+.typeCardIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-md);
+  color: #fff;
+}
+
+.typeCardIcon.postgres  { background: #336791; }
+.typeCardIcon.mysql     { background: #00758F; }
+.typeCardIcon.mongodb   { background: #4DB33D; }
+.typeCardIcon.sqlserver  { background: #CC2927; }
+.typeCardIcon.sqlite    { background: #003B57; }
+.typeCardIcon.files     { background: #6366f1; }
+
+.typeCardLabel {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semi);
+  color: var(--color-text);
+}
+
+.typeCardDesc {
+  font-size: var(--font-size-2xs);
+  color: var(--color-text-muted);
+  line-height: 1.4;
+}
+
+.typeCardCheck {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  color: #fff;
+}
+
+/* ── Form area ────────────────────────────────────────────────── */
+.formArea {
+  display: flex;
+  flex-direction: column;
+}
+
+.sectionTitle {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semi);
+  color: var(--color-text);
+  margin-bottom: var(--space-3);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.sectionTitle svg {
+  color: var(--color-primary);
+}
+
+/* ── Tags input ───────────────────────────────────────────────── */
+.tagsWrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  min-height: 36px;
+  align-items: center;
+  cursor: text;
+}
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  background: var(--color-primary-muted);
+  color: var(--color-primary);
+  border-radius: var(--radius-full);
+  font-size: var(--font-size-2xs);
+  font-weight: var(--font-weight-medium);
+}
+
+.tagRemove {
+  display: flex;
+  align-items: center;
+  background: none;
+  border: none;
+  color: var(--color-primary);
+  cursor: pointer;
+  padding: 0;
+  opacity: 0.6;
+}
+
+.tagRemove:hover {
+  opacity: 1;
+}
+
+.tagInput {
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: var(--font-size-sm);
+  color: var(--color-text);
+  flex: 1;
+  min-width: 80px;
+}
+
+.tagInput::placeholder {
+  color: var(--color-text-subtle);
+}
+
+/* ── Test connection ──────────────────────────────────────────── */
+.testOk {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  background: var(--color-success-muted);
+  color: var(--color-success);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  margin-top: var(--space-3);
+}
+
+.testError {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  background: var(--color-danger-muted);
+  color: var(--color-danger);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  margin-top: var(--space-3);
+}
+
+/* ── Footer buttons ───────────────────────────────────────────── */
+.footerLeft {
+  margin-right: auto;
+}
+
+.backBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.backBtn:hover {
+  color: var(--color-text);
+  border-color: var(--color-text-muted);
+}
+
+.cancelBtn {
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.cancelBtn:hover {
+  color: var(--color-text);
+  border-color: var(--color-text-muted);
+}
+
+.testBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text);
+  background: var(--color-surface-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.testBtn:hover:not(:disabled) {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.testBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.primaryBtn {
+  padding: var(--space-2) var(--space-5);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semi);
+  color: var(--color-text-on-primary);
+  background: var(--color-primary);
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+.primaryBtn:hover:not(:disabled) {
+  background: var(--color-primary-hover);
+}
+
+.primaryBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ── Responsive ───────────────────────────────────────────────── */
+@media (max-width: 640px) {
+  .typeGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}

@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import Sidebar, { type NavKey } from '../../components/Sidebar/Sidebar';
+import { DatabaseStatIcon, JobStatIcon, ExecutionStatIcon, DangerStatIcon, SunIcon, MoonIcon, EmptyPageIcon } from '../../components/Icons';
+import StatusBadge from '../../components/StatusBadge/StatusBadge';
 import DatasourcesPage from '../DatasourcesPage/DatasourcesPage';
 import StoragePage     from '../StoragePage/StoragePage';
 import BackupJobsPage  from '../BackupJobsPage/BackupJobsPage';
@@ -234,10 +236,7 @@ function EmptyPage({ page }: { page: NavKey }) {
       gap: '12px',
       color: 'var(--color-text-muted)',
     }}>
-      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" opacity="0.4">
-        <rect x="3" y="3" width="18" height="18" rx="3" />
-        <path d="M9 9h6M9 12h6M9 15h4" strokeLinecap="round" />
-      </svg>
+      <EmptyPageIcon />
       <p style={{ fontSize: 'var(--font-size-lg)', fontWeight: 600, color: 'var(--color-text)' }}>
         {PAGE_TITLES[page].title}
       </p>
@@ -248,92 +247,3 @@ function EmptyPage({ page }: { page: NavKey }) {
   );
 }
 
-/* ── Componente de badge de status ─────────────────────────── */
-function StatusBadge({ status, label }: { status: string; label?: string }) {
-  const map: Record<string, string> = {
-    success: 'success',
-    failed:  'danger',
-    running: 'running',
-    warning: 'warning',
-    error:   'danger',
-  };
-
-  const labelMap: Record<string, string> = {
-    success: 'Sucesso',
-    failed:  'Falhou',
-    running: 'Rodando',
-    warning: 'Aviso',
-    error:   'Erro',
-  };
-
-  const cls = map[status] ?? 'warning';
-  return (
-    <span className={`${styles.badge} ${styles[cls]}`}>
-      {label ?? labelMap[status] ?? status}
-    </span>
-  );
-}
-
-/* ── Ícones de estatísticas ─────────────────────────────────── */
-function DatabaseStatIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <ellipse cx="12" cy="5" rx="9" ry="3" />
-      <path d="M3 5v4c0 1.66 4.03 3 9 3s9-1.34 9-3V5" />
-      <path d="M3 9v4c0 1.66 4.03 3 9 3s9-1.34 9-3V9" />
-      <path d="M3 13v4c0 1.66 4.03 3 9 3s9-1.34 9-3v-4" />
-    </svg>
-  );
-}
-
-function JobStatIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="9" />
-      <polyline points="12 7 12 12 15.5 14.5" />
-    </svg>
-  );
-}
-
-function ExecutionStatIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="9" />
-      <polygon points="10 8 17 12 10 16" fill="currentColor" stroke="none" />
-    </svg>
-  );
-}
-
-function DangerStatIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
-      <line x1="12" y1="9" x2="12" y2="13" />
-      <line x1="12" y1="17" x2="12.01" y2="17" />
-    </svg>
-  );
-}
-
-function SunIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="5" />
-      <line x1="12" y1="1" x2="12" y2="3" />
-      <line x1="12" y1="21" x2="12" y2="23" />
-      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
-      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
-      <line x1="1" y1="12" x2="3" y2="12" />
-      <line x1="21" y1="12" x2="23" y2="12" />
-      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
-      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
-    </svg>
-  );
-}
-
-function MoonIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" />
-    </svg>
-  );
-}
