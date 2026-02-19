@@ -67,6 +67,94 @@ export interface UpdateDatasourceData {
   tags?:              string[];
 }
 
+type JsonMap = Record<string, unknown>;
+
+function isPlainObject(value: unknown): value is JsonMap {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function asStringField(
+  cfg: JsonMap,
+  key: string,
+  datasourceType: DatasourceType,
+  { required = true, trim = true }: { required?: boolean; trim?: boolean } = {},
+) {
+  const value = cfg[key];
+
+  if (value === undefined || value === null) {
+    if (!required) return '';
+    throw new AppError(
+      'CONNECTION_CONFIG_INVALID',
+      422,
+      `Campo obrigatório ausente em connection_config para datasource '${datasourceType}': ${key}`,
+      { field: key, datasource_type: datasourceType },
+    );
+  }
+
+  if (typeof value !== 'string') {
+    throw new AppError(
+      'CONNECTION_CONFIG_INVALID',
+      422,
+      `Campo inválido em connection_config para datasource '${datasourceType}': ${key} deve ser string`,
+      { field: key, datasource_type: datasourceType, received_type: typeof value },
+    );
+  }
+
+  const normalized = trim ? value.trim() : value;
+  if (required && normalized.length === 0) {
+    throw new AppError(
+      'CONNECTION_CONFIG_INVALID',
+      422,
+      `Campo obrigatório vazio em connection_config para datasource '${datasourceType}': ${key}`,
+      { field: key, datasource_type: datasourceType },
+    );
+  }
+
+  return normalized;
+}
+
+function asPortField(cfg: JsonMap, datasourceType: DatasourceType, fallback: number) {
+  const raw = cfg.port;
+  if (raw === undefined || raw === null || raw === '') return fallback;
+
+  const parsed = typeof raw === 'number' ? raw : Number(raw);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    throw new AppError(
+      'CONNECTION_CONFIG_INVALID',
+      422,
+      `Campo inválido em connection_config para datasource '${datasourceType}': port deve ser número positivo`,
+      { field: 'port', datasource_type: datasourceType },
+    );
+  }
+
+  return Math.trunc(parsed);
+}
+
+function normalizeConnectionConfig(value: unknown): JsonMap {
+  return isPlainObject(value) ? value : {};
+}
+
+function buildPostgresConfig(cfg: JsonMap) {
+  return {
+    host:        asStringField(cfg, 'host', 'postgres'),
+    port:        asPortField(cfg, 'postgres', 5432),
+    database:    asStringField(cfg, 'database', 'postgres'),
+    username:    asStringField(cfg, 'username', 'postgres'),
+    password:    asStringField(cfg, 'password', 'postgres', { trim: false }),
+    ssl_enabled: Boolean(cfg.ssl_enabled),
+  };
+}
+
+function buildMysqlConfig(cfg: JsonMap) {
+  return {
+    host:     asStringField(cfg, 'host', 'mysql'),
+    port:     asPortField(cfg, 'mysql', 3306),
+    database: asStringField(cfg, 'database', 'mysql'),
+    username: asStringField(cfg, 'username', 'mysql'),
+    password: asStringField(cfg, 'password', 'mysql', { trim: false }),
+  };
+}
+
 // ──────────────────────────────────────────
 // Model functions
 // ──────────────────────────────────────────
@@ -124,13 +212,27 @@ export async function findDatasourceById(id: string) {
 }
 
 export async function updateDatasource(id: string, data: UpdateDatasourceData) {
-  await prisma.datasource.findUniqueOrThrow({ where: { id } });
+  const current = await prisma.datasource.findUniqueOrThrow({ where: { id } });
+
+  let mergedConnectionConfig = normalizeConnectionConfig(current.connectionConfig);
+
+  if (data.connection_config !== undefined) {
+    const patch = normalizeConnectionConfig(data.connection_config);
+    const merged = { ...mergedConnectionConfig, ...patch };
+
+    // Permite edição sem reenviar segredo mascarado/vazio, mantendo o valor já salvo.
+    if (patch.password === '**********' || patch.password === '') {
+      merged.password = mergedConnectionConfig.password;
+    }
+
+    mergedConnectionConfig = merged;
+  }
 
   const updated = await prisma.datasource.update({
     where: { id },
     data: {
       ...(data.name              !== undefined && { name: data.name }),
-      ...(data.connection_config !== undefined && { connectionConfig: data.connection_config as Prisma.InputJsonValue }),
+      ...(data.connection_config !== undefined && { connectionConfig: mergedConnectionConfig as Prisma.InputJsonValue }),
       ...(data.enabled           !== undefined && { enabled: data.enabled }),
       ...(data.tags              !== undefined && { tags: data.tags }),
     },
@@ -161,30 +263,14 @@ export async function deleteDatasource(id: string) {
 
 export async function testDatasourceConnection(id: string) {
   const datasource = await prisma.datasource.findUniqueOrThrow({ where: { id } });
-  const cfg = datasource.connectionConfig as Record<string, unknown>;
-
-  const str = (v: unknown, fallback = '') => (v != null ? String(v) : fallback);
-  const num = (v: unknown, fallback: number) => (v != null ? Number(v) : fallback);
+  const cfg = normalizeConnectionConfig(datasource.connectionConfig);
 
   switch (datasource.type) {
     case 'postgres':
-      return testPostgresConnection({
-        host:        str(cfg.host, 'localhost'),
-        port:        num(cfg.port, 5432),
-        database:    str(cfg.database),
-        username:    str(cfg.username),
-        password:    str(cfg.password),
-        ssl_enabled: Boolean(cfg.ssl_enabled),
-      });
+      return testPostgresConnection(buildPostgresConfig(cfg));
 
     case 'mysql':
-      return testMysqlConnection({
-        host:     str(cfg.host, 'localhost'),
-        port:     num(cfg.port, 3306),
-        database: str(cfg.database),
-        username: str(cfg.username),
-        password: str(cfg.password),
-      });
+      return testMysqlConnection(buildMysqlConfig(cfg));
 
     default:
       throw new AppError(
@@ -197,36 +283,14 @@ export async function testDatasourceConnection(id: string) {
 
 export async function executeDatasourceQuery(id: string, sql: string) {
   const datasource = await prisma.datasource.findUniqueOrThrow({ where: { id } });
-  const cfg = datasource.connectionConfig as Record<string, unknown>;
-
-  const str = (v: unknown, fallback = '') => (v != null ? String(v) : fallback);
-  const num = (v: unknown, fallback: number) => (v != null ? Number(v) : fallback);
+  const cfg = normalizeConnectionConfig(datasource.connectionConfig);
 
   switch (datasource.type) {
     case 'postgres':
-      return executePostgresQuery(
-        {
-          host:        str(cfg.host, 'localhost'),
-          port:        num(cfg.port, 5432),
-          database:    str(cfg.database),
-          username:    str(cfg.username),
-          password:    str(cfg.password),
-          ssl_enabled: Boolean(cfg.ssl_enabled),
-        },
-        sql,
-      );
+      return executePostgresQuery(buildPostgresConfig(cfg), sql);
 
     case 'mysql':
-      return executeMysqlQuery(
-        {
-          host:     str(cfg.host, 'localhost'),
-          port:     num(cfg.port, 3306),
-          database: str(cfg.database),
-          username: str(cfg.username),
-          password: str(cfg.password),
-        },
-        sql,
-      );
+      return executeMysqlQuery(buildMysqlConfig(cfg), sql);
 
     default:
       throw new AppError(
@@ -239,30 +303,14 @@ export async function executeDatasourceQuery(id: string, sql: string) {
 
 export async function getDatasourceSchema(id: string) {
   const datasource = await prisma.datasource.findUniqueOrThrow({ where: { id } });
-  const cfg = datasource.connectionConfig as Record<string, unknown>;
-
-  const str = (v: unknown, fallback = '') => (v != null ? String(v) : fallback);
-  const num = (v: unknown, fallback: number) => (v != null ? Number(v) : fallback);
+  const cfg = normalizeConnectionConfig(datasource.connectionConfig);
 
   switch (datasource.type) {
     case 'postgres':
-      return introspectPostgres({
-        host:        str(cfg.host, 'localhost'),
-        port:        num(cfg.port, 5432),
-        database:    str(cfg.database),
-        username:    str(cfg.username),
-        password:    str(cfg.password),
-        ssl_enabled: Boolean(cfg.ssl_enabled),
-      });
+      return introspectPostgres(buildPostgresConfig(cfg));
 
     case 'mysql':
-      return introspectMysql({
-        host:     str(cfg.host, 'localhost'),
-        port:     num(cfg.port, 3306),
-        database: str(cfg.database),
-        username: str(cfg.username),
-        password: str(cfg.password),
-      });
+      return introspectMysql(buildMysqlConfig(cfg));
 
     default:
       throw new AppError(

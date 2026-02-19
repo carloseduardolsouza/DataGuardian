@@ -3,65 +3,78 @@ import Modal from '../../components/Modal/Modal';
 import FormField from '../../components/FormField/FormField';
 import { formStyles } from '../../components/FormField/FormField';
 import {
-  CheckIcon, AlertIcon, PlugIcon, SpinnerIcon, CloseIcon,
-  PostgresIcon, MysqlIcon, MongodbIcon, SqlserverIcon, SqliteIcon, FilesIcon,
+  CheckIcon,
+  AlertIcon,
+  PlugIcon,
+  SpinnerIcon,
+  CloseIcon,
+  PostgresIcon,
+  MysqlIcon,
+  MongodbIcon,
+  SqlserverIcon,
+  SqliteIcon,
+  FilesIcon,
   DatabaseIcon,
 } from '../../components/Icons';
 import { DATASOURCE_TYPES } from '../../constants';
 import type { DatasourceType } from '../../constants';
+import { datasourceApi } from '../../services/api';
 import type { ApiDatasourceDetail } from '../../services/api';
 import styles from './AddDatasourceModal.module.css';
 
 interface Props {
-  onClose:   () => void;
-  onSave:    (data: unknown, editId?: string) => void;
+  onClose: () => void;
+  onSave: (data: unknown, editId?: string) => Promise<void>;
   editData?: ApiDatasourceDetail | null;
 }
 
-// ── Estado do formulário ──────────────────────────────────────────
-
 interface FormState {
-  name:      string;
-  enabled:   boolean;
-  // Relacional (postgres/mysql/mongodb/sqlserver)
-  host:      string;
-  port:      string;
-  database:  string;
-  username:  string;
-  password:  string;
+  name: string;
+  enabled: boolean;
+  host: string;
+  port: string;
+  database: string;
+  username: string;
+  password: string;
   sslEnabled: boolean;
-  // SQLite
-  filePath:  string;
-  // Files
-  sourcePath:      string;
+  filePath: string;
+  sourcePath: string;
   includePatterns: string;
   excludePatterns: string;
-  // Tags
   tags: string[];
 }
 
 const INITIAL_FORM: FormState = {
-  name: '', enabled: true,
-  host: '', port: '', database: '', username: '', password: '', sslEnabled: false,
+  name: '',
+  enabled: true,
+  host: '',
+  port: '',
+  database: '',
+  username: '',
+  password: '',
+  sslEnabled: false,
   filePath: '',
-  sourcePath: '', includePatterns: '', excludePatterns: '',
+  sourcePath: '',
+  includePatterns: '',
+  excludePatterns: '',
   tags: [],
 };
 
 function initFormFromEdit(ds: ApiDatasourceDetail): FormState {
   const cfg = ds.connection_config;
+
   return {
-    name:    ds.name,
+    name: ds.name,
     enabled: ds.enabled,
-    tags:    [...ds.tags],
-    host:        String(cfg.host ?? ''),
-    port:        String(cfg.port ?? ''),
-    database:    String(cfg.database ?? ''),
-    username:    String(cfg.username ?? ''),
-    password:    '',  // never pre-fill masked value
-    sslEnabled:  Boolean(cfg.ssl_enabled ?? false),
-    filePath:    String(cfg.file_path ?? ''),
-    sourcePath:  String(cfg.source_path ?? ''),
+    tags: [...ds.tags],
+    host: String(cfg.host ?? ''),
+    port: String(cfg.port ?? ''),
+    database: String(cfg.database ?? ''),
+    username: String(cfg.username ?? ''),
+    password: '',
+    sslEnabled: Boolean(cfg.ssl_enabled ?? false),
+    filePath: String(cfg.file_path ?? ''),
+    sourcePath: String(cfg.source_path ?? ''),
     includePatterns: Array.isArray(cfg.include_patterns)
       ? (cfg.include_patterns as string[]).join(', ')
       : String(cfg.include_patterns ?? ''),
@@ -71,108 +84,55 @@ function initFormFromEdit(ds: ApiDatasourceDetail): FormState {
   };
 }
 
-// ── Ícone por tipo de datasource ──────────────────────────────────
-
 const DS_TYPE_ICON: Record<DatasourceType, React.ReactNode> = {
-  postgres:  <PostgresIcon />,
-  mysql:     <MysqlIcon />,
-  mongodb:   <MongodbIcon />,
+  postgres: <PostgresIcon />,
+  mysql: <MysqlIcon />,
+  mongodb: <MongodbIcon />,
   sqlserver: <SqlserverIcon />,
-  sqlite:    <SqliteIcon />,
-  files:     <FilesIcon />,
+  sqlite: <SqliteIcon />,
+  files: <FilesIcon />,
 };
-
-// ── Componente principal ──────────────────────────────────────────
 
 export default function AddDatasourceModal({ onClose, onSave, editData }: Props) {
   const isEdit = !!editData;
 
-  const [step, setStep]                 = useState<1 | 2>(isEdit ? 2 : 1);
-  const [selectedType, setSelectedType] = useState<DatasourceType | null>(
-    isEdit ? editData.type : null,
-  );
-  const [form, setForm]   = useState<FormState>(
-    isEdit ? initFormFromEdit(editData) : INITIAL_FORM,
-  );
-  const [testing, setTesting]       = useState(false);
+  const [step, setStep] = useState<1 | 2>(isEdit ? 2 : 1);
+  const [selectedType, setSelectedType] = useState<DatasourceType | null>(isEdit ? editData.type : null);
+  const [form, setForm] = useState<FormState>(isEdit ? initFormFromEdit(editData) : INITIAL_FORM);
+  const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<'ok' | 'error' | null>(null);
-  const [tagInput, setTagInput]     = useState('');
+  const [testMessage, setTestMessage] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [tagInput, setTagInput] = useState('');
 
-  const set = (key: keyof FormState) =>
+  const set =
+    (key: keyof FormState) =>
     (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
-      setForm(prev => ({ ...prev, [key]: e.target.value }));
+      setForm((prev) => ({ ...prev, [key]: e.target.value }));
 
-  const setCheck = (key: keyof FormState) => (e: React.ChangeEvent<HTMLInputElement>) =>
-    setForm(prev => ({ ...prev, [key]: e.target.checked }));
+  const setCheck =
+    (key: keyof FormState) => (e: React.ChangeEvent<HTMLInputElement>) =>
+      setForm((prev) => ({ ...prev, [key]: e.target.checked }));
 
   const goToStep2 = () => {
     if (!selectedType) return;
-    const defaultPort = DATASOURCE_TYPES.find(t => t.type === selectedType)?.defaultPort;
-    setForm(prev => ({ ...prev, port: defaultPort ? String(defaultPort) : '' }));
+
+    const defaultPort = DATASOURCE_TYPES.find((t) => t.type === selectedType)?.defaultPort;
+    setForm((prev) => ({ ...prev, port: defaultPort ? String(defaultPort) : '' }));
     setStep(2);
-  };
-
-  const handleTest = () => {
-    setTesting(true);
-    setTestResult(null);
-    setTimeout(() => {
-      setTesting(false);
-      setTestResult('ok');
-    }, 1500);
-  };
-
-  const handleSave = () => {
-    const isRelational = selectedType && !['sqlite', 'files'].includes(selectedType);
-    let connectionConfig: Record<string, unknown> = {};
-
-    if (selectedType === 'sqlite') {
-      connectionConfig = { file_path: form.filePath };
-    } else if (selectedType === 'files') {
-      connectionConfig = {
-        source_path: form.sourcePath,
-        ...(form.includePatterns ? { include_patterns: form.includePatterns.split(',').map(s => s.trim()).filter(Boolean) } : {}),
-        ...(form.excludePatterns ? { exclude_patterns: form.excludePatterns.split(',').map(s => s.trim()).filter(Boolean) } : {}),
-      };
-    } else if (isRelational) {
-      connectionConfig = {
-        host:        form.host,
-        port:        parseInt(form.port) || 5432,
-        database:    form.database,
-        username:    form.username,
-        ssl_enabled: form.sslEnabled,
-        ...(form.password ? { password: form.password } : {}),
-      };
-    }
-
-    if (isEdit) {
-      onSave({
-        name:              form.name,
-        connection_config: connectionConfig,
-        enabled:           form.enabled,
-        tags:              form.tags,
-      }, editData.id);
-    } else {
-      onSave({
-        name:              form.name,
-        type:              selectedType,
-        connection_config: connectionConfig,
-        enabled:           form.enabled,
-        tags:              form.tags,
-      });
-    }
-    onClose();
   };
 
   const addTag = (value: string) => {
     const tag = value.trim().toLowerCase();
     if (tag && !form.tags.includes(tag)) {
-      setForm(prev => ({ ...prev, tags: [...prev.tags, tag] }));
+      setForm((prev) => ({ ...prev, tags: [...prev.tags, tag] }));
     }
     setTagInput('');
   };
 
   const removeTag = (tag: string) => {
-    setForm(prev => ({ ...prev, tags: prev.tags.filter(t => t !== tag) }));
+    setForm((prev) => ({ ...prev, tags: prev.tags.filter((t) => t !== tag) }));
   };
 
   const handleTagKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -185,69 +145,172 @@ export default function AddDatasourceModal({ onClose, onSave, editData }: Props)
     }
   };
 
-  // Validação
   const isRelational = selectedType && !['sqlite', 'files'].includes(selectedType);
+  const missingPasswordOnEdit =
+    !!isEdit &&
+    !!isRelational &&
+    (!editData || typeof editData.connection_config.password !== 'string' || editData.connection_config.password.length === 0);
+
   const isValid = (() => {
     if (!form.name.trim()) return false;
     if (selectedType === 'sqlite') return !!form.filePath.trim();
     if (selectedType === 'files') return !!form.sourcePath.trim();
+
     const base = !!form.host.trim() && !!form.database.trim() && !!form.username.trim();
+    if (missingPasswordOnEdit) return base && !!form.password.trim();
     return isEdit ? base : base && !!form.password.trim();
   })();
 
-  // ── Footer ──────────────────────────────────────────────────────
+  const handleTest = async () => {
+    if (!selectedType) return;
+
+    setTestResult(null);
+    setTestMessage(null);
+
+    if (!isEdit || !editData) {
+      setTestResult('error');
+      setTestMessage('Salve o datasource antes de executar o teste de conexao.');
+      return;
+    }
+
+    try {
+      setTesting(true);
+      const response = await datasourceApi.test(editData.id);
+
+      if (response.status === 'ok') {
+        setTestResult('ok');
+        setTestMessage(
+          response.latency_ms != null
+            ? `Conexao estabelecida (${response.latency_ms}ms).`
+            : 'Conexao estabelecida.',
+        );
+      } else {
+        setTestResult('error');
+        setTestMessage(response.message ?? 'Nao foi possivel conectar com esse datasource.');
+      }
+    } catch (err) {
+      setTestResult('error');
+      setTestMessage(err instanceof Error ? err.message : 'Falha ao testar conexao.');
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  const handleSave = async () => {
+    if (!selectedType || !isValid) return;
+
+    let connectionConfig: Record<string, unknown> = {};
+
+    if (selectedType === 'sqlite') {
+      connectionConfig = { file_path: form.filePath };
+    } else if (selectedType === 'files') {
+      connectionConfig = {
+        source_path: form.sourcePath,
+        ...(form.includePatterns
+          ? {
+              include_patterns: form.includePatterns
+                .split(',')
+                .map((s) => s.trim())
+                .filter(Boolean),
+            }
+          : {}),
+        ...(form.excludePatterns
+          ? {
+              exclude_patterns: form.excludePatterns
+                .split(',')
+                .map((s) => s.trim())
+                .filter(Boolean),
+            }
+          : {}),
+      };
+    } else if (isRelational) {
+      connectionConfig = {
+        host: form.host,
+        port: parseInt(form.port, 10) || 5432,
+        database: form.database,
+        username: form.username,
+        ssl_enabled: form.sslEnabled,
+        ...(form.password ? { password: form.password } : {}),
+      };
+    }
+
+    const payload = isEdit
+      ? {
+          name: form.name,
+          connection_config: connectionConfig,
+          enabled: form.enabled,
+          tags: form.tags,
+        }
+      : {
+          name: form.name,
+          type: selectedType,
+          connection_config: connectionConfig,
+          enabled: form.enabled,
+          tags: form.tags,
+        };
+
+    try {
+      setSaving(true);
+      setSaveError(null);
+      await onSave(payload, editData?.id);
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Falha ao salvar datasource.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const typeLabel = selectedType ? DATASOURCE_TYPES.find((t) => t.type === selectedType)?.label : '';
 
   const footer = (
     <>
       {step === 2 && !isEdit && (
         <div className={styles.footerLeft}>
-          <button className={styles.backBtn} onClick={() => { setStep(1); setTestResult(null); }}>
-            ← Voltar
+          <button
+            className={styles.backBtn}
+            onClick={() => {
+              setStep(1);
+              setTestResult(null);
+              setTestMessage(null);
+              setSaveError(null);
+            }}
+            disabled={saving || testing}
+          >
+            Voltar
           </button>
         </div>
       )}
-      <button className={styles.cancelBtn} onClick={onClose}>Cancelar</button>
+      <button className={styles.cancelBtn} onClick={onClose} disabled={saving}>
+        Cancelar
+      </button>
       {step === 1 ? (
-        <button
-          className={styles.primaryBtn}
-          disabled={!selectedType}
-          onClick={goToStep2}
-        >
-          Próximo →
+        <button className={styles.primaryBtn} disabled={!selectedType || saving} onClick={goToStep2}>
+          Proximo
         </button>
       ) : (
         <>
           {selectedType !== 'files' && (
-            <button
-              className={styles.testBtn}
-              onClick={handleTest}
-              disabled={testing || !isValid}
-            >
+            <button className={styles.testBtn} onClick={handleTest} disabled={testing || saving || !isValid}>
               {testing ? <SpinnerIcon /> : <PlugIcon />}
-              {testing ? 'Testando...' : 'Testar Conexão'}
+              {testing ? 'Testando...' : 'Testar Conexao'}
             </button>
           )}
-          <button className={styles.primaryBtn} onClick={handleSave} disabled={!isValid}>
-            {isEdit ? 'Salvar alterações' : 'Salvar'}
+          <button className={styles.primaryBtn} onClick={handleSave} disabled={!isValid || saving || testing}>
+            {saving ? 'Salvando...' : isEdit ? 'Salvar alteracoes' : 'Salvar'}
           </button>
         </>
       )}
     </>
   );
 
-  // ── Render ──────────────────────────────────────────────────────
-
-  const typeLabel = selectedType ? DATASOURCE_TYPES.find(t => t.type === selectedType)?.label : '';
-
   return (
     <Modal
       title={isEdit ? 'Editar Datasource' : 'Adicionar Datasource'}
-      subtitle={step === 1 ? 'Escolha o tipo de banco de dados' : `Configurar conexão ${typeLabel}`}
+      subtitle={step === 1 ? 'Escolha o tipo de banco de dados' : `Configurar conexao ${typeLabel}`}
       onClose={onClose}
       footer={footer}
       size="lg"
     >
-      {/* Steps indicator — only in create mode */}
       {!isEdit && (
         <div className={styles.steps}>
           <div className={`${styles.step} ${step >= 1 ? styles.stepDone : ''}`}>
@@ -257,45 +320,42 @@ export default function AddDatasourceModal({ onClose, onSave, editData }: Props)
           <div className={styles.stepLine} />
           <div className={`${styles.step} ${step >= 2 ? styles.stepDone : ''}`}>
             <span className={styles.stepNum}>2</span>
-            <span>Configuração</span>
+            <span>Configuracao</span>
           </div>
         </div>
       )}
 
-      {/* STEP 1 — Seleção de tipo (apenas no modo criação) */}
       {step === 1 && !isEdit && (
         <div className={styles.typeGrid}>
-          {DATASOURCE_TYPES.map(opt => (
+          {DATASOURCE_TYPES.map((opt) => (
             <button
               key={opt.type}
               className={`${styles.typeCard} ${selectedType === opt.type ? styles.typeCardActive : ''}`}
               onClick={() => setSelectedType(opt.type)}
             >
-              <div className={`${styles.typeCardIcon} ${styles[opt.type]}`}>
-                {DS_TYPE_ICON[opt.type]}
-              </div>
+              <div className={`${styles.typeCardIcon} ${styles[opt.type]}`}>{DS_TYPE_ICON[opt.type]}</div>
               <span className={styles.typeCardLabel}>{opt.label}</span>
               <span className={styles.typeCardDesc}>{opt.description}</span>
               {selectedType === opt.type && (
-                <span className={styles.typeCardCheck}><CheckIcon width={10} height={10} /></span>
+                <span className={styles.typeCardCheck}>
+                  <CheckIcon width={10} height={10} />
+                </span>
               )}
             </button>
           ))}
         </div>
       )}
 
-      {/* STEP 2 — Formulário dinâmico */}
       {step === 2 && selectedType && (
         <div className={styles.formArea}>
-          {/* Nome */}
           <div className={styles.sectionTitle}>
-            <DatabaseIcon width={15} height={15} /> Informações gerais
+            <DatabaseIcon width={15} height={15} /> Informacoes gerais
           </div>
           <FormField label="Nome *" hint="Nome identificador para este datasource">
             <input
               className={formStyles.input}
               type="text"
-              placeholder={`Ex: ${selectedType === 'postgres' ? 'Postgres Produção' : selectedType === 'mysql' ? 'MySQL Staging' : selectedType === 'mongodb' ? 'MongoDB Atlas' : selectedType === 'sqlserver' ? 'SQL Server Principal' : selectedType === 'sqlite' ? 'SQLite Local' : 'Backups Diários'}`}
+              placeholder="Ex: Postgres Producao"
               value={form.name}
               onChange={set('name')}
             />
@@ -308,11 +368,10 @@ export default function AddDatasourceModal({ onClose, onSave, editData }: Props)
 
           <div className={formStyles.divider} />
 
-          {/* ── Campos para bancos relacionais ── */}
           {isRelational && (
             <>
               <div className={styles.sectionTitle}>
-                {DS_TYPE_ICON[selectedType]} Conexão
+                {DS_TYPE_ICON[selectedType]} Conexao
               </div>
               <div className={formStyles.grid2}>
                 <FormField label="Host *">
@@ -325,16 +384,11 @@ export default function AddDatasourceModal({ onClose, onSave, editData }: Props)
                   />
                 </FormField>
                 <FormField label="Porta">
-                  <input
-                    className={formStyles.input}
-                    type="number"
-                    value={form.port}
-                    onChange={set('port')}
-                  />
+                  <input className={formStyles.input} type="number" value={form.port} onChange={set('port')} />
                 </FormField>
               </div>
 
-              <FormField label="Database *" hint="Nome do banco de dados">
+              <FormField label="Database *">
                 <input
                   className={formStyles.input}
                   type="text"
@@ -345,7 +399,7 @@ export default function AddDatasourceModal({ onClose, onSave, editData }: Props)
               </FormField>
 
               <div className={formStyles.grid2}>
-                <FormField label="Usuário *">
+                <FormField label="Usuario *">
                   <input
                     className={formStyles.input}
                     type="text"
@@ -355,8 +409,8 @@ export default function AddDatasourceModal({ onClose, onSave, editData }: Props)
                   />
                 </FormField>
                 <FormField
-                  label={isEdit ? 'Nova senha' : 'Senha *'}
-                  hint={isEdit ? 'Deixe em branco para manter a senha atual' : undefined}
+                  label={isEdit ? (missingPasswordOnEdit ? 'Senha *' : 'Nova senha') : 'Senha *'}
+                  hint={isEdit ? (missingPasswordOnEdit ? 'Este datasource esta sem senha salva. Informe a senha para habilitar schema/query.' : 'Deixe em branco para manter a senha atual') : undefined}
                 >
                   <input
                     className={formStyles.input}
@@ -375,7 +429,6 @@ export default function AddDatasourceModal({ onClose, onSave, editData }: Props)
             </>
           )}
 
-          {/* ── Campos para SQLite ── */}
           {selectedType === 'sqlite' && (
             <>
               <div className={styles.sectionTitle}>
@@ -393,13 +446,12 @@ export default function AddDatasourceModal({ onClose, onSave, editData }: Props)
             </>
           )}
 
-          {/* ── Campos para Files ── */}
           {selectedType === 'files' && (
             <>
               <div className={styles.sectionTitle}>
-                <FilesIcon width={15} height={15} /> Diretório fonte
+                <FilesIcon width={15} height={15} /> Diretorio fonte
               </div>
-              <FormField label="Caminho de origem *" hint="Diretório a ser incluído no backup">
+              <FormField label="Caminho de origem *" hint="Diretorio a ser incluido no backup">
                 <input
                   className={formStyles.input}
                   type="text"
@@ -408,20 +460,20 @@ export default function AddDatasourceModal({ onClose, onSave, editData }: Props)
                   onChange={set('sourcePath')}
                 />
               </FormField>
-              <FormField label="Padrões de inclusão" hint="Glob patterns separados por vírgula (ex: *.jpg, *.png)">
+              <FormField label="Padroes de inclusao" hint="Glob patterns separados por virgula">
                 <input
                   className={formStyles.input}
                   type="text"
-                  placeholder="*.jpg, *.png, *.pdf"
+                  placeholder="*.jpg, *.png"
                   value={form.includePatterns}
                   onChange={set('includePatterns')}
                 />
               </FormField>
-              <FormField label="Padrões de exclusão" hint="Glob patterns para ignorar (ex: *.tmp, node_modules)">
+              <FormField label="Padroes de exclusao" hint="Glob patterns para ignorar">
                 <input
                   className={formStyles.input}
                   type="text"
-                  placeholder="*.tmp, .cache, node_modules"
+                  placeholder="*.tmp, node_modules"
                   value={form.excludePatterns}
                   onChange={set('excludePatterns')}
                 />
@@ -431,10 +483,9 @@ export default function AddDatasourceModal({ onClose, onSave, editData }: Props)
 
           <div className={formStyles.divider} />
 
-          {/* ── Tags ── */}
-          <FormField label="Tags" hint="Pressione Enter ou vírgula para adicionar">
+          <FormField label="Tags" hint="Pressione Enter ou virgula para adicionar">
             <div className={styles.tagsWrap}>
-              {form.tags.map(tag => (
+              {form.tags.map((tag) => (
                 <span key={tag} className={styles.tag}>
                   {tag}
                   <button className={styles.tagRemove} onClick={() => removeTag(tag)}>
@@ -447,22 +498,28 @@ export default function AddDatasourceModal({ onClose, onSave, editData }: Props)
                 type="text"
                 placeholder={form.tags.length === 0 ? 'Ex: prod, principal' : ''}
                 value={tagInput}
-                onChange={e => setTagInput(e.target.value)}
+                onChange={(e) => setTagInput(e.target.value)}
                 onKeyDown={handleTagKeyDown}
-                onBlur={() => { if (tagInput) addTag(tagInput); }}
+                onBlur={() => {
+                  if (tagInput) addTag(tagInput);
+                }}
               />
             </div>
           </FormField>
 
-          {/* Resultado do teste */}
           {testResult === 'ok' && (
             <div className={styles.testOk}>
-              <CheckIcon /> Conexão estabelecida com sucesso!
+              <CheckIcon /> {testMessage ?? 'Conexao estabelecida com sucesso!'}
             </div>
           )}
           {testResult === 'error' && (
             <div className={styles.testError}>
-              <AlertIcon /> Não foi possível conectar. Verifique as credenciais.
+              <AlertIcon /> {testMessage ?? 'Nao foi possivel conectar. Verifique os dados.'}
+            </div>
+          )}
+          {saveError && (
+            <div className={styles.testError}>
+              <AlertIcon /> {saveError}
             </div>
           )}
         </div>

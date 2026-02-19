@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import Sidebar, { type NavKey } from '../../components/Sidebar/Sidebar';
 import { DatabaseStatIcon, JobStatIcon, ExecutionStatIcon, DangerStatIcon, SunIcon, MoonIcon, EmptyPageIcon } from '../../components/Icons';
 import StatusBadge from '../../components/StatusBadge/StatusBadge';
@@ -9,6 +8,7 @@ import ExecutionsPage  from '../ExecutionsPage/ExecutionsPage';
 import styles from './DashboardPage.module.css';
 
 interface Props {
+  activePage: NavKey;
   theme: 'dark' | 'light';
   onToggleTheme: () => void;
   onLogout: () => void;
@@ -80,16 +80,13 @@ const PAGE_TITLES: Record<NavKey, { title: string; sub: string }> = {
   'settings':      { title: 'Configurações',     sub: 'Preferências do sistema' },
 };
 
-export default function DashboardPage({ theme, onToggleTheme, onLogout }: Props) {
-  const [activePage, setActivePage] = useState<NavKey>('dashboard');
-
+export default function DashboardPage({ activePage, theme, onToggleTheme, onLogout }: Props) {
   const { title, sub } = PAGE_TITLES[activePage];
 
   return (
     <div className={styles.layout}>
       <Sidebar
         active={activePage}
-        onNavigate={setActivePage}
         onLogout={onLogout}
         unreadNotifications={3}
       />

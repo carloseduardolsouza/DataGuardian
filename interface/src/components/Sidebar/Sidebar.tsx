@@ -1,4 +1,5 @@
-import styles from './Sidebar.module.css';
+﻿import styles from './Sidebar.module.css';
+import { Link } from 'react-router-dom';
 import {
   LogoIcon,
   DashboardIcon,
@@ -22,9 +23,19 @@ export type NavKey =
   | 'notifications'
   | 'settings';
 
+export const ROUTE_PATHS: Record<NavKey, string> = {
+  dashboard: '/dashboard',
+  datasources: '/datasources',
+  storage: '/storage',
+  'backup-jobs': '/backup-jobs',
+  executions: '/executions',
+  health: '/health',
+  notifications: '/notifications',
+  settings: '/settings',
+};
+
 interface Props {
   active: NavKey;
-  onNavigate: (key: NavKey) => void;
   onLogout: () => void;
   unreadNotifications?: number;
 }
@@ -36,23 +47,22 @@ interface NavItem {
 }
 
 const mainNav: NavItem[] = [
-  { key: 'dashboard',    label: 'Dashboard',     icon: <DashboardIcon /> },
-  { key: 'datasources',  label: 'Datasources',   icon: <DatabaseIcon /> },
-  { key: 'storage',      label: 'Storage',        icon: <ServerIcon /> },
-  { key: 'backup-jobs',  label: 'Backup Jobs',    icon: <JobsIcon /> },
-  { key: 'executions',   label: 'Execuções',      icon: <PlayIcon /> },
+  { key: 'dashboard', label: 'Dashboard', icon: <DashboardIcon /> },
+  { key: 'datasources', label: 'Datasources', icon: <DatabaseIcon /> },
+  { key: 'storage', label: 'Storage', icon: <ServerIcon /> },
+  { key: 'backup-jobs', label: 'Backup Jobs', icon: <JobsIcon /> },
+  { key: 'executions', label: 'Execucoes', icon: <PlayIcon /> },
 ];
 
 const systemNav: NavItem[] = [
-  { key: 'health',        label: 'Health',          icon: <HealthIcon /> },
-  { key: 'notifications', label: 'Notificações',    icon: <BellIcon /> },
-  { key: 'settings',      label: 'Configurações',   icon: <SettingsIcon /> },
+  { key: 'health', label: 'Health', icon: <HealthIcon /> },
+  { key: 'notifications', label: 'Notificacoes', icon: <BellIcon /> },
+  { key: 'settings', label: 'Configuracoes', icon: <SettingsIcon /> },
 ];
 
-export default function Sidebar({ active, onNavigate, onLogout, unreadNotifications = 0 }: Props) {
+export default function Sidebar({ active, onLogout, unreadNotifications = 0 }: Props) {
   return (
     <aside className={styles.sidebar}>
-      {/* Cabeçalho */}
       <div className={styles.header}>
         <div className={styles.logoWrap}>
           <LogoIcon />
@@ -60,43 +70,39 @@ export default function Sidebar({ active, onNavigate, onLogout, unreadNotificati
         <span className={styles.brandName}>DataGuardian</span>
       </div>
 
-      {/* Navegação */}
       <nav className={styles.nav}>
-        {/* Grupo principal */}
         <div className={styles.navGroup}>
           <p className={styles.navGroupLabel}>Principal</p>
           {mainNav.map((item) => (
-            <button
+            <Link
               key={item.key}
+              to={ROUTE_PATHS[item.key]}
               className={`${styles.navItem}${active === item.key ? ` ${styles.active}` : ''}`}
-              onClick={() => onNavigate(item.key)}
             >
               <span className={styles.navIcon}>{item.icon}</span>
               {item.label}
-            </button>
+            </Link>
           ))}
         </div>
 
-        {/* Grupo sistema */}
         <div className={styles.navGroup}>
           <p className={styles.navGroupLabel}>Sistema</p>
           {systemNav.map((item) => (
-            <button
+            <Link
               key={item.key}
+              to={ROUTE_PATHS[item.key]}
               className={`${styles.navItem}${active === item.key ? ` ${styles.active}` : ''}`}
-              onClick={() => onNavigate(item.key)}
             >
               <span className={styles.navIcon}>{item.icon}</span>
               {item.label}
               {item.key === 'notifications' && unreadNotifications > 0 && (
                 <span className={styles.navBadge}>{unreadNotifications}</span>
               )}
-            </button>
+            </Link>
           ))}
         </div>
       </nav>
 
-      {/* Rodapé */}
       <div className={styles.footer}>
         <div className={styles.userRow}>
           <div className={styles.avatar}>A</div>

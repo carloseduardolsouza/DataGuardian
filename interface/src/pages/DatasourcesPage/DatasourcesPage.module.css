@@ -35,6 +35,42 @@
   flex-direction: column;
 }
 
+.rightWorkspace {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  overflow: hidden;
+}
+
+.explorerPane {
+  width: 300px;
+  min-width: 260px;
+  max-width: 360px;
+  border-right: 1px solid var(--color-border);
+  overflow: hidden;
+}
+
+.queryPane {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+
+@media (max-width: 1200px) {
+  .rightWorkspace {
+    flex-direction: column;
+  }
+
+  .explorerPane {
+    width: 100%;
+    max-width: none;
+    min-width: 0;
+    height: 300px;
+    border-right: none;
+    border-bottom: 1px solid var(--color-border);
+  }
+}
+
 /* ── Estado vazio do painel central ──────────── */
 .explorerPlaceholder {
   display: flex;

@@ -91,6 +91,7 @@
   width: 100%;
   text-align: left;
   position: relative;
+  text-decoration: none;
 }
 
 .navItem:hover {
