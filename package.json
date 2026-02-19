@@ -5,8 +5,7 @@
   "main": "dist/index.js",
   "scripts": {
     "dev": "concurrently --names \"API,UI\" --prefix-colors \"blue,magenta\" --kill-others-on-fail \"tsx watch --env-file=.env src/index.ts\" \"npm run dev --prefix interface\"",
-    "build": "tsc",
-    "build:all": "concurrently --names \"API,UI\" \"npm run build\" \"npm run build --prefix interface\"",
+    "build": "concurrently --names \"API,UI\" \"tsc\" \"tsc --prefix interface\"",
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src --ext .ts",
