@@ -18,7 +18,7 @@ import {
 } from '../../components/Icons';
 
 export default function StoragePage() {
-  const [locations, setLocations]     = useState(MOCK_STORAGE_LOCATIONS);
+  const [locations] = useState(MOCK_STORAGE_LOCATIONS);
   const [selectedLoc, setSelectedLoc] = useState<MockStorageLocation | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
 

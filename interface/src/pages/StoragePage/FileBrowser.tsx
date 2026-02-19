@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { MockFile, MockStorageLocation } from './mockData';
 import { formatBytes, formatDate, getRootLabel } from './mockData';
+import { TrashIcon } from '../../components/Icons';
 import styles from './FileBrowser.module.css';
 
 interface Crumb {
@@ -294,15 +295,12 @@ export default function FileBrowser({ location }: Props) {
   );
 }
 
-/* ── Ícones ─────────────────────────────────────────────────────── */
+/* ── Ícones específicos do FileBrowser ──────────────────────────── */
 function FolderIcon() {
   return <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" stroke="none" opacity="0.85"><path d="M20 6h-8l-2-2H4a2 2 0 00-2 2v12a2 2 0 002 2h16a2 2 0 002-2V8a2 2 0 00-2-2z"/></svg>;
 }
 function ArchiveIcon() {
   return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>;
-}
-function TrashIcon() {
-  return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a1 1 0 011-1h4a1 1 0 011 1v2"/></svg>;
 }
 function ChevronIcon() {
   return <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="9 18 15 12 9 6"/></svg>;

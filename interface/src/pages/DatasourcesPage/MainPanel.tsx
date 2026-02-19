@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import type { MockDatasource, MockTable, QueryResult } from './mockData';
 import { runMockQuery } from './mockData';
+import { PlayFilledIcon, TrashIcon, ExportIcon } from '../../components/Icons';
 import styles from './MainPanel.module.css';
 
 type Tab = 'query' | 'data' | 'structure' | 'indexes';
@@ -97,7 +98,7 @@ export default function MainPanel({ datasource, selectedTable, initialTab = 'que
               </button>
               {result && !result.error && (
                 <button className={styles.actionBtn} onClick={() => exportCSV(result)} title="Exportar CSV">
-                  <DownloadIcon /> CSV
+                  <ExportIcon /> CSV
                 </button>
               )}
               <button
@@ -105,7 +106,7 @@ export default function MainPanel({ datasource, selectedTable, initialTab = 'que
                 onClick={handleRun}
                 disabled={running || !sql.trim()}
               >
-                {running ? <span className={styles.spinner} /> : <PlayIcon />}
+                {running ? <span className={styles.spinner} /> : <PlayFilledIcon width={13} height={13} />}
                 {running ? 'Executando...' : 'Executar'}
                 {!running && <span className={styles.kbd}>⌃↵</span>}
               </button>
@@ -113,7 +114,7 @@ export default function MainPanel({ datasource, selectedTable, initialTab = 'que
           )}
           {(activeTab === 'data' || activeTab === 'structure') && selectedTable && (
             <button className={styles.actionBtn} onClick={() => exportCSV({ columns: selectedTable.columns.map(c => c.name), rows: selectedTable.rows, rowCount: selectedTable.rows.length, executionTime: '' })}>
-              <DownloadIcon /> Exportar
+              <ExportIcon /> Exportar
             </button>
           )}
         </div>
@@ -195,7 +196,7 @@ export default function MainPanel({ datasource, selectedTable, initialTab = 'que
                       <span>Tempo: <strong>{result.executionTime}</strong></span>
                     </div>
                     <button className={styles.actionBtn} onClick={() => exportCSV(result)}>
-                      <DownloadIcon /> Exportar CSV
+                      <ExportIcon /> Exportar CSV
                     </button>
                   </div>
                   <div className={styles.tableWrap}>
@@ -394,10 +395,7 @@ function exportCSV(result: QueryResult) {
   URL.revokeObjectURL(url);
 }
 
-/* ── Ícones ─────────────────────────────────────────────────── */
-function PlayIcon() { return <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21"/></svg>; }
-function TrashIcon() { return <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>; }
+/* ── Ícones específicos do MainPanel ────────────────────────────── */
 function HistoryIcon() { return <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/><polyline points="12 7 12 12 15 15"/></svg>; }
-function DownloadIcon() { return <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>; }
 function Check() { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--color-success)" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>; }
 function Dash() { return <span style={{ color: 'var(--color-text-subtle)', fontSize: '12px' }}>—</span>; }
