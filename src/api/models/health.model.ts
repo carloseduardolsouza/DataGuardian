@@ -1,18 +1,18 @@
-import { prisma } from '../../lib/prisma';
-
-// ──────────────────────────────────────────
-// Query types
-// ──────────────────────────────────────────
+﻿import { prisma } from '../../lib/prisma';
+import { getWorkersSnapshot } from '../../workers/worker-registry';
+import { listStorageHealthEntries } from '../../core/health/storage-health-store';
 
 export interface HealthHistoryFilters {
   datasource_id?: string;
-  from?:          string;
-  to?:            string;
+  from?: string;
+  to?: string;
 }
 
-// ──────────────────────────────────────────
-// Model functions
-// ──────────────────────────────────────────
+export interface StorageHealthHistoryFilters {
+  storage_location_id?: string;
+  from?: string;
+  to?: string;
+}
 
 export async function getSystemHealth() {
   let dbStatus: 'ok' | 'error' = 'ok';
@@ -42,30 +42,38 @@ export async function getSystemHealth() {
     prisma.backupExecution.count({ where: { status: 'failed', createdAt: { gte: startOfDay } } }),
   ]);
 
-  const overallStatus = dbStatus === 'error' ? 'degraded' : 'ok';
+  const workers = getWorkersSnapshot();
+  const hasWorkerError = Object.values(workers).some((worker) => worker.status === 'error');
+  const overallStatus = dbStatus === 'error' || hasWorkerError ? 'degraded' : 'ok';
 
   return {
-    status:         overallStatus,
-    version:        process.env.npm_package_version ?? '1.0.0',
+    status: overallStatus,
+    version: process.env.npm_package_version ?? '1.0.0',
     uptime_seconds: Math.floor(process.uptime()),
     services: {
       database: dbStatus,
-      redis:    'unknown',
+      redis: 'unknown',
       workers: {
-        backup:    'not_started',
-        scheduler: 'not_started',
-        health:    'not_started',
-        cleanup:   'not_started',
+        backup: workers.backup.status,
+        scheduler: workers.scheduler.status,
+        health: workers.health.status,
+        cleanup: workers.cleanup.status,
       },
     },
     stats: {
-      datasources_total:       totalDatasources,
-      datasources_healthy:     healthyDatasources,
-      datasources_critical:    criticalDatasources,
-      jobs_total:              totalJobs,
-      jobs_enabled:            enabledJobs,
-      executions_today:        executionsToday,
+      datasources_total: totalDatasources,
+      datasources_healthy: healthyDatasources,
+      datasources_critical: criticalDatasources,
+      jobs_total: totalJobs,
+      jobs_enabled: enabledJobs,
+      executions_today: executionsToday,
       executions_failed_today: failedToday,
+    },
+    worker_details: {
+      backup: workers.backup,
+      scheduler: workers.scheduler,
+      health: workers.health,
+      cleanup: workers.cleanup,
     },
   };
 }
@@ -80,7 +88,7 @@ export async function getDatasourceHealthHistory(
   if (filters.from || filters.to) {
     where.checkedAt = {
       ...(filters.from && { gte: new Date(filters.from) }),
-      ...(filters.to   && { lte: new Date(filters.to) }),
+      ...(filters.to && { lte: new Date(filters.to) }),
     };
   }
 
@@ -96,25 +104,50 @@ export async function getDatasourceHealthHistory(
   ]);
 
   const data = items.map((hc) => ({
-    id:            hc.id,
+    id: hc.id,
     datasource_id: hc.datasourceId,
-    datasource:    hc.datasource
+    datasource: hc.datasource
       ? { name: hc.datasource.name, type: hc.datasource.type }
       : undefined,
-    checked_at:    hc.checkedAt.toISOString(),
-    status:        hc.status,
-    latency_ms:    hc.latencyMs,
+    checked_at: hc.checkedAt.toISOString(),
+    status: hc.status,
+    latency_ms: hc.latencyMs,
     error_message: hc.errorMessage,
-    metadata:      hc.metadata,
+    metadata: hc.metadata,
   }));
 
   return {
     data,
     pagination: {
       total,
-      page:       Math.floor(skip / limit) + 1,
+      page: Math.floor(skip / limit) + 1,
       limit,
       totalPages: Math.ceil(total / limit),
     },
   };
 }
+
+export async function getStorageHealthHistory(
+  filters: StorageHealthHistoryFilters,
+  skip: number,
+  limit: number,
+) {
+  const { data, total } = listStorageHealthEntries({
+    storage_location_id: filters.storage_location_id,
+    from: filters.from,
+    to: filters.to,
+    skip,
+    limit,
+  });
+
+  return {
+    data,
+    pagination: {
+      total,
+      page: Math.floor(skip / limit) + 1,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    },
+  };
+}
+

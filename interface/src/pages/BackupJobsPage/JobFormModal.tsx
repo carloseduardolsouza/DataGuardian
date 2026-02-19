@@ -1,146 +1,231 @@
-import { useState } from 'react';
-import type { MockBackupJob, StorageTarget, BackupType, Frequency } from './mockData';
-import { DS_OPTIONS, SL_OPTIONS } from './mockData';
-import { DS_ABBR, SL_ABBR } from '../../constants';
+import { useMemo, useState } from 'react';
+import type { ReactNode } from 'react';
+import type { ApiBackupJob, ApiDatasource, ApiStorageLocation } from '../../services/api';
 import {
-  CheckIcon,
-  PlusIcon,
-  TrashIcon,
-  ChevronUpIcon,
-  ChevronDownIcon,
-  InfoIcon,
+  CheckIcon,  InfoIcon,
   DbIcon,
   StorageIcon,
   ClockIcon,
   RetentionIcon,
 } from '../../components/Icons';
 import Modal from '../../components/Modal/Modal';
+import { DS_ABBR, SL_ABBR } from '../../constants';
 import styles from './JobFormModal.module.css';
 
-interface Props {
-  job:     MockBackupJob | null;   // null = criando novo
-  onClose: () => void;
-  onSave:  (job: MockBackupJob) => void;
+export type BackupType = 'full' | 'incremental' | 'differential';
+type Frequency = 'daily' | 'weekly' | 'monthly';
+
+interface JobPayload {
+  name: string;
+  datasource_id: string;
+  storage_location_id: string;
+  schedule_cron: string;
+  schedule_timezone: string;
+  enabled: boolean;
+  retention_policy: {
+    keep_daily: number;
+    keep_weekly: number;
+    keep_monthly: number;
+    auto_delete: boolean;
+  };
+  backup_options: {
+    compression: 'gzip' | 'zstd' | 'lz4' | 'none';
+    compression_level?: number;
+    parallel_jobs?: number;
+    exclude_tables?: string[];
+    include_tables?: string[];
+    max_file_size_mb?: number;
+    storage_strategy?: 'replicate' | 'fallback';
+    storage_targets?: Array<{
+      storage_location_id: string;
+      order: number;
+    }>;
+  };
 }
 
-const WEEKDAYS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
-const HOURS    = Array.from({ length: 24 }, (_, i) => i);
-const MINUTES  = [0, 15, 30, 45];
+interface Props {
+  job: ApiBackupJob | null;
+  datasources: ApiDatasource[];
+  storages: ApiStorageLocation[];
+  saving: boolean;
+  onClose: () => void;
+  onSave: (payload: JobPayload, id?: string) => Promise<void>;
+}
+
+const WEEKDAYS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sab'];
+const HOURS = Array.from({ length: 24 }, (_, i) => i);
+const MINUTES = [0, 15, 30, 45];
 
 const BACKUP_TYPES: { value: BackupType; label: string; desc: string }[] = [
-  { value: 'full',          label: 'Completo',      desc: 'Copia todos os dados a cada execução' },
-  { value: 'incremental',   label: 'Incremental',   desc: 'Apenas o que mudou desde o último backup' },
-  { value: 'differential',  label: 'Diferencial',   desc: 'Mudanças desde o último backup completo' },
+  { value: 'full', label: 'Completo', desc: 'Copia todos os dados a cada execução' },
+  { value: 'incremental', label: 'Incremental', desc: 'Apenas o que mudou desde o último backup' },
+  { value: 'differential', label: 'Diferencial', desc: 'Mudanças desde o último backup completo' },
 ];
 
-export default function JobFormModal({ job, onClose, onSave }: Props) {
-  // ── Estado do formulário ────────────────────────────────────────
-  const [name, setName]             = useState(job?.name ?? '');
-  const [enabled, setEnabled]       = useState(job?.enabled ?? true);
-  const [datasourceId, setDs]       = useState(job?.datasourceId ?? '');
-  const [backupType, setBt]         = useState<BackupType>(job?.backupType ?? 'full');
+function parseCron(cron: string) {
+  const [minRaw = '0', hourRaw = '2', domRaw = '*', _monthRaw = '*', dowRaw = '*'] = cron.split(' ');
+  const minute = Number(minRaw) || 0;
+  const hour = Number(hourRaw) || 2;
 
-  // Storages com ordem
-  const [targets, setTargets]       = useState<StorageTarget[]>(
-    job?.storageTargets ?? [],
+  if (domRaw !== '*' && dowRaw === '*') {
+    return {
+      frequency: 'monthly' as Frequency,
+      hour,
+      minute,
+      daysOfWeek: [1],
+      dayOfMonth: Number(domRaw) || 1,
+    };
+  }
+
+  if (dowRaw !== '*' && domRaw === '*') {
+    const days = dowRaw.split(',').map((d) => Number(d)).filter((d) => Number.isFinite(d) && d >= 0 && d <= 6);
+    return {
+      frequency: 'weekly' as Frequency,
+      hour,
+      minute,
+      daysOfWeek: days.length > 0 ? days : [1],
+      dayOfMonth: 1,
+    };
+  }
+
+  return {
+    frequency: 'daily' as Frequency,
+    hour,
+    minute,
+    daysOfWeek: [1],
+    dayOfMonth: 1,
+  };
+}
+
+function buildCron(frequency: Frequency, hour: number, minute: number, daysOfWeek: number[], dayOfMonth: number) {
+  if (frequency === 'monthly') {
+    return `${minute} ${hour} ${dayOfMonth} * *`;
+  }
+  if (frequency === 'weekly') {
+    const dow = [...new Set(daysOfWeek)].sort((a, b) => a - b).join(',') || '1';
+    return `${minute} ${hour} * * ${dow}`;
+  }
+  return `${minute} ${hour} * * *`;
+}
+
+export default function JobFormModal({
+  job,
+  datasources,
+  storages,
+  saving,
+  onClose,
+  onSave,
+}: Props) {
+  const parsed = parseCron(job?.schedule_cron ?? '0 2 * * *');
+  const initialTargets = (
+    job?.storage_targets
+    ?? job?.backup_options?.storage_targets
+    ?? (job?.storage_location_id ? [{ storage_location_id: job.storage_location_id, order: 1 }] : [])
+  )
+    .map((t) => ({
+      storage_location_id: t.storage_location_id,
+      order: Number(t.order) || 1,
+    }))
+    .sort((a, b) => a.order - b.order);
+
+  const [name, setName] = useState(job?.name ?? '');
+  const [enabled, setEnabled] = useState(job?.enabled ?? true);
+  const [datasourceId, setDatasourceId] = useState(job?.datasource_id ?? '');
+  const [storageTargets, setStorageTargets] = useState(initialTargets);
+  const [storageToAddId, setStorageToAddId] = useState('');
+  const [storageStrategy, setStorageStrategy] = useState<'replicate' | 'fallback'>(
+    job?.storage_strategy ?? job?.backup_options?.storage_strategy ?? 'fallback',
+  );
+  const [backupType, setBackupType] = useState<BackupType>('full');
+
+  const [frequency, setFrequency] = useState<Frequency>(parsed.frequency);
+  const [hour, setHour] = useState(parsed.hour);
+  const [minute, setMinute] = useState(parsed.minute);
+  const [daysOfWeek, setDaysOfWeek] = useState<number[]>(parsed.daysOfWeek);
+  const [dayOfMonth, setDayOfMonth] = useState(parsed.dayOfMonth);
+
+  const [retDaily, setRetDaily] = useState(Number(job?.retention_policy?.keep_daily ?? 7));
+  const [retWeekly, setRetWeekly] = useState(Number(job?.retention_policy?.keep_weekly ?? 4));
+  const [retMonthly, setRetMonthly] = useState(Number(job?.retention_policy?.keep_monthly ?? 12));
+  const [autoDelete, setAutoDelete] = useState(Boolean(job?.retention_policy?.auto_delete ?? true));
+
+  const [compression, setCompression] = useState<'gzip' | 'zstd' | 'lz4' | 'none'>(
+    job?.backup_options?.compression ?? 'gzip',
   );
 
-  // Agendamento
-  const [frequency, setFreq]        = useState<Frequency>(job?.schedule.frequency ?? 'daily');
-  const [hour, setHour]             = useState(job?.schedule.hour ?? 2);
-  const [minute, setMinute]         = useState(job?.schedule.minute ?? 0);
-  const [daysOfWeek, setDow]        = useState<number[]>(job?.schedule.daysOfWeek ?? [1]);
-  const [dayOfMonth, setDom]        = useState(job?.schedule.dayOfMonth ?? 1);
+  const isValid = useMemo(() => {
+    if (!name.trim()) return false;
+    if (!datasourceId) return false;
+    if (storageTargets.length === 0) return false;
+    if (frequency === 'weekly' && daysOfWeek.length === 0) return false;
+    if (frequency === 'monthly' && (dayOfMonth < 1 || dayOfMonth > 28)) return false;
+    return true;
+  }, [name, datasourceId, storageTargets.length, frequency, daysOfWeek, dayOfMonth]);
 
-  // Retenção
-  const [retDaily, setRetDaily]     = useState(job?.retention.daily ?? 7);
-  const [retWeekly, setRetWeekly]   = useState(job?.retention.weekly ?? 4);
-  const [retMonthly, setRetMonthly] = useState(job?.retention.monthly ?? 12);
-
-  // UI state
-  const [storageToAdd, setStorageToAdd] = useState('');
-
-  // ── Lógica de storages ──────────────────────────────────────────
-  const addStorage = () => {
-    if (!storageToAdd || targets.find(t => t.storageId === storageToAdd)) return;
-    setTargets(prev => [
+  function addStorageTarget() {
+    if (!storageToAddId) return;
+    if (storageTargets.some((t) => t.storage_location_id === storageToAddId)) return;
+    setStorageTargets((prev) => [
       ...prev,
-      { storageId: storageToAdd, order: prev.length + 1, replicate: prev.length === 0 },
+      { storage_location_id: storageToAddId, order: prev.length + 1 },
     ]);
-    setStorageToAdd('');
-  };
+    setStorageToAddId('');
+  }
 
-  const removeStorage = (id: string) => {
-    setTargets(prev => {
-      const next = prev.filter(t => t.storageId !== id);
-      return next.map((t, i) => ({ ...t, order: i + 1 }));
-    });
-  };
+  function moveTarget(index: number, direction: -1 | 1) {
+    const newIndex = index + direction;
+    if (newIndex < 0 || newIndex >= storageTargets.length) return;
+    const next = [...storageTargets];
+    const [moved] = next.splice(index, 1);
+    next.splice(newIndex, 0, moved);
+    setStorageTargets(next.map((t, i) => ({ ...t, order: i + 1 })));
+  }
 
-  const moveUp = (idx: number) => {
-    if (idx === 0) return;
-    setTargets(prev => {
-      const next = [...prev];
-      [next[idx - 1], next[idx]] = [next[idx], next[idx - 1]];
-      return next.map((t, i) => ({ ...t, order: i + 1 }));
-    });
-  };
+  function removeTarget(storageLocationId: string) {
+    const next = storageTargets
+      .filter((t) => t.storage_location_id !== storageLocationId)
+      .map((t, i) => ({ ...t, order: i + 1 }));
+    setStorageTargets(next);
+  }
 
-  const moveDown = (idx: number) => {
-    setTargets(prev => {
-      if (idx >= prev.length - 1) return prev;
-      const next = [...prev];
-      [next[idx], next[idx + 1]] = [next[idx + 1], next[idx]];
-      return next.map((t, i) => ({ ...t, order: i + 1 }));
-    });
-  };
+  async function handleSave() {
+    if (!isValid) return;
 
-  const toggleReplicate = (id: string) =>
-    setTargets(prev => prev.map(t => t.storageId === id ? { ...t, replicate: !t.replicate } : t));
-
-  // ── Submit ──────────────────────────────────────────────────────
-  const handleSave = () => {
-    const base: MockBackupJob = {
-      id:           job?.id ?? '',
-      name,
+    const payload: JobPayload = {
+      name: name.trim(),
+      datasource_id: datasourceId,
+      storage_location_id: storageTargets[0].storage_location_id,
+      schedule_cron: buildCron(frequency, hour, minute, daysOfWeek, dayOfMonth),
+      schedule_timezone: 'UTC',
       enabled,
-      datasourceId,
-      storageTargets: targets,
-      schedule:     {
-        frequency,
-        hour,
-        minute,
-        ...(frequency === 'weekly'  ? { daysOfWeek } : {}),
-        ...(frequency === 'monthly' ? { dayOfMonth } : {}),
+      retention_policy: {
+        keep_daily: retDaily,
+        keep_weekly: retWeekly,
+        keep_monthly: retMonthly,
+        auto_delete: autoDelete,
       },
-      backupType,
-      retention:    { daily: retDaily, weekly: retWeekly, monthly: retMonthly },
-      lastExecution:   job?.lastExecution ?? null,
-      nextExecutionAt: job?.nextExecutionAt ?? new Date().toISOString(),
-      createdAt:       job?.createdAt ?? new Date().toISOString(),
+      backup_options: {
+        compression,
+        storage_strategy: storageStrategy,
+        storage_targets: storageTargets.map((t, index) => ({
+          storage_location_id: t.storage_location_id,
+          order: index + 1,
+        })),
+      },
     };
-    onSave(base);
-  };
 
-  const isValid = name.trim() && datasourceId && targets.length > 0;
+    await onSave(payload, job?.id);
+  }
 
-  const availableStorages = SL_OPTIONS.filter(s => !targets.find(t => t.storageId === s.id));
-
-  // ── Footer ────────────────────────────────────────────────────────
   const footerContent = (
     <>
-      <button className={styles.cancelBtn} onClick={onClose}>Cancelar</button>
-      <button
-        className={styles.saveBtn}
-        onClick={handleSave}
-        disabled={!isValid}
-      >
-        {job ? 'Salvar alterações' : 'Criar job'}
+      <button className={styles.cancelBtn} onClick={onClose} disabled={saving}>Cancelar</button>
+      <button className={styles.saveBtn} onClick={() => void handleSave()} disabled={!isValid || saving}>
+        {saving ? 'Salvando...' : job ? 'Salvar alterações' : 'Criar job'}
       </button>
     </>
   );
 
-  // ── UI ──────────────────────────────────────────────────────────
   return (
     <Modal
       title={job ? 'Editar Job' : 'Novo Backup Job'}
@@ -149,18 +234,18 @@ export default function JobFormModal({ job, onClose, onSave }: Props) {
       footer={footerContent}
       size="lg"
     >
-      {/* ── Seção 1: Informações básicas ─────────────────────── */}
       <Section icon={<InfoIcon />} title="Informações gerais">
         <div className={styles.field}>
           <label className={styles.label}>Nome do job *</label>
           <input
             className={styles.input}
             type="text"
-            placeholder="Ex: Postgres — Backup Diário"
+            placeholder="Ex: Postgres - Backup Diário"
             value={name}
             onChange={e => setName(e.target.value)}
           />
         </div>
+
         <div className={styles.field}>
           <label className={styles.label}>Tipo de backup</label>
           <div className={styles.radioCards}>
@@ -168,7 +253,7 @@ export default function JobFormModal({ job, onClose, onSave }: Props) {
               <button
                 key={bt.value}
                 className={`${styles.radioCard} ${backupType === bt.value ? styles.radioCardActive : ''}`}
-                onClick={() => setBt(bt.value)}
+                onClick={() => setBackupType(bt.value)}
                 type="button"
               >
                 <span className={styles.radioCardLabel}>{bt.label}</span>
@@ -177,20 +262,20 @@ export default function JobFormModal({ job, onClose, onSave }: Props) {
             ))}
           </div>
         </div>
+
         <label className={styles.checkLabel}>
           <input type="checkbox" checked={enabled} onChange={e => setEnabled(e.target.checked)} />
           <span>Job ativo (será agendado automaticamente)</span>
         </label>
       </Section>
 
-      {/* ── Seção 2: Banco de dados ──────────────────────────── */}
-      <Section icon={<DbIcon />} title="Banco de dados de origem">
+      <Section icon={<DbIcon />} title="Datasource de origem">
         <div className={styles.dsGrid}>
-          {DS_OPTIONS.map(ds => (
+          {datasources.map(ds => (
             <button
               key={ds.id}
               className={`${styles.dsCard} ${datasourceId === ds.id ? styles.dsCardActive : ''}`}
-              onClick={() => setDs(ds.id)}
+              onClick={() => setDatasourceId(ds.id)}
               type="button"
             >
               <span className={`${styles.dsCardIcon} ${styles[ds.type]}`}>
@@ -204,86 +289,101 @@ export default function JobFormModal({ job, onClose, onSave }: Props) {
         </div>
       </Section>
 
-      {/* ── Seção 3: Destinos de armazenamento ───────────────── */}
-      <Section icon={<StorageIcon />} title="Destinos de armazenamento">
-        <p className={styles.sectionHint}>
-          Adicione um ou mais locais. Arraste para definir a ordem de prioridade.
-          Marque <strong>Replicar</strong> para guardar cópias em paralelo.
-        </p>
-
-        {/* Lista de storages selecionados */}
-        {targets.length === 0 && (
-          <p className={styles.emptyTargets}>Nenhum destino adicionado ainda.</p>
-        )}
+      <Section icon={<StorageIcon />} title="Storage de destino">
+        <div className={styles.addTargetRow}>
+          <select
+            className={styles.select}
+            value={storageToAddId}
+            onChange={(e) => setStorageToAddId(e.target.value)}
+          >
+            <option value="">Selecione um storage...</option>
+            {storages
+              .filter((s) => !storageTargets.some((t) => t.storage_location_id === s.id))
+              .map(sl => (
+              <option key={sl.id} value={sl.id}>{sl.name}</option>
+              ))}
+          </select>
+          <button type="button" className={styles.addTargetBtn} onClick={addStorageTarget} disabled={!storageToAddId}>
+            Adicionar
+          </button>
+        </div>
 
         <div className={styles.targetList}>
-          {targets.map((t, idx) => {
-            const sl = SL_OPTIONS.find(s => s.id === t.storageId);
+          {storageTargets.length === 0 && (
+            <p className={styles.emptyTargets}>Selecione pelo menos um storage de destino.</p>
+          )}
+
+          {storageTargets.map((target, index) => {
+            const sl = storages.find((s) => s.id === target.storage_location_id);
+            if (!sl) return null;
             return (
-              <div key={t.storageId} className={styles.targetRow}>
+              <div key={target.storage_location_id} className={styles.targetRow}>
                 <div className={styles.targetOrder}>
-                  <button className={styles.orderBtn} onClick={() => moveUp(idx)} disabled={idx === 0}><ChevronUpIcon /></button>
-                  <span className={styles.orderNum}>{idx + 1}</span>
-                  <button className={styles.orderBtn} onClick={() => moveDown(idx)} disabled={idx === targets.length - 1}><ChevronDownIcon /></button>
+                  <button
+                    type="button"
+                    className={styles.orderBtn}
+                    onClick={() => moveTarget(index, -1)}
+                    disabled={index === 0}
+                    aria-label="Mover para cima"
+                  >
+                    Up
+                  </button>
+                  <span className={styles.orderNum}>{index + 1}</span>
+                  <button
+                    type="button"
+                    className={styles.orderBtn}
+                    onClick={() => moveTarget(index, 1)}
+                    disabled={index === storageTargets.length - 1}
+                    aria-label="Mover para baixo"
+                  >
+                    Dn
+                  </button>
                 </div>
 
-                <span className={`${styles.slBadge} ${styles[sl?.type ?? '']}`}>
-                  {SL_ABBR[sl?.type ?? ''] ?? '?'}
-                </span>
-
+                <span className={`${styles.slBadge} ${styles[sl.type]}`}>{SL_ABBR[sl.type]}</span>
                 <div className={styles.targetInfo}>
-                  <span className={styles.targetName}>{sl?.name}</span>
-                  {idx === 0 && <span className={styles.primaryLabel}>Primário</span>}
+                  <span className={styles.targetName}>{sl.name}</span>
+                  {index === 0 && <span className={styles.primaryLabel}>primario</span>}
                 </div>
-
-                <label className={styles.replicateToggle} title="Replicar backup neste destino em paralelo">
-                  <input
-                    type="checkbox"
-                    checked={t.replicate}
-                    onChange={() => toggleReplicate(t.storageId)}
-                  />
-                  <span>Replicar</span>
-                </label>
 
                 <button
+                  type="button"
                   className={styles.removeTarget}
-                  onClick={() => removeStorage(t.storageId)}
-                  title="Remover destino"
+                  onClick={() => removeTarget(target.storage_location_id)}
+                  aria-label="Remover target"
                 >
-                  <TrashIcon />
+                  X
                 </button>
               </div>
             );
           })}
         </div>
 
-        {/* Adicionar novo destino */}
-        {availableStorages.length > 0 && (
-          <div className={styles.addTargetRow}>
-            <select
-              className={styles.select}
-              value={storageToAdd}
-              onChange={e => setStorageToAdd(e.target.value)}
-            >
-              <option value="">Selecione um storage…</option>
-              {availableStorages.map(sl => (
-                <option key={sl.id} value={sl.id}>{sl.name}</option>
-              ))}
-            </select>
+        <div className={styles.field}>
+          <label className={styles.label}>Estrategia de gravacao</label>
+          <div className={styles.freqTabs}>
             <button
-              className={styles.addTargetBtn}
-              onClick={addStorage}
-              disabled={!storageToAdd}
+              type="button"
+              className={`${styles.freqTab} ${storageStrategy === 'fallback' ? styles.freqTabActive : ''}`}
+              onClick={() => setStorageStrategy('fallback')}
             >
-              <PlusIcon /> Adicionar
+              Fallback
+            </button>
+            <button
+              type="button"
+              className={`${styles.freqTab} ${storageStrategy === 'replicate' ? styles.freqTabActive : ''}`}
+              onClick={() => setStorageStrategy('replicate')}
+            >
+              Replicar
             </button>
           </div>
-        )}
+          <p className={styles.sectionHint}>
+            Fallback: salva no primeiro storage disponivel. Replicar: tenta salvar em todos os storages.
+          </p>
+        </div>
       </Section>
 
-      {/* ── Seção 4: Agendamento ─────────────────────────────── */}
       <Section icon={<ClockIcon />} title="Agendamento">
-        {/* Frequência */}
         <div className={styles.field}>
           <label className={styles.label}>Frequência</label>
           <div className={styles.freqTabs}>
@@ -291,7 +391,7 @@ export default function JobFormModal({ job, onClose, onSave }: Props) {
               <button
                 key={f}
                 className={`${styles.freqTab} ${frequency === f ? styles.freqTabActive : ''}`}
-                onClick={() => setFreq(f)}
+                onClick={() => setFrequency(f)}
                 type="button"
               >
                 {f === 'daily' ? 'Diário' : f === 'weekly' ? 'Semanal' : 'Mensal'}
@@ -300,7 +400,6 @@ export default function JobFormModal({ job, onClose, onSave }: Props) {
           </div>
         </div>
 
-        {/* Dias da semana (se weekly) */}
         {frequency === 'weekly' && (
           <div className={styles.field}>
             <label className={styles.label}>Dias da semana</label>
@@ -310,8 +409,8 @@ export default function JobFormModal({ job, onClose, onSave }: Props) {
                   key={i}
                   type="button"
                   className={`${styles.dowBtn} ${daysOfWeek.includes(i) ? styles.dowActive : ''}`}
-                  onClick={() => setDow(prev =>
-                    prev.includes(i) ? prev.filter(x => x !== i) : [...prev, i]
+                  onClick={() => setDaysOfWeek(prev =>
+                    prev.includes(i) ? prev.filter(x => x !== i) : [...prev, i],
                   )}
                 >
                   {d}
@@ -321,7 +420,6 @@ export default function JobFormModal({ job, onClose, onSave }: Props) {
           </div>
         )}
 
-        {/* Dia do mês (se monthly) */}
         {frequency === 'monthly' && (
           <div className={styles.field}>
             <label className={styles.label}>Dia do mês</label>
@@ -331,15 +429,13 @@ export default function JobFormModal({ job, onClose, onSave }: Props) {
               min="1"
               max="28"
               value={dayOfMonth}
-              onChange={e => setDom(Number(e.target.value))}
+              onChange={e => setDayOfMonth(Number(e.target.value))}
             />
-            <span className={styles.fieldHint}>Use no máximo 28 para funcionar em todos os meses.</span>
           </div>
         )}
 
-        {/* Horário */}
         <div className={styles.field}>
-          <label className={styles.label}>Horário de execução</label>
+          <label className={styles.label}>Horário (UTC)</label>
           <div className={styles.timeRow}>
             <select className={styles.select} value={hour} onChange={e => setHour(Number(e.target.value))}>
               {HOURS.map(h => (
@@ -352,29 +448,37 @@ export default function JobFormModal({ job, onClose, onSave }: Props) {
                 <option key={m} value={m}>{String(m).padStart(2, '0')}</option>
               ))}
             </select>
-            <span className={styles.timeHint}>Horário do servidor (UTC)</span>
           </div>
         </div>
       </Section>
 
-      {/* ── Seção 5: Retenção ─────────────────────────────────── */}
       <Section icon={<RetentionIcon />} title="Política de retenção">
-        <p className={styles.sectionHint}>
-          Define quantos backups manter de cada tipo antes de apagar os mais antigos automaticamente.
-        </p>
+        <label className={styles.checkLabel}>
+          <input type="checkbox" checked={autoDelete} onChange={(e) => setAutoDelete(e.target.checked)} />
+          <span>Auto delete habilitado</span>
+        </label>
+
         <div className={styles.retentionGrid}>
-          <RetentionField label="Backups diários" value={retDaily}   onChange={setRetDaily}   />
-          <RetentionField label="Backups semanais" value={retWeekly}  onChange={setRetWeekly}  />
-          <RetentionField label="Backups mensais"  value={retMonthly} onChange={setRetMonthly} />
+          <RetentionField label="Backups diários" value={retDaily} onChange={setRetDaily} />
+          <RetentionField label="Backups semanais" value={retWeekly} onChange={setRetWeekly} />
+          <RetentionField label="Backups mensais" value={retMonthly} onChange={setRetMonthly} />
+        </div>
+
+        <div className={styles.field}>
+          <label className={styles.label}>Compressão</label>
+          <select className={styles.select} value={compression} onChange={(e) => setCompression(e.target.value as typeof compression)}>
+            <option value="gzip">gzip</option>
+            <option value="zstd">zstd</option>
+            <option value="lz4">lz4</option>
+            <option value="none">none</option>
+          </select>
         </div>
       </Section>
     </Modal>
   );
 }
 
-/* ── Componentes auxiliares ──────────────────────────────────────── */
-
-function Section({ icon, title, children }: { icon: React.ReactNode; title: string; children: React.ReactNode }) {
+function Section({ icon, title, children }: { icon: ReactNode; title: string; children: ReactNode }) {
   return (
     <div className={styles.section}>
       <div className={styles.sectionHeader}>
@@ -391,11 +495,15 @@ function RetentionField({ label, value, onChange }: { label: string; value: numb
     <div className={styles.retField}>
       <label className={styles.retLabel}>{label}</label>
       <div className={styles.retControl}>
-        <button className={styles.retBtn} onClick={() => onChange(Math.max(0, value - 1))}>−</button>
-        <span className={styles.retValue}>{value === 0 ? '∞' : value}</span>
-        <button className={styles.retBtn} onClick={() => onChange(value + 1)}>+</button>
+        <button className={styles.retBtn} onClick={() => onChange(Math.max(0, value - 1))} type="button">-</button>
+        <span className={styles.retValue}>{value}</span>
+        <button className={styles.retBtn} onClick={() => onChange(value + 1)} type="button">+</button>
       </div>
-      <span className={styles.retHint}>{value === 0 ? 'sem limite' : `${value} backup${value !== 1 ? 's' : ''}`}</span>
     </div>
   );
 }
+
+
+
+
+

@@ -1,4 +1,5 @@
 import {
+  Prisma,
   NotificationType,
   NotificationSeverity,
   NotificationEntityType,
@@ -30,7 +31,7 @@ export async function createNotification(input: CreateNotificationInput): Promis
         entityId:   input.entityId,
         title:      input.title,
         message:    input.message,
-        metadata:   input.metadata ?? {},
+        metadata:   (input.metadata ?? {}) as Prisma.InputJsonValue,
       },
     });
 

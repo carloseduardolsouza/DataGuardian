@@ -1,5 +1,6 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
+import { AppError } from '../middlewares/error-handler';
 
 // ──────────────────────────────────────────
 // Configurações padrão do sistema
@@ -64,6 +65,13 @@ export async function seedDefaultSettings(): Promise<void> {
 
 type SettingsMap = Record<string, { value: unknown; description: string | null; updated_at: string }>;
 
+export interface SystemSettingItem {
+  key: string;
+  value: unknown;
+  description: string | null;
+  updated_at: string;
+}
+
 function maskSmtpPassword(settings: SettingsMap): SettingsMap {
   const result = { ...settings };
   const smtpKey = 'notifications.email_smtp_config';
@@ -73,6 +81,33 @@ function maskSmtpPassword(settings: SettingsMap): SettingsMap {
     result[smtpKey] = { ...result[smtpKey], value: v };
   }
   return result;
+}
+
+function maskSmtpPasswordForItem(item: SystemSettingItem): SystemSettingItem {
+  if (item.key !== 'notifications.email_smtp_config') return item;
+  const value = { ...(item.value as Record<string, unknown>) };
+  if (value.password) value.password = '**********';
+  return { ...item, value };
+}
+
+async function normalizeSmtpConfigValueForPersist(value: unknown): Promise<Prisma.InputJsonValue> {
+  const smtpKey = 'notifications.email_smtp_config';
+  const incoming = (value ?? {}) as Record<string, unknown>;
+  const current = await prisma.systemSetting.findUnique({ where: { key: smtpKey } });
+  const currentValue = (current?.value ?? {}) as Record<string, unknown>;
+
+  const merged = { ...incoming };
+  const incomingPassword = merged.password;
+
+  if (incomingPassword === '**********' || incomingPassword === '' || incomingPassword === undefined) {
+    if (currentValue.password) {
+      merged.password = currentValue.password;
+    } else {
+      delete merged.password;
+    }
+  }
+
+  return merged as Prisma.InputJsonValue;
 }
 
 export async function getSystemSettings(): Promise<SettingsMap> {
@@ -90,23 +125,67 @@ export async function getSystemSettings(): Promise<SettingsMap> {
   return maskSmtpPassword(result);
 }
 
+export async function getSystemSettingByKey(key: string): Promise<SystemSettingItem> {
+  const setting = await prisma.systemSetting.findUnique({ where: { key } });
+  if (!setting) {
+    throw new AppError('NOT_FOUND', 404, `Configuração '${key}' não encontrada.`);
+  }
+
+  return maskSmtpPasswordForItem({
+    key: setting.key,
+    value: setting.value,
+    description: setting.description,
+    updated_at: setting.updatedAt.toISOString(),
+  });
+}
+
+export async function createSystemSetting(data: {
+  key: string;
+  value: unknown;
+  description?: string | null;
+}): Promise<SystemSettingItem> {
+  const existing = await prisma.systemSetting.findUnique({ where: { key: data.key } });
+  if (existing) {
+    throw new AppError('CONFLICT', 409, `Configuração '${data.key}' já existe.`);
+  }
+
+  const created = await prisma.systemSetting.create({
+    data: {
+      key: data.key,
+      value: data.value as Prisma.InputJsonValue,
+      description: data.description ?? null,
+    },
+  });
+
+  return maskSmtpPasswordForItem({
+    key: created.key,
+    value: created.value,
+    description: created.description,
+    updated_at: created.updatedAt.toISOString(),
+  });
+}
+
 export async function updateSystemSettings(updates: Record<string, unknown>): Promise<SettingsMap> {
-  const upserts = Object.entries(updates).map(([key, value]) =>
+  const upserts = await Promise.all(Object.entries(updates).map(async ([key, value]) =>
     prisma.systemSetting.upsert({
       where:  { key },
       create: {
         key,
-        value:       value as Prisma.InputJsonValue,
+        value:       key === 'notifications.email_smtp_config'
+          ? await normalizeSmtpConfigValueForPersist(value)
+          : value as Prisma.InputJsonValue,
         description: DEFAULT_SETTINGS[key]?.description ?? null,
       },
-      update: { value: value as Prisma.InputJsonValue },
+      update: {
+        value: key === 'notifications.email_smtp_config'
+          ? await normalizeSmtpConfigValueForPersist(value)
+          : value as Prisma.InputJsonValue,
+      },
     }),
-  );
-
-  const updated = await Promise.all(upserts);
+  ));
 
   const result: SettingsMap = {};
-  for (const s of updated) {
+  for (const s of upserts) {
     result[s.key] = {
       value:       s.value,
       description: s.description,
@@ -115,6 +194,44 @@ export async function updateSystemSettings(updates: Record<string, unknown>): Pr
   }
 
   return result;
+}
+
+export async function updateSystemSettingByKey(
+  key: string,
+  patch: { value?: unknown; description?: string | null },
+): Promise<SystemSettingItem> {
+  const current = await prisma.systemSetting.findUnique({ where: { key } });
+  if (!current) {
+    throw new AppError('NOT_FOUND', 404, `Configuração '${key}' não encontrada.`);
+  }
+
+  const updated = await prisma.systemSetting.update({
+    where: { key },
+    data: {
+      ...(patch.value !== undefined && {
+        value: key === 'notifications.email_smtp_config'
+          ? await normalizeSmtpConfigValueForPersist(patch.value)
+          : patch.value as Prisma.InputJsonValue,
+      }),
+      ...(patch.description !== undefined && { description: patch.description }),
+    },
+  });
+
+  return maskSmtpPasswordForItem({
+    key: updated.key,
+    value: updated.value,
+    description: updated.description,
+    updated_at: updated.updatedAt.toISOString(),
+  });
+}
+
+export async function deleteSystemSettingByKey(key: string): Promise<void> {
+  const existing = await prisma.systemSetting.findUnique({ where: { key } });
+  if (!existing) {
+    throw new AppError('NOT_FOUND', 404, `Configuração '${key}' não encontrada.`);
+  }
+
+  await prisma.systemSetting.delete({ where: { key } });
 }
 
 export async function testSmtpConnection() {

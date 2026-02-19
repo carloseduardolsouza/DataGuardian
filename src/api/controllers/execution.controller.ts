@@ -2,7 +2,9 @@ import { Request, Response, NextFunction } from 'express';
 import {
   listExecutions,
   findExecutionById,
+  getExecutionLogs,
   cancelExecution,
+  deleteExecution,
 } from '../models/execution.model';
 import { getPaginationParams, buildPaginatedResponse } from '../../utils/config';
 
@@ -32,10 +34,28 @@ export const ExecutionController = {
     }
   },
 
+  async logs(req: Request, res: Response, next: NextFunction) {
+    try {
+      const result = await getExecutionLogs(String(req.params.id));
+      res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  },
+
   async cancel(req: Request, res: Response, next: NextFunction) {
     try {
       const result = await cancelExecution(String(req.params.id));
       res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async remove(req: Request, res: Response, next: NextFunction) {
+    try {
+      await deleteExecution(String(req.params.id));
+      res.status(204).send();
     } catch (err) {
       next(err);
     }

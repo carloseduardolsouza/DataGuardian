@@ -1,17 +1,16 @@
-import { prisma } from './lib/prisma';
+﻿import { prisma } from './lib/prisma';
 import { createApp } from './api/server';
 import { seedDefaultSettings } from './api/models/system.model';
 import { config } from './utils/config';
 import { logger } from './utils/logger';
-
-// ──────────────────────────────────────────
-// Entry point do DataGuardian
-// ──────────────────────────────────────────
+import { startBackupWorker, stopBackupWorker } from './workers/backup-worker';
+import { startSchedulerWorker, stopSchedulerWorker } from './workers/scheduler-worker';
+import { startHealthWorker, stopHealthWorker } from './workers/health-worker';
+import { startCleanupWorker, stopCleanupWorker } from './workers/cleanup-worker';
 
 async function bootstrap() {
   logger.info('Iniciando DataGuardian...');
 
-  // 1. Conecta ao banco de dados
   try {
     await prisma.$connect();
     logger.info('Conectado ao PostgreSQL');
@@ -20,7 +19,6 @@ async function bootstrap() {
     process.exit(1);
   }
 
-  // 2. Seed das configurações padrão do sistema
   try {
     await seedDefaultSettings();
     logger.info('Configurações padrão verificadas/criadas');
@@ -28,8 +26,7 @@ async function bootstrap() {
     logger.warn({ err }, 'Erro ao verificar configurações padrão');
   }
 
-  // 3. Inicia o servidor Express
-  const app  = createApp();
+  const app = createApp();
   const port = config.port;
 
   const server = app.listen(port, () => {
@@ -37,17 +34,18 @@ async function bootstrap() {
     logger.info(`Ambiente: ${config.env}`);
   });
 
-  // 4. Workers (stubs — serão implementados em etapas futuras)
-  logger.warn('Workers não iniciados — serão implementados na próxima etapa:');
-  logger.warn('  → SchedulerWorker (agenda backups a cada 1 min)');
-  logger.warn('  → BackupWorker    (processa a fila de backups)');
-  logger.warn('  → HealthWorker    (health checks a cada 5 min)');
-  logger.warn('  → CleanupWorker   (limpeza GFS diária às 4h)');
+  startSchedulerWorker();
+  startBackupWorker();
+  startHealthWorker();
+  startCleanupWorker();
 
-  // 5. Graceful shutdown
   const shutdown = async (signal: string) => {
     logger.info(`Sinal ${signal} recebido. Encerrando servidor...`);
     server.close(async () => {
+      stopHealthWorker();
+      stopSchedulerWorker();
+      stopBackupWorker();
+      stopCleanupWorker();
       await prisma.$disconnect();
       logger.info('Servidor encerrado com sucesso');
       process.exit(0);
@@ -55,17 +53,18 @@ async function bootstrap() {
   };
 
   process.on('SIGTERM', () => shutdown('SIGTERM'));
-  process.on('SIGINT',  () => shutdown('SIGINT'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
 
   process.on('uncaughtException', (err) => {
-    logger.fatal({ err }, 'Uncaught exception — encerrando');
+    logger.fatal({ err }, 'Uncaught exception - encerrando');
     process.exit(1);
   });
 
   process.on('unhandledRejection', (reason) => {
-    logger.fatal({ reason }, 'Unhandled rejection — encerrando');
+    logger.fatal({ reason }, 'Unhandled rejection - encerrando');
     process.exit(1);
   });
 }
 
 bootstrap();
+

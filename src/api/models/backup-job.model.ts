@@ -3,10 +3,12 @@ import { prisma } from '../../lib/prisma';
 import { AppError } from '../middlewares/error-handler';
 import { validateCron } from '../../core/scheduler/cron-parser';
 import { calculateNextExecution } from '../../core/scheduler/job-scheduler';
+import { triggerBackupExecutionNow } from '../../workers/backup-worker';
+import { logger } from '../../utils/logger';
 
-// ──────────────────────────────────────────
+// ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬
 // Formatter
-// ──────────────────────────────────────────
+// ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬
 
 export function formatJob(job: {
   id: string;
@@ -24,7 +26,33 @@ export function formatJob(job: {
   updatedAt: Date;
   datasource?: { id: string; name: string; type: DatasourceType } | null;
   storageLocation?: { id: string; name: string; type: StorageLocationType } | null;
+  backupExecutions?: Array<{
+    status: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';
+    startedAt: Date | null;
+    finishedAt: Date | null;
+    sizeBytes: bigint | null;
+    durationSeconds: number | null;
+  }>;
 }) {
+  const backupOptions = (job.backupOptions ?? {}) as Record<string, unknown>;
+  const rawTargets = Array.isArray(backupOptions.storage_targets)
+    ? backupOptions.storage_targets as Array<Record<string, unknown>>
+    : [];
+  const normalizedTargets = rawTargets
+    .map((t) => ({
+      storage_location_id: String(t.storage_location_id ?? ''),
+      order: Number(t.order ?? 0),
+    }))
+    .filter((t) => t.storage_location_id && Number.isFinite(t.order) && t.order > 0)
+    .sort((a, b) => a.order - b.order);
+
+  const storageTargets = normalizedTargets.length > 0
+    ? normalizedTargets
+    : [{ storage_location_id: job.storageLocationId, order: 1 }];
+
+  const storageStrategy = backupOptions.storage_strategy === 'replicate' ? 'replicate' : 'fallback';
+
+  const latest = job.backupExecutions?.[0] ?? null;
   return {
     id:                  job.id,
     name:                job.name,
@@ -34,7 +62,9 @@ export function formatJob(job: {
     schedule_timezone:   job.scheduleTimezone,
     enabled:             job.enabled,
     retention_policy:    job.retentionPolicy,
-    backup_options:      job.backupOptions,
+    backup_options:      backupOptions,
+    storage_targets:     storageTargets,
+    storage_strategy:    storageStrategy,
     last_execution_at:   job.lastExecutionAt?.toISOString() ?? null,
     next_execution_at:   job.nextExecutionAt?.toISOString() ?? null,
     created_at:          job.createdAt.toISOString(),
@@ -45,12 +75,21 @@ export function formatJob(job: {
     ...(job.storageLocation && {
       storage_location: { id: job.storageLocation.id, name: job.storageLocation.name, type: job.storageLocation.type },
     }),
+    ...(latest && {
+      last_execution: {
+        status: latest.status,
+        started_at: latest.startedAt?.toISOString() ?? null,
+        finished_at: latest.finishedAt?.toISOString() ?? null,
+        size_bytes: latest.sizeBytes ? Number(latest.sizeBytes) : null,
+        duration_seconds: latest.durationSeconds,
+      },
+    }),
   };
 }
 
-// ──────────────────────────────────────────
+// ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬
 // Query types
-// ──────────────────────────────────────────
+// ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬
 
 export interface ListBackupJobsFilters {
   enabled?:             string;
@@ -83,11 +122,22 @@ export interface UpdateBackupJobData {
 const jobInclude = {
   datasource:      { select: { id: true, name: true, type: true } },
   storageLocation: { select: { id: true, name: true, type: true } },
+  backupExecutions: {
+    take: 1,
+    orderBy: { createdAt: 'desc' as const },
+    select: {
+      status: true,
+      startedAt: true,
+      finishedAt: true,
+      sizeBytes: true,
+      durationSeconds: true,
+    },
+  },
 } as const;
 
-// ──────────────────────────────────────────
+// ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬
 // Model functions
-// ──────────────────────────────────────────
+// ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬
 
 export async function listBackupJobs(
   filters: ListBackupJobsFilters,
@@ -116,16 +166,43 @@ export async function listBackupJobs(
 export async function createBackupJob(data: CreateBackupJobData) {
   validateCron(data.schedule_cron);
 
+  const backupOptions = (data.backup_options ?? {}) as Record<string, unknown>;
+  const strategy = backupOptions.storage_strategy === 'replicate' ? 'replicate' : 'fallback';
+  const rawTargets = Array.isArray(backupOptions.storage_targets)
+    ? backupOptions.storage_targets as Array<Record<string, unknown>>
+    : [];
+  const normalizedTargets = rawTargets
+    .map((t) => ({
+      storage_location_id: String(t.storage_location_id ?? ''),
+      order: Number(t.order ?? 0),
+    }))
+    .filter((t) => t.storage_location_id && Number.isFinite(t.order) && t.order > 0)
+    .sort((a, b) => a.order - b.order);
+
+  const storageTargets = normalizedTargets.length > 0
+    ? normalizedTargets
+    : [{ storage_location_id: data.storage_location_id, order: 1 }];
+
+  const primaryStorageId = storageTargets[0].storage_location_id;
+
   const [datasource, storageLocation] = await Promise.all([
     prisma.datasource.findUnique({ where: { id: data.datasource_id } }),
-    prisma.storageLocation.findUnique({ where: { id: data.storage_location_id } }),
+    prisma.storageLocation.findUnique({ where: { id: primaryStorageId } }),
   ]);
 
   if (!datasource) {
-    throw new AppError('NOT_FOUND', 404, `Datasource '${data.datasource_id}' não encontrado`);
+    throw new AppError('NOT_FOUND', 404, `Datasource '${data.datasource_id}' nÃƒÆ’Ã‚Â£o encontrado`);
   }
   if (!storageLocation) {
-    throw new AppError('NOT_FOUND', 404, `Storage location '${data.storage_location_id}' não encontrado`);
+    throw new AppError('NOT_FOUND', 404, `Storage location '${primaryStorageId}' nÃƒÆ’Ã‚Â£o encontrado`);
+  }
+
+  if (storageTargets.length > 1) {
+    const uniqueIds = [...new Set(storageTargets.map((t) => t.storage_location_id))];
+    const count = await prisma.storageLocation.count({ where: { id: { in: uniqueIds } } });
+    if (count !== uniqueIds.length) {
+      throw new AppError('NOT_FOUND', 404, 'Um ou mais storage targets nÃƒÆ’Ã‚Â£o foram encontrados');
+    }
   }
 
   const nextExecutionAt = calculateNextExecution(data.schedule_cron, data.schedule_timezone ?? 'UTC');
@@ -134,12 +211,16 @@ export async function createBackupJob(data: CreateBackupJobData) {
     data: {
       name:              data.name,
       datasourceId:      data.datasource_id,
-      storageLocationId: data.storage_location_id,
+      storageLocationId: primaryStorageId,
       scheduleCron:      data.schedule_cron,
       scheduleTimezone:  data.schedule_timezone ?? 'UTC',
       enabled:           data.enabled,
       retentionPolicy:   data.retention_policy,
-      backupOptions:     data.backup_options,
+      backupOptions: {
+        ...backupOptions,
+        storage_strategy: strategy,
+        storage_targets: storageTargets,
+      },
       nextExecutionAt,
     },
     include: jobInclude,
@@ -170,12 +251,34 @@ export async function updateBackupJob(id: string, data: UpdateBackupJobData) {
 
   if (data.datasource_id) {
     const ds = await prisma.datasource.findUnique({ where: { id: data.datasource_id } });
-    if (!ds) throw new AppError('NOT_FOUND', 404, `Datasource '${data.datasource_id}' não encontrado`);
+    if (!ds) throw new AppError('NOT_FOUND', 404, `Datasource '${data.datasource_id}' nÃƒÆ’Ã‚Â£o encontrado`);
   }
 
-  if (data.storage_location_id) {
-    const sl = await prisma.storageLocation.findUnique({ where: { id: data.storage_location_id } });
-    if (!sl) throw new AppError('NOT_FOUND', 404, `Storage location '${data.storage_location_id}' não encontrado`);
+  const currentBackupOptions = (current.backupOptions ?? {}) as Record<string, unknown>;
+  const patchBackupOptions = (data.backup_options ?? {}) as Record<string, unknown>;
+  const mergedBackupOptions = { ...currentBackupOptions, ...patchBackupOptions };
+
+  const rawTargets = Array.isArray(mergedBackupOptions.storage_targets)
+    ? mergedBackupOptions.storage_targets as Array<Record<string, unknown>>
+    : [];
+  const normalizedTargets = rawTargets
+    .map((t) => ({
+      storage_location_id: String(t.storage_location_id ?? ''),
+      order: Number(t.order ?? 0),
+    }))
+    .filter((t) => t.storage_location_id && Number.isFinite(t.order) && t.order > 0)
+    .sort((a, b) => a.order - b.order);
+
+  const computedTargets = normalizedTargets.length > 0
+    ? normalizedTargets
+    : [{ storage_location_id: data.storage_location_id ?? current.storageLocationId, order: 1 }];
+
+  const primaryStorageId = data.storage_location_id ?? computedTargets[0].storage_location_id;
+
+  const uniqueStorageIds = [...new Set(computedTargets.map((t) => t.storage_location_id))];
+  const storageCount = await prisma.storageLocation.count({ where: { id: { in: uniqueStorageIds } } });
+  if (storageCount !== uniqueStorageIds.length) {
+    throw new AppError('NOT_FOUND', 404, 'Um ou mais storage targets nÃƒÆ’Ã‚Â£o foram encontrados');
   }
 
   const updated = await prisma.backupJob.update({
@@ -183,12 +286,18 @@ export async function updateBackupJob(id: string, data: UpdateBackupJobData) {
     data: {
       ...(data.name                !== undefined && { name: data.name }),
       ...(data.datasource_id       !== undefined && { datasourceId: data.datasource_id }),
-      ...(data.storage_location_id !== undefined && { storageLocationId: data.storage_location_id }),
+      ...(primaryStorageId !== undefined && { storageLocationId: primaryStorageId }),
       ...(data.schedule_cron       !== undefined && { scheduleCron: data.schedule_cron }),
       ...(data.schedule_timezone   !== undefined && { scheduleTimezone: data.schedule_timezone }),
       ...(data.enabled             !== undefined && { enabled: data.enabled }),
       ...(data.retention_policy    !== undefined && { retentionPolicy: data.retention_policy }),
-      ...(data.backup_options      !== undefined && { backupOptions: data.backup_options }),
+      ...((data.backup_options !== undefined || data.storage_location_id !== undefined) && {
+        backupOptions: {
+          ...mergedBackupOptions,
+          storage_strategy: mergedBackupOptions.storage_strategy === 'replicate' ? 'replicate' : 'fallback',
+          storage_targets: computedTargets,
+        },
+      }),
       ...(nextExecutionAt          !== undefined && { nextExecutionAt }),
     },
     include: jobInclude,
@@ -199,15 +308,12 @@ export async function updateBackupJob(id: string, data: UpdateBackupJobData) {
 
 export async function deleteBackupJob(id: string) {
   await prisma.backupJob.findUniqueOrThrow({ where: { id } });
+  await prisma.backupExecution.deleteMany({ where: { jobId: id } });
   await prisma.backupJob.delete({ where: { id } });
 }
 
 export async function runBackupJob(id: string) {
   const job = await prisma.backupJob.findUniqueOrThrow({ where: { id } });
-
-  if (!job.enabled) {
-    throw new AppError('JOB_DISABLED', 400, 'Este backup job está desabilitado. Habilite-o antes de executar.');
-  }
 
   const execution = await prisma.backupExecution.create({
     data: {
@@ -219,11 +325,16 @@ export async function runBackupJob(id: string) {
     },
   });
 
-  // TODO: Enfileirar na backup-queue via BullMQ quando workers estiverem implementados.
+  void triggerBackupExecutionNow(execution.id).catch((err) => {
+    logger.error(
+      { err, executionId: execution.id, jobId: job.id },
+      'Falha no disparo de backup sob demanda',
+    );
+  });
 
   return {
     execution_id: execution.id,
-    message:      'Backup enfileirado com sucesso',
-    status:       'queued',
+    message:      'Backup iniciado sob demanda',
+    status:       'running',
   };
 }

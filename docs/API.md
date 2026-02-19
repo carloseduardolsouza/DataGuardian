@@ -873,6 +873,35 @@ Retorna o histórico de health checks de todos os datasources.
 
 ---
 
+### `GET /api/health/storage`
+
+Retorna o historico de health checks dos storage locations monitorados pelo HealthWorker.
+
+**Query Parameters:** `storage_location_id`, `page`, `limit`, `from`, `to`
+
+**Resposta `200 OK`:**
+
+```json
+{
+  "data": [
+    {
+      "id": "shc-uuid-...",
+      "storage_location_id": "st-uuid-...",
+      "storage_name": "NAS Empresa",
+      "storage_type": "ssh",
+      "checked_at": "2026-02-19T16:10:00.000Z",
+      "status": "ok",
+      "latency_ms": 34,
+      "available_space_gb": null,
+      "error_message": null
+    }
+  ],
+  "pagination": { "total": 42, "page": 1, "limit": 20, "totalPages": 3 }
+}
+```
+
+---
+
 ## Notifications
 
 Sistema de alertas e eventos do DataGuardian.
@@ -1040,6 +1069,64 @@ Atualiza uma ou mais configurações do sistema.
 ```
 
 **Resposta `200 OK`:** objeto com todas as configurações atualizadas.
+
+---
+
+### `POST /api/system/settings`
+
+Cria uma nova configuração (chave única).
+
+**Request Body:**
+
+```json
+{
+  "key": "app.custom_flag",
+  "value": true,
+  "description": "Flag customizada para ambiente local"
+}
+```
+
+**Resposta `201 Created`:**
+
+```json
+{
+  "key": "app.custom_flag",
+  "value": true,
+  "description": "Flag customizada para ambiente local",
+  "updated_at": "2026-02-19T18:20:00.000Z"
+}
+```
+
+---
+
+### `GET /api/system/settings/:key`
+
+Retorna uma configuração específica.
+
+---
+
+### `PUT /api/system/settings/:key`
+
+Atualiza uma configuração específica por chave.
+
+**Request Body (parcial):**
+
+```json
+{
+  "value": {
+    "enabled": true
+  },
+  "description": "Nova descrição opcional"
+}
+```
+
+---
+
+### `DELETE /api/system/settings/:key`
+
+Remove uma configuração específica.
+
+**Resposta `204 No Content`.**
 
 ---
 

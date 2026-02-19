@@ -6,11 +6,46 @@ import { SystemController } from "../controllers/system.controller";
 export const systemRouter = Router();
 
 const updateSettingsSchema = z.record(z.unknown());
+const settingKeySchema = z.object({
+  key: z.string().min(1).max(100),
+});
+const createSettingSchema = z.object({
+  key: z.string().min(1).max(100),
+  value: z.unknown(),
+  description: z.string().max(500).nullable().optional(),
+});
+const updateSettingSchema = z.object({
+  value: z.unknown().optional(),
+  description: z.string().max(500).nullable().optional(),
+}).refine((v) => v.value !== undefined || v.description !== undefined, {
+  message: 'Informe ao menos "value" ou "description".',
+});
 
 systemRouter.get("/settings", SystemController.getSettings);
+systemRouter.post(
+  "/settings",
+  validate(createSettingSchema),
+  SystemController.createSetting,
+);
 systemRouter.put(
   "/settings",
   validate(updateSettingsSchema),
   SystemController.updateSettings,
 );
 systemRouter.post("/settings/test-smtp", SystemController.testSmtp);
+systemRouter.get(
+  "/settings/:key",
+  validate(settingKeySchema, "params"),
+  SystemController.getSettingByKey,
+);
+systemRouter.put(
+  "/settings/:key",
+  validate(settingKeySchema, "params"),
+  validate(updateSettingSchema),
+  SystemController.updateSettingByKey,
+);
+systemRouter.delete(
+  "/settings/:key",
+  validate(settingKeySchema, "params"),
+  SystemController.deleteSettingByKey,
+);

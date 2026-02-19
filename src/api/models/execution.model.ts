@@ -1,11 +1,15 @@
-import { ExecutionStatus, DatasourceType, StorageLocationType, BackupType } from '@prisma/client';
+import { Prisma, ExecutionStatus, DatasourceType, StorageLocationType, BackupType } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { AppError } from '../middlewares/error-handler';
 import { bigIntToSafe } from '../../utils/config';
 
-// ──────────────────────────────────────────
-// Formatter
-// ──────────────────────────────────────────
+type ExecutionLogLevel = 'info' | 'warn' | 'error' | 'debug' | 'success';
+
+interface ExecutionLogEntry {
+  ts: string;
+  level: ExecutionLogLevel;
+  message: string;
+}
 
 export function formatExecution(exec: {
   id: string;
@@ -29,22 +33,22 @@ export function formatExecution(exec: {
   storageLocation?: { name: string; type: StorageLocationType } | null;
 }) {
   return {
-    id:                    exec.id,
-    job_id:                exec.jobId,
-    datasource_id:         exec.datasourceId,
-    storage_location_id:   exec.storageLocationId,
-    status:                exec.status,
-    backup_type:           exec.backupType,
-    started_at:            exec.startedAt?.toISOString() ?? null,
-    finished_at:           exec.finishedAt?.toISOString() ?? null,
-    duration_seconds:      exec.durationSeconds,
-    size_bytes:            bigIntToSafe(exec.sizeBytes),
+    id: exec.id,
+    job_id: exec.jobId,
+    datasource_id: exec.datasourceId,
+    storage_location_id: exec.storageLocationId,
+    status: exec.status,
+    backup_type: exec.backupType,
+    started_at: exec.startedAt?.toISOString() ?? null,
+    finished_at: exec.finishedAt?.toISOString() ?? null,
+    duration_seconds: exec.durationSeconds,
+    size_bytes: bigIntToSafe(exec.sizeBytes),
     compressed_size_bytes: bigIntToSafe(exec.compressedSizeBytes),
-    backup_path:           exec.backupPath,
-    files_count:           exec.filesCount,
-    error_message:         exec.errorMessage,
-    metadata:              exec.metadata,
-    created_at:            exec.createdAt.toISOString(),
+    backup_path: exec.backupPath,
+    files_count: exec.filesCount,
+    error_message: exec.errorMessage,
+    metadata: exec.metadata,
+    created_at: exec.createdAt.toISOString(),
     ...(exec.job && {
       job: { name: exec.job.name, schedule_cron: exec.job.scheduleCron },
     }),
@@ -57,43 +61,77 @@ export function formatExecution(exec: {
   };
 }
 
-// ──────────────────────────────────────────
-// Query types
-// ──────────────────────────────────────────
+function getMetadataObject(metadata: unknown): Record<string, unknown> {
+  if (metadata && typeof metadata === 'object' && !Array.isArray(metadata)) {
+    return metadata as Record<string, unknown>;
+  }
+  return {};
+}
+
+function normalizeExecutionLogs(metadata: unknown, fallbackErrorMessage: string | null): ExecutionLogEntry[] {
+  const raw = getMetadataObject(metadata).execution_logs;
+  const logs = Array.isArray(raw)
+    ? raw
+      .map((entry) => {
+        if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return null;
+        const log = entry as Record<string, unknown>;
+        const message = String(log.message ?? '').trim();
+        if (!message) return null;
+
+        const levelRaw = String(log.level ?? 'info');
+        const level: ExecutionLogLevel = ['info', 'warn', 'error', 'debug', 'success'].includes(levelRaw)
+          ? levelRaw as ExecutionLogLevel
+          : 'info';
+
+        const tsRaw = String(log.ts ?? '');
+        const ts = Number.isNaN(Date.parse(tsRaw))
+          ? new Date().toISOString()
+          : new Date(tsRaw).toISOString();
+
+        return { ts, level, message };
+      })
+      .filter((entry): entry is ExecutionLogEntry => entry !== null)
+    : [];
+
+  if (logs.length > 0) return logs;
+  if (!fallbackErrorMessage) return [];
+
+  return [{
+    ts: new Date().toISOString(),
+    level: 'error',
+    message: fallbackErrorMessage,
+  }];
+}
 
 export interface ListExecutionsFilters {
-  job_id?:              string;
-  datasource_id?:       string;
+  job_id?: string;
+  datasource_id?: string;
   storage_location_id?: string;
-  status?:              string;
-  from?:                string;
-  to?:                  string;
+  status?: string;
+  from?: string;
+  to?: string;
 }
 
 const executionInclude = {
-  job:             { select: { name: true, scheduleCron: true } },
-  datasource:      { select: { name: true, type: true } },
+  job: { select: { name: true, scheduleCron: true } },
+  datasource: { select: { name: true, type: true } },
   storageLocation: { select: { name: true, type: true } },
 } as const;
-
-// ──────────────────────────────────────────
-// Model functions
-// ──────────────────────────────────────────
 
 export async function listExecutions(
   filters: ListExecutionsFilters,
   skip: number,
   limit: number,
 ) {
-  const where: Record<string, unknown> = {};
-  if (filters.job_id)              where.jobId             = filters.job_id;
-  if (filters.datasource_id)       where.datasourceId      = filters.datasource_id;
+  const where: Prisma.BackupExecutionWhereInput = {};
+  if (filters.job_id) where.jobId = filters.job_id;
+  if (filters.datasource_id) where.datasourceId = filters.datasource_id;
   if (filters.storage_location_id) where.storageLocationId = filters.storage_location_id;
-  if (filters.status)              where.status            = filters.status as ExecutionStatus;
+  if (filters.status) where.status = filters.status as ExecutionStatus;
   if (filters.from || filters.to) {
     where.createdAt = {
       ...(filters.from && { gte: new Date(filters.from) }),
-      ...(filters.to   && { lte: new Date(filters.to) }),
+      ...(filters.to && { lte: new Date(filters.to) }),
     };
   }
 
@@ -120,9 +158,9 @@ export async function findExecutionById(id: string) {
         orderBy: { chunkNumber: 'asc' },
         select: {
           chunkNumber: true,
-          filePath:    true,
-          sizeBytes:   true,
-          checksum:    true,
+          filePath: true,
+          sizeBytes: true,
+          checksum: true,
         },
       },
     },
@@ -132,10 +170,32 @@ export async function findExecutionById(id: string) {
     ...formatExecution(execution),
     chunks: execution.chunks.map((c) => ({
       chunk_number: c.chunkNumber,
-      file_path:    c.filePath,
-      size_bytes:   bigIntToSafe(c.sizeBytes),
-      checksum:     c.checksum,
+      file_path: c.filePath,
+      size_bytes: bigIntToSafe(c.sizeBytes),
+      checksum: c.checksum,
     })),
+  };
+}
+
+export async function getExecutionLogs(id: string) {
+  const execution = await prisma.backupExecution.findUniqueOrThrow({
+    where: { id },
+    select: {
+      id: true,
+      status: true,
+      startedAt: true,
+      finishedAt: true,
+      errorMessage: true,
+      metadata: true,
+    },
+  });
+
+  return {
+    execution_id: execution.id,
+    status: execution.status,
+    started_at: execution.startedAt?.toISOString() ?? null,
+    finished_at: execution.finishedAt?.toISOString() ?? null,
+    logs: normalizeExecutionLogs(execution.metadata, execution.errorMessage),
   };
 }
 
@@ -147,7 +207,7 @@ export async function cancelExecution(id: string) {
     throw new AppError(
       'EXECUTION_NOT_CANCELLABLE',
       409,
-      `Execução com status '${execution.status}' não pode ser cancelada`,
+      `Execucao com status '${execution.status}' nao pode ser cancelada`,
       { current_status: execution.status },
     );
   }
@@ -155,16 +215,35 @@ export async function cancelExecution(id: string) {
   const cancelled = await prisma.backupExecution.update({
     where: { id },
     data: {
-      status:     'cancelled',
+      status: 'cancelled',
       finishedAt: new Date(),
     },
   });
 
-  // TODO: Sinalizar ao worker para interromper o processo de backup em andamento.
-
   return {
-    id:      cancelled.id,
-    status:  'cancelled',
-    message: 'Execução cancelada com sucesso',
+    id: cancelled.id,
+    status: 'cancelled',
+    message: 'Execucao cancelada com sucesso',
   };
+}
+
+export async function deleteExecution(id: string) {
+  const execution = await prisma.backupExecution.findUniqueOrThrow({
+    where: { id },
+    select: { id: true, status: true },
+  });
+
+  if (execution.status === 'queued' || execution.status === 'running') {
+    throw new AppError(
+      'EXECUTION_NOT_DELETABLE',
+      409,
+      `Execucao com status '${execution.status}' nao pode ser removida`,
+      { current_status: execution.status },
+    );
+  }
+
+  await prisma.$transaction([
+    prisma.backupChunk.deleteMany({ where: { executionId: id } }),
+    prisma.backupExecution.delete({ where: { id } }),
+  ]);
 }

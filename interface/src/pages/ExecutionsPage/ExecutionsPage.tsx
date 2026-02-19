@@ -1,127 +1,270 @@
-import { useState, useMemo } from 'react';
-import {
-  MOCK_EXECUTIONS, DS_FILTER_OPTIONS,
-  formatBytes, formatDuration, formatDateTime,
-} from './mockData';
-import type { MockExecution, ExecStatus } from './mockData';
+import { useEffect, useMemo, useState } from 'react';
+import { datasourceApi, executionsApi } from '../../services/api';
+import type { ApiDatasource, ApiExecution } from '../../services/api';
 import { DS_ABBR } from '../../constants';
 import StatusBadge from '../../components/StatusBadge/StatusBadge';
-import { LogIcon, TrashIcon, ErrorIcon, CloseIcon, EmptyExecIcon } from '../../components/Icons';
+import { LogIcon, TrashIcon, ErrorIcon, CloseIcon, EmptyExecIcon, SpinnerIcon } from '../../components/Icons';
 import LogModal from './LogModal';
 import styles from './ExecutionsPage.module.css';
 
+type ExecStatus = 'running' | 'completed' | 'failed' | 'cancelled' | 'queued';
 type StatusFilter = 'all' | ExecStatus;
 const PAGE_SIZES = [10, 25, 50] as const;
 
+interface PaginationState {
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
+function formatBytes(value: number | string | null) {
+  if (value === null) return '—';
+  const bytes = typeof value === 'string' ? Number(value) : value;
+  if (!Number.isFinite(bytes) || bytes <= 0) return '—';
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const index = Math.min(units.length - 1, Math.floor(Math.log(bytes) / Math.log(1024)));
+  const amount = bytes / 1024 ** index;
+  return `${amount.toFixed(index === 0 ? 0 : 1)} ${units[index]}`;
+}
+
+function formatDuration(secs: number | null) {
+  if (secs === null) return '—';
+  if (secs < 60) return `${secs}s`;
+  if (secs < 3600) return `${Math.floor(secs / 60)}m ${secs % 60}s`;
+  return `${Math.floor(secs / 3600)}h ${Math.floor((secs % 3600) / 60)}m`;
+}
+
+function formatDateTime(iso: string | null) {
+  if (!iso) return '—';
+  return new Date(iso).toLocaleString('pt-BR', {
+    day: '2-digit', month: '2-digit', year: '2-digit',
+    hour: '2-digit', minute: '2-digit',
+  });
+}
+
+function toIsoStart(date: string) {
+  if (!date) return undefined;
+  return `${date}T00:00:00.000Z`;
+}
+
+function toIsoEnd(date: string) {
+  if (!date) return undefined;
+  return `${date}T23:59:59.999Z`;
+}
+
 export default function ExecutionsPage() {
-  const [executions, setExecutions] = useState(MOCK_EXECUTIONS);
+  const [executions, setExecutions] = useState<ApiExecution[]>([]);
+  const [datasources, setDatasources] = useState<ApiDatasource[]>([]);
+  const [counts, setCounts] = useState<Record<StatusFilter, number>>({
+    all: 0,
+    running: 0,
+    completed: 0,
+    failed: 0,
+    cancelled: 0,
+    queued: 0,
+  });
 
-  // ── Filtros ───────────────────────────────────────────────────
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
-  const [dsFilter,     setDsFilter]     = useState('');
-  const [dateFrom,     setDateFrom]     = useState('');
-  const [dateTo,       setDateTo]       = useState('');
+  const [dsFilter, setDsFilter] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
 
-  // ── Seleção e paginação ───────────────────────────────────────
-  const [selected,  setSelected]  = useState<Set<string>>(new Set());
-  const [page,      setPage]      = useState(1);
-  const [pageSize,  setPageSize]  = useState<typeof PAGE_SIZES[number]>(10);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState<typeof PAGE_SIZES[number]>(10);
 
-  // ── Modal de logs ─────────────────────────────────────────────
-  const [logTarget, setLogTarget] = useState<MockExecution | null>(null);
+  const [pagination, setPagination] = useState<PaginationState>({ total: 0, page: 1, limit: pageSize, totalPages: 1 });
+  const [logTargetId, setLogTargetId] = useState<string | null>(null);
 
-  // ── Filtrar + ordenar ─────────────────────────────────────────
-  const filtered = useMemo(() => {
-    return executions
-      .filter(e => {
-        if (statusFilter !== 'all' && e.status !== statusFilter) return false;
-        if (dsFilter && e.datasourceId !== dsFilter) return false;
-        if (dateFrom && e.startedAt < dateFrom) return false;
-        if (dateTo) {
-          const end = dateTo + 'T23:59:59Z';
-          if (e.startedAt > end) return false;
-        }
-        return true;
-      })
-      .sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime());
-  }, [executions, statusFilter, dsFilter, dateFrom, dateTo]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
-  const safePage   = Math.min(page, totalPages);
-  const paged      = filtered.slice((safePage - 1) * pageSize, safePage * pageSize);
+  async function loadDatasources() {
+    try {
+      const response = await datasourceApi.list();
+      setDatasources(response.data);
+    } catch {
+      setDatasources([]);
+    }
+  }
 
-  const resetPage  = () => setPage(1);
+  async function loadCounts() {
+    try {
+      const baseFilters = {
+        limit: 1,
+        page: 1,
+        datasource_id: dsFilter || undefined,
+        from: toIsoStart(dateFrom),
+        to: toIsoEnd(dateTo),
+      };
 
-  // ── Contadores para os tabs ───────────────────────────────────
-  const counts = useMemo(() => ({
-    all:       executions.length,
-    running:   executions.filter(e => e.status === 'running').length,
-    completed: executions.filter(e => e.status === 'completed').length,
-    failed:    executions.filter(e => e.status === 'failed').length,
-    cancelled: executions.filter(e => e.status === 'cancelled').length,
-  }), [executions]);
+      const [all, running, completed, failed, cancelled, queued] = await Promise.all([
+        executionsApi.list(baseFilters),
+        executionsApi.list({ ...baseFilters, status: 'running' }),
+        executionsApi.list({ ...baseFilters, status: 'completed' }),
+        executionsApi.list({ ...baseFilters, status: 'failed' }),
+        executionsApi.list({ ...baseFilters, status: 'cancelled' }),
+        executionsApi.list({ ...baseFilters, status: 'queued' }),
+      ]);
 
-  // ── Seleção ───────────────────────────────────────────────────
-  const pagedIds    = paged.map(e => e.id);
-  const allSelected = pagedIds.length > 0 && pagedIds.every(id => selected.has(id));
-  const anySelected = pagedIds.some(id => selected.has(id));
+      setCounts({
+        all: all.pagination.total,
+        running: running.pagination.total,
+        completed: completed.pagination.total,
+        failed: failed.pagination.total,
+        cancelled: cancelled.pagination.total,
+        queued: queued.pagination.total,
+      });
+    } catch {
+      setCounts({ all: 0, running: 0, completed: 0, failed: 0, cancelled: 0, queued: 0 });
+    }
+  }
 
-  const toggleAll = () => {
-    if (allSelected) setSelected(prev => { const n = new Set(prev); pagedIds.forEach(id => n.delete(id)); return n; });
-    else             setSelected(prev => { const n = new Set(prev); pagedIds.forEach(id => n.add(id)); return n; });
-  };
+  async function loadExecutions() {
+    try {
+      setLoading(true);
+      setError(null);
 
-  const toggleOne = (id: string) =>
-    setSelected(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+      const response = await executionsApi.list({
+        page,
+        limit: pageSize,
+        datasource_id: dsFilter || undefined,
+        status: statusFilter === 'all' ? undefined : statusFilter,
+        from: toIsoStart(dateFrom),
+        to: toIsoEnd(dateTo),
+      });
 
-  // ── Deletar ───────────────────────────────────────────────────
-  const deleteSelected = () => {
-    setExecutions(prev => prev.filter(e => !selected.has(e.id)));
-    setSelected(new Set());
-  };
+      setExecutions(response.data);
+      setPagination(response.pagination);
+      setSelected(new Set());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao carregar execuções');
+    } finally {
+      setLoading(false);
+    }
+  }
 
-  const deleteOne = (id: string) => {
-    setExecutions(prev => prev.filter(e => e.id !== id));
-    setSelected(prev => { const n = new Set(prev); n.delete(id); return n; });
-  };
+  useEffect(() => {
+    void loadDatasources();
+  }, []);
 
-  const totalSize = executions
-    .filter(e => e.sizeBytes)
-    .reduce((acc, e) => acc + (e.sizeBytes ?? 0), 0);
+  useEffect(() => {
+    void Promise.all([loadExecutions(), loadCounts()]);
+  }, [statusFilter, dsFilter, dateFrom, dateTo, page, pageSize]);
+
+  useEffect(() => {
+    const hasLive = executions.some((item) => item.status === 'running' || item.status === 'queued');
+    if (!hasLive) return;
+
+    const timer = setInterval(() => {
+      void Promise.all([loadExecutions(), loadCounts()]);
+    }, 3000);
+
+    return () => clearInterval(timer);
+  }, [executions, statusFilter, dsFilter, dateFrom, dateTo, page, pageSize]);
+
+  const pagedIds = useMemo(() => executions.map((item) => item.id), [executions]);
+  const allSelected = pagedIds.length > 0 && pagedIds.every((id) => selected.has(id));
+  const anySelected = pagedIds.some((id) => selected.has(id));
+
+  const totalSize = useMemo(() => executions.reduce((acc, item) => {
+    const value = item.compressed_size_bytes ?? item.size_bytes;
+    const bytes = typeof value === 'string' ? Number(value) : value;
+    return acc + (Number.isFinite(bytes) ? Number(bytes) : 0);
+  }, 0), [executions]);
+
+  function resetPage() {
+    setPage(1);
+  }
+
+  function toggleAll() {
+    if (allSelected) {
+      setSelected((prev) => {
+        const next = new Set(prev);
+        pagedIds.forEach((id) => next.delete(id));
+        return next;
+      });
+      return;
+    }
+
+    setSelected((prev) => {
+      const next = new Set(prev);
+      pagedIds.forEach((id) => next.add(id));
+      return next;
+    });
+  }
+
+  function toggleOne(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  async function removeExecution(id: string) {
+    try {
+      await executionsApi.remove(id);
+      await Promise.all([loadExecutions(), loadCounts()]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao remover execução');
+    }
+  }
+
+  async function cancelExecution(id: string) {
+    try {
+      await executionsApi.cancel(id);
+      await Promise.all([loadExecutions(), loadCounts()]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao cancelar execução');
+    }
+  }
+
+  async function deleteSelected() {
+    if (selected.size === 0) return;
+    const ids = [...selected];
+    const settled = await Promise.allSettled(ids.map((id) => executionsApi.remove(id)));
+    const failed = settled.filter((result) => result.status === 'rejected').length;
+
+    if (failed > 0) {
+      setError(`${failed} execução(ões) não puderam ser removidas.`);
+    }
+
+    await Promise.all([loadExecutions(), loadCounts()]);
+  }
 
   return (
     <div className={styles.page}>
-      {/* ── Cabeçalho ──────────────────────────────────────────── */}
       <div className={styles.pageHeader}>
         <div>
           <h2 className={styles.pageTitle}>Execuções</h2>
           <p className={styles.pageSub}>
-            {executions.length} execuções · {formatBytes(totalSize)} total armazenado
+            {counts.all} execuções · {formatBytes(totalSize)} nesta página
           </p>
         </div>
         {selected.size > 0 && (
-          <button className={styles.deleteSelectedBtn} onClick={deleteSelected}>
-            <TrashIcon />
-            Excluir {selected.size} selecionada{selected.size !== 1 ? 's' : ''}
+          <button className={styles.deleteSelectedBtn} onClick={() => void deleteSelected()}>
+            <TrashIcon /> Excluir {selected.size} selecionada{selected.size !== 1 ? 's' : ''}
           </button>
         )}
       </div>
 
-      {/* ── Barra de filtros ────────────────────────────────────── */}
       <div className={styles.filterBar}>
-        {/* Status tabs */}
         <div className={styles.statusTabs}>
           {([
-            ['all',       'Todas',      counts.all],
-            ['running',   'Em execução', counts.running],
+            ['all', 'Todas', counts.all],
+            ['running', 'Executando', counts.running],
+            ['queued', 'Na fila', counts.queued],
             ['completed', 'Concluídas', counts.completed],
-            ['failed',    'Com erro',   counts.failed],
+            ['failed', 'Com erro', counts.failed],
             ['cancelled', 'Canceladas', counts.cancelled],
-          ] as [StatusFilter, string, number][]).map(([s, label, count]) => (
+          ] as [StatusFilter, string, number][]).map(([status, label, count]) => (
             <button
-              key={s}
-              className={`${styles.tab} ${statusFilter === s ? styles.tabActive : ''} ${s !== 'all' ? styles[`tab_${s}`] : ''}`}
-              onClick={() => { setStatusFilter(s); resetPage(); }}
+              key={status}
+              className={`${styles.tab} ${statusFilter === status ? styles.tabActive : ''} ${status !== 'all' ? styles[`tab_${status}`] : ''}`}
+              onClick={() => { setStatusFilter(status); resetPage(); }}
             >
               {label}
               {count > 0 && <span className={styles.tabCount}>{count}</span>}
@@ -129,15 +272,15 @@ export default function ExecutionsPage() {
           ))}
         </div>
 
-        {/* Filtros adicionais */}
         <div className={styles.filterRight}>
           <select
             className={styles.filterSelect}
             value={dsFilter}
-            onChange={e => { setDsFilter(e.target.value); resetPage(); }}
+            onChange={(event) => { setDsFilter(event.target.value); resetPage(); }}
           >
-            {DS_FILTER_OPTIONS.map(o => (
-              <option key={o.id} value={o.id}>{o.name}</option>
+            <option value="">Todos os bancos</option>
+            {datasources.map((datasource) => (
+              <option key={datasource.id} value={datasource.id}>{datasource.name}</option>
             ))}
           </select>
 
@@ -146,7 +289,7 @@ export default function ExecutionsPage() {
               className={styles.dateInput}
               type="date"
               value={dateFrom}
-              onChange={e => { setDateFrom(e.target.value); resetPage(); }}
+              onChange={(event) => { setDateFrom(event.target.value); resetPage(); }}
               title="Data inicial"
             />
             <span className={styles.dateSep}>→</span>
@@ -154,7 +297,7 @@ export default function ExecutionsPage() {
               className={styles.dateInput}
               type="date"
               value={dateTo}
-              onChange={e => { setDateTo(e.target.value); resetPage(); }}
+              onChange={(event) => { setDateTo(event.target.value); resetPage(); }}
               title="Data final"
             />
           </div>
@@ -163,7 +306,6 @@ export default function ExecutionsPage() {
             <button
               className={styles.clearBtn}
               onClick={() => { setDsFilter(''); setDateFrom(''); setDateTo(''); resetPage(); }}
-              title="Limpar filtros"
             >
               <CloseIcon /> Limpar
             </button>
@@ -171,9 +313,16 @@ export default function ExecutionsPage() {
         </div>
       </div>
 
-      {/* ── Tabela ──────────────────────────────────────────────── */}
+      {error && (
+        <div style={{ padding: '8px 24px', color: 'var(--color-danger)', fontSize: 'var(--font-size-sm)' }}>
+          {error}
+        </div>
+      )}
+
       <div className={styles.tableWrap}>
-        {paged.length === 0 ? (
+        {loading ? (
+          <div className={styles.empty}><SpinnerIcon /><p>Carregando execuções...</p></div>
+        ) : executions.length === 0 ? (
           <div className={styles.empty}>
             <EmptyExecIcon />
             <p>Nenhuma execução encontrada</p>
@@ -187,13 +336,13 @@ export default function ExecutionsPage() {
                   <input
                     type="checkbox"
                     checked={allSelected}
-                    ref={el => { if (el) el.indeterminate = anySelected && !allSelected; }}
+                    ref={(el) => { if (el) el.indeterminate = anySelected && !allSelected; }}
                     onChange={toggleAll}
                   />
                 </th>
                 <th>Job</th>
                 <th>Banco de dados</th>
-                <th>Storage(s)</th>
+                <th>Storage</th>
                 <th>Início</th>
                 <th>Duração</th>
                 <th>Tamanho</th>
@@ -202,14 +351,15 @@ export default function ExecutionsPage() {
               </tr>
             </thead>
             <tbody>
-              {paged.map(exec => (
+              {executions.map((execution) => (
                 <ExecRow
-                  key={exec.id}
-                  exec={exec}
-                  isSelected={selected.has(exec.id)}
-                  onToggle={() => toggleOne(exec.id)}
-                  onViewLog={() => setLogTarget(exec)}
-                  onDelete={() => deleteOne(exec.id)}
+                  key={execution.id}
+                  execution={execution}
+                  isSelected={selected.has(execution.id)}
+                  onToggle={() => toggleOne(execution.id)}
+                  onViewLog={() => setLogTargetId(execution.id)}
+                  onDelete={() => void removeExecution(execution.id)}
+                  onCancel={() => void cancelExecution(execution.id)}
                 />
               ))}
             </tbody>
@@ -217,97 +367,83 @@ export default function ExecutionsPage() {
         )}
       </div>
 
-      {/* ── Rodapé / Paginação ───────────────────────────────────── */}
       <div className={styles.pagination}>
         <div className={styles.pagLeft}>
           <span className={styles.pagInfo}>
-            {filtered.length === 0 ? '0 resultados' : (
-              `${(safePage - 1) * pageSize + 1}–${Math.min(safePage * pageSize, filtered.length)} de ${filtered.length}`
-            )}
+            {pagination.total === 0
+              ? '0 resultados'
+              : `${(pagination.page - 1) * pagination.limit + 1}–${Math.min(pagination.page * pagination.limit, pagination.total)} de ${pagination.total}`}
           </span>
           <select
             className={styles.pagSelect}
             value={pageSize}
-            onChange={e => { setPageSize(Number(e.target.value) as typeof PAGE_SIZES[number]); resetPage(); }}
+            onChange={(event) => {
+              setPageSize(Number(event.target.value) as typeof PAGE_SIZES[number]);
+              setPage(1);
+            }}
           >
-            {PAGE_SIZES.map(s => <option key={s} value={s}>{s} por página</option>)}
+            {PAGE_SIZES.map((size) => <option key={size} value={size}>{size} por página</option>)}
           </select>
         </div>
 
         <div className={styles.pagButtons}>
-          <button
-            className={styles.pagBtn}
-            onClick={() => setPage(1)}
-            disabled={safePage === 1}
-            title="Primeira página"
-          >
-            «
-          </button>
-          <button
-            className={styles.pagBtn}
-            onClick={() => setPage(p => Math.max(1, p - 1))}
-            disabled={safePage === 1}
-          >
-            ‹
-          </button>
+          <button className={styles.pagBtn} onClick={() => setPage(1)} disabled={pagination.page === 1}>«</button>
+          <button className={styles.pagBtn} onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={pagination.page === 1}>‹</button>
 
-          {Array.from({ length: totalPages }, (_, i) => i + 1)
-            .filter(p => p === 1 || p === totalPages || Math.abs(p - safePage) <= 1)
-            .reduce<(number | '…')[]>((acc, p, idx, arr) => {
-              if (idx > 0 && p - (arr[idx - 1] as number) > 1) acc.push('…');
+          {Array.from({ length: pagination.totalPages }, (_, index) => index + 1)
+            .filter((p) => p === 1 || p === pagination.totalPages || Math.abs(p - pagination.page) <= 1)
+            .reduce<(number | '...')[]>((acc, p, index, arr) => {
+              if (index > 0 && p - (arr[index - 1] as number) > 1) acc.push('...');
               acc.push(p);
               return acc;
             }, [])
-            .map((p, i) =>
-              p === '…'
-                ? <span key={`e${i}`} className={styles.pagEllipsis}>…</span>
-                : <button
-                    key={p}
-                    className={`${styles.pagBtn} ${p === safePage ? styles.pagBtnActive : ''}`}
-                    onClick={() => setPage(p as number)}
-                  >
-                    {p}
-                  </button>
-            )
-          }
+            .map((p, index) => p === '...'
+              ? <span key={`ellipsis-${index}`} className={styles.pagEllipsis}>…</span>
+              : (
+                <button
+                  key={p}
+                  className={`${styles.pagBtn} ${p === pagination.page ? styles.pagBtnActive : ''}`}
+                  onClick={() => setPage(p as number)}
+                >
+                  {p}
+                </button>
+              ))}
 
-          <button
-            className={styles.pagBtn}
-            onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-            disabled={safePage === totalPages}
-          >
-            ›
-          </button>
-          <button
-            className={styles.pagBtn}
-            onClick={() => setPage(totalPages)}
-            disabled={safePage === totalPages}
-            title="Última página"
-          >
-            »
-          </button>
+          <button className={styles.pagBtn} onClick={() => setPage((p) => Math.min(pagination.totalPages, p + 1))} disabled={pagination.page === pagination.totalPages}>›</button>
+          <button className={styles.pagBtn} onClick={() => setPage(pagination.totalPages)} disabled={pagination.page === pagination.totalPages}>»</button>
         </div>
       </div>
 
-      {/* ── Modal de logs ──────────────────────────────────────── */}
-      {logTarget && (
-        <LogModal exec={logTarget} onClose={() => setLogTarget(null)} />
+      {logTargetId && (
+        <LogModal
+          executionId={logTargetId}
+          onClose={() => setLogTargetId(null)}
+          onChanged={async () => {
+            await Promise.all([loadExecutions(), loadCounts()]);
+          }}
+        />
       )}
     </div>
   );
 }
 
-/* ── Linha da tabela ────────────────────────────────────────────── */
 function ExecRow({
-  exec, isSelected, onToggle, onViewLog, onDelete,
+  execution,
+  isSelected,
+  onToggle,
+  onViewLog,
+  onDelete,
+  onCancel,
 }: {
-  exec:       MockExecution;
+  execution: ApiExecution;
   isSelected: boolean;
-  onToggle:   () => void;
-  onViewLog:  () => void;
-  onDelete:   () => void;
+  onToggle: () => void;
+  onViewLog: () => void;
+  onDelete: () => void;
+  onCancel: () => void;
 }) {
-  const isRunning = exec.status === 'running';
+  const isRunning = execution.status === 'running';
+  const isQueued = execution.status === 'queued';
 
   return (
     <>
@@ -316,97 +452,54 @@ function ExecRow({
           <input type="checkbox" checked={isSelected} onChange={onToggle} />
         </td>
 
-        {/* Nome do job */}
         <td>
           <div className={styles.jobCell}>
-            <span className={styles.jobName}>{exec.jobName}</span>
-            <span className={styles.jobId}>{exec.id}</span>
+            <span className={styles.jobName}>{execution.job?.name ?? execution.job_id}</span>
+            <span className={styles.jobId}>{execution.id}</span>
           </div>
         </td>
 
-        {/* Banco */}
         <td>
           <div className={styles.dsCell}>
-            <span className={`${styles.dsIcon} ${styles[exec.datasourceType]}`}>
-              {DS_ABBR[exec.datasourceType] ?? 'DB'}
+            <span className={`${styles.dsIcon} ${styles[execution.datasource?.type ?? 'postgres']}`}>
+              {DS_ABBR[execution.datasource?.type ?? 'postgres'] ?? 'DB'}
             </span>
-            <span className={styles.dsName}>{exec.datasourceName}</span>
+            <span className={styles.dsName}>{execution.datasource?.name ?? execution.datasource_id}</span>
           </div>
         </td>
 
-        {/* Storages */}
         <td>
           <div className={styles.storageList}>
-            {exec.storageNames.map(s => (
-              <span key={s} className={styles.storageChip}>{s}</span>
-            ))}
+            <span className={styles.storageChip}>{execution.storage_location?.name ?? execution.storage_location_id}</span>
           </div>
         </td>
 
-        {/* Início */}
-        <td className={styles.dateCell}>{formatDateTime(exec.startedAt)}</td>
+        <td className={styles.dateCell}>{formatDateTime(execution.started_at)}</td>
+        <td className={styles.monoCell}>{isRunning ? 'em andamento...' : formatDuration(execution.duration_seconds)}</td>
+        <td className={styles.monoCell}>{formatBytes(execution.compressed_size_bytes ?? execution.size_bytes)}</td>
+        <td><StatusBadge status={execution.status === 'completed' ? 'success' : execution.status} /></td>
 
-        {/* Duração */}
-        <td className={styles.monoCell}>
-          {isRunning ? (
-            <span className={styles.runningText}>em andamento…</span>
-          ) : exec.durationSeconds !== null ? (
-            formatDuration(exec.durationSeconds)
-          ) : '—'}
-        </td>
-
-        {/* Tamanho */}
-        <td className={styles.monoCell}>
-          {exec.sizeBytes ? formatBytes(exec.sizeBytes) : '—'}
-        </td>
-
-        {/* Status */}
-        <td>
-          <StatusBadge status={exec.status} />
-        </td>
-
-        {/* Ações */}
         <td className={styles.actionsCol}>
           <div className={styles.actions}>
-            <button className={styles.actionBtn} onClick={onViewLog} title="Ver logs">
-              <LogIcon />
-            </button>
-            <button
-              className={`${styles.actionBtn} ${styles.deleteBtn}`}
-              onClick={onDelete}
-              title="Excluir execução"
-              disabled={isRunning}
-            >
+            <button className={styles.actionBtn} onClick={onViewLog} title="Ver logs"><LogIcon /></button>
+            {(isRunning || isQueued) && (
+              <button className={styles.actionBtn} onClick={onCancel} title="Cancelar execução"><CloseIcon /></button>
+            )}
+            <button className={`${styles.actionBtn} ${styles.deleteBtn}`} onClick={onDelete} disabled={isRunning || isQueued} title="Excluir execução">
               <TrashIcon />
             </button>
           </div>
         </td>
       </tr>
 
-      {/* Linha de erro inline (quando falhou) */}
-      {exec.status === 'failed' && exec.errorMessage && (
+      {execution.status === 'failed' && execution.error_message && (
         <tr className={styles.errorRow}>
           <td />
           <td colSpan={8}>
             <div className={styles.errorInline}>
               <ErrorIcon />
-              <span>{exec.errorMessage}</span>
+              <span>{execution.error_message}</span>
               <button className={styles.logsLink} onClick={onViewLog}>Ver logs completos →</button>
-            </div>
-          </td>
-        </tr>
-      )}
-
-      {/* Barra de progresso (quando está rodando) */}
-      {isRunning && exec.progress !== null && (
-        <tr className={styles.progressRow}>
-          <td />
-          <td colSpan={8}>
-            <div className={styles.progressWrap}>
-              <div className={styles.progressBar}>
-                <div className={styles.progressFill} style={{ width: `${exec.progress}%` }} />
-              </div>
-              <span className={styles.progressPct}>{exec.progress}%</span>
             </div>
           </td>
         </tr>

@@ -5,6 +5,8 @@ import DatasourcesPage from '../DatasourcesPage/DatasourcesPage';
 import StoragePage     from '../StoragePage/StoragePage';
 import BackupJobsPage  from '../BackupJobsPage/BackupJobsPage';
 import ExecutionsPage  from '../ExecutionsPage/ExecutionsPage';
+import HealthPage      from '../HealthPage/HealthPage';
+import SettingsPage    from '../SettingsPage/SettingsPage';
 import styles from './DashboardPage.module.css';
 
 interface Props {
@@ -120,7 +122,9 @@ export default function DashboardPage({ activePage, theme, onToggleTheme, onLogo
           {activePage === 'storage'      && <StoragePage />}
           {activePage === 'backup-jobs'  && <BackupJobsPage />}
           {activePage === 'executions'   && <ExecutionsPage />}
-          {activePage !== 'dashboard' && activePage !== 'datasources' && activePage !== 'storage' && activePage !== 'backup-jobs' && activePage !== 'executions' && (
+          {activePage === 'health'       && <HealthPage />}
+          {activePage === 'settings'     && <SettingsPage />}
+          {activePage !== 'dashboard' && activePage !== 'datasources' && activePage !== 'storage' && activePage !== 'backup-jobs' && activePage !== 'executions' && activePage !== 'health' && activePage !== 'settings' && (
             <EmptyPage page={activePage} />
           )}
         </main>

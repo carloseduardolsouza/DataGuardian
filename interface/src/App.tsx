@@ -3,6 +3,7 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import LoginPage from './pages/LoginPage/LoginPage';
 import DashboardPage from './pages/DashboardPage/DashboardPage';
 import { ROUTE_PATHS, type NavKey } from './components/Sidebar/Sidebar';
+import { ToastProvider } from './components/Toast/ToastProvider';
 
 type Theme = 'dark' | 'light';
 
@@ -71,58 +72,60 @@ export default function App() {
 
   return (
     <div data-theme={theme} style={{ minHeight: '100vh' }}>
-      <Routes>
-        <Route
-          path="/"
-          element={
-            <Navigate
-              to={isAuthenticated ? ROUTE_PATHS.dashboard : '/login'}
-              replace
-            />
-          }
-        />
-        <Route
-          path="/login"
-          element={
-            isAuthenticated ? (
-              <Navigate to={ROUTE_PATHS.dashboard} replace />
-            ) : (
-              <LoginPage
-                onLogin={handleLogin}
-                theme={theme}
-                onToggleTheme={toggleTheme}
-              />
-            )
-          }
-        />
-        {APP_PAGES.map((page) => (
+      <ToastProvider>
+        <Routes>
           <Route
-            key={page}
-            path={ROUTE_PATHS[page]}
+            path="/"
+            element={
+              <Navigate
+                to={isAuthenticated ? ROUTE_PATHS.dashboard : '/login'}
+                replace
+              />
+            }
+          />
+          <Route
+            path="/login"
             element={
               isAuthenticated ? (
-                <DashboardPage
-                  activePage={page}
+                <Navigate to={ROUTE_PATHS.dashboard} replace />
+              ) : (
+                <LoginPage
+                  onLogin={handleLogin}
                   theme={theme}
                   onToggleTheme={toggleTheme}
-                  onLogout={handleLogout}
                 />
-              ) : (
-                <Navigate to="/login" replace />
               )
             }
           />
-        ))}
-        <Route
-          path="*"
-          element={
-            <Navigate
-              to={isAuthenticated ? ROUTE_PATHS.dashboard : '/login'}
-              replace
+          {APP_PAGES.map((page) => (
+            <Route
+              key={page}
+              path={ROUTE_PATHS[page]}
+              element={
+                isAuthenticated ? (
+                  <DashboardPage
+                    activePage={page}
+                    theme={theme}
+                    onToggleTheme={toggleTheme}
+                    onLogout={handleLogout}
+                  />
+                ) : (
+                  <Navigate to="/login" replace />
+                )
+              }
             />
-          }
-        />
-      </Routes>
+          ))}
+          <Route
+            path="*"
+            element={
+              <Navigate
+                to={isAuthenticated ? ROUTE_PATHS.dashboard : '/login'}
+                replace
+              />
+            }
+          />
+        </Routes>
+      </ToastProvider>
     </div>
   );
 }

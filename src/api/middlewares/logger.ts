@@ -6,7 +6,9 @@ export function requestLogger(req: Request, res: Response, next: NextFunction): 
 
   res.on('finish', () => {
     const durationMs = Date.now() - start;
-    const level = res.statusCode >= 500 ? 'error' : res.statusCode >= 400 ? 'warn' : 'info';
+    if (res.statusCode < 400) return;
+
+    const level = res.statusCode >= 500 ? 'error' : 'warn';
 
     logger[level]({
       method:     req.method,

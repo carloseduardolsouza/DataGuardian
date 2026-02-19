@@ -4,6 +4,7 @@ import * as path from 'node:path';
 import * as net from 'node:net';
 import { prisma } from '../../lib/prisma';
 import { AppError } from '../middlewares/error-handler';
+import { createStorageAdapter } from '../../core/storage/storage-factory';
 import {
   SENSITIVE_STORAGE_FIELDS,
   StorageTypeValue,
@@ -432,62 +433,13 @@ function mapStorageRuntimeError(err: unknown, type: StorageLocationType, operati
 }
 
 async function runStorageConnectionTest(type: StorageLocationType, cfg: JsonMap): Promise<ConnectionTestResult> {
-  switch (type) {
-    case 'local': {
-      const startedAt = Date.now();
-      const storagePath = String(cfg.path);
-      if (!path.isAbsolute(storagePath)) {
-        throw new AppError(
-          'STORAGE_CONFIG_INVALID',
-          422,
-          `Caminho local deve ser absoluto: ${storagePath}`,
-          { field: 'path', storage_type: type },
-        );
-      }
-
-      const stat = await fs.stat(storagePath);
-      if (!stat.isDirectory()) {
-        throw new AppError(
-          'STORAGE_CONFIG_INVALID',
-          422,
-          `Caminho local nao e um diretorio: ${storagePath}`,
-          { field: 'path', storage_type: type },
-        );
-      }
-
-      return { available_space_gb: null, latency_ms: Date.now() - startedAt };
-    }
-
-    case 'ssh': {
-      const host = String(cfg.host);
-      const port = Number(cfg.port);
-      const latency = await probeTcp(host, port);
-      return { available_space_gb: null, latency_ms: latency };
-    }
-
-    case 's3': {
-      const endpoint = cfg.endpoint
-        ? String(cfg.endpoint)
-        : `https://s3.${String(cfg.region)}.amazonaws.com`;
-      const parsed = parseUrl(endpoint);
-      const latency = await probeHttp(`${parsed.origin}/`);
-      return { available_space_gb: null, latency_ms: latency };
-    }
-
-    case 'minio': {
-      const parsed = parseUrl(String(cfg.endpoint));
-      const latency = await probeHttp(`${parsed.origin}/`);
-      return { available_space_gb: null, latency_ms: latency };
-    }
-
-    case 'backblaze': {
-      const latency = await probeHttp('https://api.backblazeb2.com/b2api/v2/b2_authorize_account');
-      return { available_space_gb: null, latency_ms: latency };
-    }
-
-    default:
-      throw new AppError('TEST_NOT_SUPPORTED', 422, `Teste nao suportado para storage '${type}'.`);
-  }
+  const adapter = createStorageAdapter(type, cfg);
+  const result = await adapter.testConnection();
+  const available = result.availableSpaceGb ?? await adapter.checkSpace();
+  return {
+    available_space_gb: available,
+    latency_ms: result.latencyMs,
+  };
 }
 
 function deriveStorageStatus(testResult: ConnectionTestResult): StorageLocationStatus {

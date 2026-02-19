@@ -1,4 +1,4 @@
-/* ── ExecutionsPage ──────────────────────────────────────────── */
+/* â”€â”€ ExecutionsPage â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 .page {
   display: flex;
@@ -7,7 +7,7 @@
   overflow: hidden;
 }
 
-/* ── Cabeçalho ────────────────────────────────── */
+/* â”€â”€ CabeÃ§alho â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .pageHeader {
   display: flex;
   align-items: center;
@@ -46,7 +46,7 @@
 }
 .deleteSelectedBtn:hover { background: var(--color-danger); color: white; }
 
-/* ── Barra de filtros ─────────────────────────── */
+/* â”€â”€ Barra de filtros â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .filterBar {
   display: flex;
   align-items: center;
@@ -59,7 +59,7 @@
   flex-wrap: wrap;
 }
 
-/* ── Status tabs ──────────────────────────────── */
+/* â”€â”€ Status tabs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .statusTabs {
   display: flex;
   gap: var(--space-1);
@@ -90,6 +90,7 @@
 
 /* Cores por status no tab ativo */
 .tab_running.tabActive   { background: var(--color-info-muted);    border-color: var(--color-info);    color: var(--color-info); }
+.tab_queued.tabActive    { background: var(--color-surface-elevated); border-color: var(--color-border); color: var(--color-text-muted); }
 .tab_completed.tabActive { background: var(--color-success-muted);  border-color: var(--color-success);  color: var(--color-success); }
 .tab_failed.tabActive    { background: var(--color-danger-muted);   border-color: var(--color-danger);   color: var(--color-danger); }
 .tab_cancelled.tabActive { background: var(--color-warning-muted);  border-color: var(--color-warning);  color: var(--color-warning); }
@@ -112,10 +113,11 @@
 
 .tab_failed.tabActive .tabCount    { background: var(--color-danger);  border-color: var(--color-danger);  color: white; }
 .tab_running.tabActive .tabCount   { background: var(--color-info);    border-color: var(--color-info);    color: white; }
+.tab_queued.tabActive .tabCount    { background: var(--color-text-muted); border-color: var(--color-text-muted); color: white; }
 .tab_completed.tabActive .tabCount { background: var(--color-success);  border-color: var(--color-success);  color: white; }
 .tab_cancelled.tabActive .tabCount { background: var(--color-warning);  border-color: var(--color-warning);  color: white; }
 
-/* ── Filtros direita ──────────────────────────── */
+/* â”€â”€ Filtros direita â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .filterRight {
   display: flex;
   align-items: center;
@@ -151,7 +153,7 @@
   color: var(--color-text);
   outline: none;
   transition: border-color var(--transition-fast);
-  /* Remove calendário colorido nativo em dark mode */
+  /* Remove calendÃ¡rio colorido nativo em dark mode */
   color-scheme: dark;
 }
 .dateInput:focus { border-color: var(--color-primary); }
@@ -173,7 +175,7 @@
 }
 .clearBtn:hover { border-color: var(--color-danger); color: var(--color-danger); background: var(--color-danger-muted); }
 
-/* ── Tabela ───────────────────────────────────── */
+/* â”€â”€ Tabela â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .tableWrap {
   flex: 1;
   overflow-y: auto;
@@ -218,7 +220,7 @@
 .checkCol   { width: 36px; }
 .actionsCol { width: 72px; text-align: right; }
 
-/* ── Células ──────────────────────────────────── */
+/* â”€â”€ CÃ©lulas â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .jobCell {
   display: flex;
   flex-direction: column;
@@ -258,6 +260,7 @@
 .dsIcon.mongodb   { background: #47A248; color: white; }
 .dsIcon.sqlite    { background: #044a64; color: white; }
 .dsIcon.sqlserver { background: #CC2927; color: white; }
+.dsIcon.files     { background: #5f5f5f; color: white; }
 
 .dsName { font-size: var(--font-size-sm); color: var(--color-text); }
 
@@ -282,7 +285,7 @@
 
 .runningText { color: var(--color-info); font-style: italic; font-family: inherit; }
 
-/* ── Badges de status ─────────────────────────── */
+/* â”€â”€ Badges de status â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .badge {
   display: inline-flex;
   align-items: center;
@@ -325,7 +328,7 @@
   50%       { opacity: 0.4; transform: scale(0.7); }
 }
 
-/* ── Linha de erro inline ─────────────────────── */
+/* â”€â”€ Linha de erro inline â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .errorRow td {
   padding: 0 var(--space-4) var(--space-3);
   border-bottom: 1px solid var(--color-border-subtle);
@@ -361,7 +364,7 @@
 }
 .logsLink:hover { opacity: 1; }
 
-/* ── Linha de progresso inline ────────────────── */
+/* â”€â”€ Linha de progresso inline â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .progressRow td {
   padding: 0 var(--space-4) var(--space-3);
   border-bottom: 1px solid var(--color-border-subtle);
@@ -409,7 +412,7 @@
   text-align: right;
 }
 
-/* ── Botões de ação ───────────────────────────── */
+/* â”€â”€ BotÃµes de aÃ§Ã£o â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .actions {
   display: flex;
   justify-content: flex-end;
@@ -447,7 +450,7 @@
 
 .actionBtn:disabled { opacity: 0.2 !important; cursor: not-allowed; }
 
-/* ── Empty state ──────────────────────────────── */
+/* â”€â”€ Empty state â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .empty {
   display: flex;
   flex-direction: column;
@@ -461,7 +464,7 @@
 .empty p    { font-size: var(--font-size-md); font-weight: var(--font-weight-semi); color: var(--color-text); }
 .empty span { font-size: var(--font-size-sm); }
 
-/* ── Paginação ────────────────────────────────── */
+/* â”€â”€ PaginaÃ§Ã£o â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .pagination {
   display: flex;
   align-items: center;

@@ -34,7 +34,7 @@ export function validate(
     }
 
     // Substitui req[part] pelos dados parseados e transformados pelo Zod
-    (req as Record<string, unknown>)[part] = result.data;
+    (req as unknown as Record<string, unknown>)[part] = result.data;
     next();
   };
 }
