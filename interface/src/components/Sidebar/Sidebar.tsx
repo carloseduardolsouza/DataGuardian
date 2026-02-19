@@ -6,6 +6,7 @@ import {
   DatabaseIcon,
   ServerIcon,
   JobsIcon,
+  FolderIcon,
   PlayIcon,
   HealthIcon,
   BellIcon,
@@ -18,6 +19,7 @@ export type NavKey =
   | 'datasources'
   | 'storage'
   | 'backup-jobs'
+  | 'backups'
   | 'executions'
   | 'health'
   | 'notifications'
@@ -28,6 +30,7 @@ export const ROUTE_PATHS: Record<NavKey, string> = {
   datasources: '/datasources',
   storage: '/storage',
   'backup-jobs': '/backup-jobs',
+  backups: '/backups',
   executions: '/executions',
   health: '/health',
   notifications: '/notifications',
@@ -52,6 +55,7 @@ const mainNav: NavItem[] = [
   { key: 'datasources', label: 'Datasources', icon: <DatabaseIcon /> },
   { key: 'storage', label: 'Storage', icon: <ServerIcon /> },
   { key: 'backup-jobs', label: 'Backup Jobs', icon: <JobsIcon /> },
+  { key: 'backups', label: 'Backups', icon: <FolderIcon /> },
   { key: 'executions', label: 'Execucoes', icon: <PlayIcon /> },
 ];
 

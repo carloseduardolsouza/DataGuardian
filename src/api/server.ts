@@ -16,6 +16,7 @@ import { notificationsRouter }    from './routes/notifications';
 import { systemRouter }           from './routes/system';
 import { authRouter }             from './routes/auth';
 import { dashboardRouter }        from './routes/dashboard';
+import { backupsRouter }          from './routes/backups';
 import { requireAuth }            from './middlewares/auth';
 
 // ──────────────────────────────────────────
@@ -56,6 +57,7 @@ export function createApp() {
   app.use('/api/notifications',     notificationsRouter);
   app.use('/api/system',            systemRouter);
   app.use('/api/dashboard',         dashboardRouter);
+  app.use('/api/backups',           backupsRouter);
 
   // ── Rota 404 ──
   app.use((_req: Request, res: Response) => {

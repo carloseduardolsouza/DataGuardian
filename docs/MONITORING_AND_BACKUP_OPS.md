@@ -560,3 +560,28 @@ Isso cria uma notificaÃ§Ã£o do tipo `restore_completed` com severidade `info`, v
 | Baixar arquivo de backup | `GET /api/executions/:id/download` |
 | Registrar restore realizado | `POST /api/executions/:id/mark-restored` |
 | Ver notificaÃ§Ãµes de falha de conexÃ£o | `GET /api/notifications?type=connection_lost` |
+---
+
+## 5. Nova Aba Backups (UI + API)
+
+Foi adicionada no menu lateral a aba **Backups**, com foco operacional em restore:
+
+- lista todos os bancos com backups concluídos
+- mostra os backups por banco com status por storage (`available`, `missing`, `unreachable`, `unknown`)
+- permite restore imediato pelo frontend (botão `Restore`)
+- permite selecionar storage específico para restore quando houver múltiplos destinos
+
+### Endpoints usados pela aba
+
+- `GET /api/backups/datasources`
+- `GET /api/backups/datasources/:datasourceId`
+- `POST /api/backups/:executionId/restore`
+
+### Comportamento do restore implementado
+
+- baixa o arquivo do storage selecionado (ou tenta automaticamente os storages do backup)
+- descompacta `.gz` automaticamente
+- executa restore real:
+  - `postgres`: `pg_restore`
+  - `mysql`: `mysql` (importando o dump)
+- remove artefatos temporários locais ao final

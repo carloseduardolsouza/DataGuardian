@@ -33,6 +33,9 @@ export function formatExecution(exec: {
   datasource?: { name: string; type: DatasourceType } | null;
   storageLocation?: { name: string; type: StorageLocationType } | null;
 }) {
+  const meta = getMetadataObject(exec.metadata);
+  const operation = meta.operation === 'restore' ? 'restore' : 'backup';
+
   return {
     id: exec.id,
     job_id: exec.jobId,
@@ -48,6 +51,7 @@ export function formatExecution(exec: {
     backup_path: exec.backupPath,
     files_count: exec.filesCount,
     error_message: exec.errorMessage,
+    operation,
     metadata: exec.metadata,
     created_at: exec.createdAt.toISOString(),
     ...(exec.job && {

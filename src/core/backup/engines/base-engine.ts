@@ -61,6 +61,9 @@ export async function resolveBinaryPath(command: string) {
   if (command === 'mysqldump') {
     directCandidates.push('C:\\xampp\\mysql\\bin\\mysqldump.exe');
   }
+  if (command === 'mysql') {
+    directCandidates.push('C:\\xampp\\mysql\\bin\\mysql.exe');
+  }
 
   for (const candidate of directCandidates) {
     if (await existsFile(candidate)) return candidate;
@@ -81,7 +84,21 @@ export async function resolveBinaryPath(command: string) {
       }
     }
 
-    if (command === 'mysqldump') {
+    if (command === 'pg_restore') {
+      const postgresRoot = path.join(base, 'PostgreSQL');
+      try {
+        const versions = await fs.readdir(postgresRoot, { withFileTypes: true });
+        for (const dir of versions) {
+          if (!dir.isDirectory()) continue;
+          const candidate = path.join(postgresRoot, dir.name, 'bin', exe);
+          if (await existsFile(candidate)) return candidate;
+        }
+      } catch {
+        // ignore
+      }
+    }
+
+    if (command === 'mysqldump' || command === 'mysql') {
       const mysqlRoot = path.join(base, 'MySQL');
       try {
         const installs = await fs.readdir(mysqlRoot, { withFileTypes: true });

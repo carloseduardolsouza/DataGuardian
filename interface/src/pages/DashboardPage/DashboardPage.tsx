@@ -14,6 +14,7 @@ import StatusBadge from '../../components/StatusBadge/StatusBadge';
 import DatasourcesPage from '../DatasourcesPage/DatasourcesPage';
 import StoragePage from '../StoragePage/StoragePage';
 import BackupJobsPage from '../BackupJobsPage/BackupJobsPage';
+import BackupsPage from '../BackupsPage/BackupsPage';
 import ExecutionsPage from '../ExecutionsPage/ExecutionsPage';
 import HealthPage from '../HealthPage/HealthPage';
 import SettingsPage from '../SettingsPage/SettingsPage';
@@ -34,6 +35,7 @@ const PAGE_TITLES: Record<NavKey, { title: string; sub: string }> = {
   datasources: { title: 'Datasources', sub: 'Gerencie suas fontes de dados' },
   storage: { title: 'Storage', sub: 'Locais de armazenamento' },
   'backup-jobs': { title: 'Backup Jobs', sub: 'Gerencie seus jobs de backup' },
+  backups: { title: 'Backups', sub: 'Explore backups por banco e execute restore' },
   executions: { title: 'Execucoes', sub: 'Historico de execucoes' },
   health: { title: 'Health', sub: 'Monitoramento de saude' },
   notifications: { title: 'Notificacoes', sub: 'Central de alertas' },
@@ -124,6 +126,7 @@ export default function DashboardPage({ activePage, theme, onToggleTheme, onLogo
             activePage === 'datasources'
             || activePage === 'storage'
             || activePage === 'backup-jobs'
+            || activePage === 'backups'
             || activePage === 'executions'
             || activePage === 'notifications'
               ? styles.contentFull
@@ -134,13 +137,14 @@ export default function DashboardPage({ activePage, theme, onToggleTheme, onLogo
           {activePage === 'datasources' && <DatasourcesPage />}
           {activePage === 'storage' && <StoragePage />}
           {activePage === 'backup-jobs' && <BackupJobsPage />}
+          {activePage === 'backups' && <BackupsPage />}
           {activePage === 'executions' && <ExecutionsPage />}
           {activePage === 'health' && <HealthPage />}
           {activePage === 'notifications' && (
             <NotificationsPage onUnreadCountChange={setUnreadCount} />
           )}
           {activePage === 'settings' && <SettingsPage />}
-          {activePage !== 'dashboard' && activePage !== 'datasources' && activePage !== 'storage' && activePage !== 'backup-jobs' && activePage !== 'executions' && activePage !== 'health' && activePage !== 'notifications' && activePage !== 'settings' && (
+          {activePage !== 'dashboard' && activePage !== 'datasources' && activePage !== 'storage' && activePage !== 'backup-jobs' && activePage !== 'backups' && activePage !== 'executions' && activePage !== 'health' && activePage !== 'notifications' && activePage !== 'settings' && (
             <EmptyPage page={activePage} />
           )}
         </main>

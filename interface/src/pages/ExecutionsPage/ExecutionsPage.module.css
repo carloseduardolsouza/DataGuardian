@@ -280,6 +280,18 @@
   white-space: nowrap;
 }
 
+.operationPill {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 9px;
+  border-radius: var(--radius-full);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  background: var(--color-primary-muted);
+  color: var(--color-primary);
+  text-transform: uppercase;
+}
+
 .dateCell { white-space: nowrap; font-size: var(--font-size-sm); color: var(--color-text-muted); }
 .monoCell { font-family: 'JetBrains Mono', 'Consolas', monospace; font-size: var(--font-size-sm); color: var(--color-text-muted); white-space: nowrap; }
 

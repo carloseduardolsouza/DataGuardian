@@ -9,6 +9,7 @@ Documentação completa de todos os endpoints da API REST do DataGuardian.
 - [Datasources](#datasources)
 - [Storage Locations](#storage-locations)
 - [Backup Jobs](#backup-jobs)
+- [Backups](#backups)
 - [Executions](#executions)
 - [Health](#health)
 - [Notifications](#notifications)
@@ -798,6 +799,116 @@ Cancela uma execução em andamento (status `queued` ou `running`).
   "message": "Execução cancelada com sucesso"
 }
 ```
+
+---
+
+## Backups
+
+Endpoints para a nova aba **Backups** (explorar backups por banco e executar restore).
+
+### `GET /api/backups/datasources`
+
+Lista todos os bancos que possuem pelo menos um backup concluido.
+
+**Resposta `200 OK`:**
+
+```json
+{
+  "data": [
+    {
+      "datasource_id": "ds-uuid-...",
+      "datasource_name": "Banco Producao",
+      "datasource_type": "postgres",
+      "datasource_status": "healthy",
+      "datasource_enabled": true,
+      "backups_count": 12,
+      "last_backup_at": "2026-02-19T18:35:00.000Z",
+      "updated_at": "2026-02-19T18:36:10.000Z"
+    }
+  ]
+}
+```
+
+---
+
+### `GET /api/backups/datasources/:datasourceId`
+
+Lista os backups concluídos de um datasource, incluindo status do arquivo em cada storage.
+
+**Resposta `200 OK`:**
+
+```json
+{
+  "datasource_id": "ds-uuid-...",
+  "total_backups": 2,
+  "backups": [
+    {
+      "execution_id": "exec-uuid-...",
+      "status": "completed",
+      "backup_type": "full",
+      "created_at": "2026-02-19T18:35:00.000Z",
+      "compressed_size_bytes": 512000000,
+      "job": {
+        "id": "job-uuid-...",
+        "name": "Backup Diario"
+      },
+      "storage_locations": [
+        {
+          "storage_location_id": "st-1",
+          "storage_name": "NAS",
+          "storage_type": "ssh",
+          "configured_status": "healthy",
+          "backup_path": "ssh://nas:22/backups/app/2026-02-19_183500/backup.dump.gz",
+          "relative_path": "app/2026-02-19_183500/backup.dump.gz",
+          "status": "available",
+          "message": null
+        }
+      ]
+    }
+  ]
+}
+```
+
+---
+
+### `POST /api/backups/:executionId/restore`
+
+Executa restore imediato de um backup concluido.
+
+**Request Body:**
+
+```json
+{
+  "storage_location_id": "st-uuid-opcional",
+  "drop_existing": true
+}
+```
+
+`storage_location_id` e opcional. Quando omitido, a API tenta automaticamente os storages conhecidos do backup.
+
+**Resposta `202 Accepted`:**
+
+```json
+{
+  "message": "Restore executado com sucesso",
+  "execution_id": "exec-uuid-...",
+  "datasource_id": "ds-uuid-...",
+  "datasource_name": "Banco Producao",
+  "datasource_type": "postgres",
+  "source_storage": {
+    "id": "st-uuid-...",
+    "name": "NAS",
+    "type": "ssh"
+  },
+  "restored_at": "2026-02-19T18:42:33.000Z"
+}
+```
+
+**Erros comuns:**
+
+- `409 BACKUP_NOT_RESTORABLE`: execucao nao esta em `completed`
+- `422 RESTORE_NOT_SUPPORTED`: restore suportado apenas para `postgres` e `mysql`
+- `503 BACKUP_DOWNLOAD_FAILED`: nenhum storage conseguiu fornecer o arquivo
 
 ---
 

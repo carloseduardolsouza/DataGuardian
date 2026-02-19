@@ -14,6 +14,7 @@ const APP_PAGES: NavKey[] = [
   'datasources',
   'storage',
   'backup-jobs',
+  'backups',
   'executions',
   'health',
   'notifications',

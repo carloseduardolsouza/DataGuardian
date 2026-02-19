@@ -1,4 +1,5 @@
 ﻿import { useEffect, useMemo, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { datasourceApi, executionsApi } from '../../services/api';
 import type { ApiDatasource, ApiExecution } from '../../services/api';
 import { DS_ABBR } from '../../constants';
@@ -54,6 +55,8 @@ function toIsoEnd(date: string) {
 }
 
 export default function ExecutionsPage() {
+  const location = useLocation();
+  const navigate = useNavigate();
   const [executions, setExecutions] = useState<ApiExecution[]>([]);
   const [datasources, setDatasources] = useState<ApiDatasource[]>([]);
   const [counts, setCounts] = useState<Record<StatusFilter, number>>({
@@ -148,6 +151,13 @@ export default function ExecutionsPage() {
   useEffect(() => {
     void loadDatasources();
   }, []);
+
+  useEffect(() => {
+    const state = location.state as { openExecutionId?: string } | null;
+    if (!state?.openExecutionId) return;
+    setLogTargetId(state.openExecutionId);
+    navigate(location.pathname, { replace: true, state: null });
+  }, [location.pathname, location.state, navigate]);
 
   useEffect(() => {
     void Promise.all([loadExecutions(), loadCounts()]);
@@ -352,6 +362,7 @@ export default function ExecutionsPage() {
                 <th>Job</th>
                 <th>Banco de dados</th>
                 <th>Storage</th>
+                <th>Tipo</th>
                 <th>InÃ­cio</th>
                 <th>DuraÃ§Ã£o</th>
                 <th>Tamanho</th>
@@ -485,6 +496,11 @@ function ExecRow({
             <span className={styles.storageChip}>{execution.storage_location?.name ?? execution.storage_location_id}</span>
           </div>
         </td>
+        <td>
+          <span className={styles.operationPill}>
+            {execution.operation === 'restore' ? 'restore' : 'backup'}
+          </span>
+        </td>
 
         <td className={styles.dateCell}>{formatDateTime(execution.started_at)}</td>
         <td className={styles.monoCell}>{isRunning ? 'em andamento...' : formatDuration(execution.duration_seconds)}</td>
@@ -511,7 +527,7 @@ function ExecRow({
       {execution.status === 'failed' && execution.error_message && (
         <tr className={styles.errorRow}>
           <td />
-          <td colSpan={8}>
+          <td colSpan={9}>
             <div className={styles.errorInline}>
               <ErrorIcon />
               <span>{execution.error_message}</span>
@@ -523,6 +539,12 @@ function ExecRow({
     </>
   );
 }
+
+
+
+
+
+
 
 
 

@@ -178,6 +178,7 @@ export interface ApiExecution {
   backup_path: string | null;
   files_count: number | null;
   error_message: string | null;
+  operation?: 'backup' | 'restore';
   metadata: Record<string, unknown> | null;
   created_at: string;
   job?: { name: string; schedule_cron: string };
@@ -301,6 +302,63 @@ export interface ApiDashboardOverview {
     running: number;
     queued: number;
   }>;
+}
+
+export interface ApiBackupDatasourceSummary {
+  datasource_id: string;
+  datasource_name: string;
+  datasource_type: DatasourceType;
+  datasource_status: DatasourceStatus;
+  datasource_enabled: boolean;
+  backups_count: number;
+  last_backup_at: string | null;
+  updated_at: string;
+}
+
+export interface ApiBackupStorageLocation {
+  storage_location_id: string;
+  storage_name: string;
+  storage_type: StorageLocationType | null;
+  configured_status: StorageLocationStatus | 'unreachable';
+  backup_path: string | null;
+  relative_path: string | null;
+  status: 'available' | 'missing' | 'unreachable' | 'unknown';
+  message: string | null;
+}
+
+export interface ApiBackupEntry {
+  execution_id: string;
+  status: 'completed';
+  backup_type: 'full' | 'incremental' | 'differential';
+  created_at: string;
+  started_at: string | null;
+  finished_at: string | null;
+  duration_seconds: number | null;
+  size_bytes: number | string | null;
+  compressed_size_bytes: number | string | null;
+  backup_path: string | null;
+  datasource: {
+    id: string;
+    name: string;
+    type: DatasourceType;
+  };
+  job: {
+    id: string;
+    name: string;
+  };
+  primary_storage: {
+    id: string;
+    name: string;
+    type: StorageLocationType;
+    status: StorageLocationStatus;
+  };
+  storage_locations: ApiBackupStorageLocation[];
+}
+
+export interface ApiBackupsByDatasourceResponse {
+  datasource_id: string;
+  total_backups: number;
+  backups: ApiBackupEntry[];
 }
 
 // ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ Base request ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬
@@ -461,6 +519,29 @@ export const healthApi = {
 export const dashboardApi = {
   overview: () =>
     request<ApiDashboardOverview>('/dashboard/overview'),
+};
+
+export const backupsApi = {
+  listDatasources: () =>
+    request<{ data: ApiBackupDatasourceSummary[] }>('/backups/datasources'),
+
+  listByDatasource: (datasourceId: string) =>
+    request<ApiBackupsByDatasourceResponse>(`/backups/datasources/${datasourceId}`),
+
+  restore: (executionId: string, data?: { storage_location_id?: string; drop_existing?: boolean }) =>
+    request<{
+      message: string;
+      execution_id: string;
+      source_execution_id: string;
+      datasource_id: string;
+      datasource_name: string;
+      datasource_type: DatasourceType;
+      status: 'running';
+      started_at: string;
+    }>(`/backups/${executionId}/restore`, {
+      method: 'POST',
+      body: JSON.stringify(data ?? {}),
+    }),
 };
 
 export const authApi = {
