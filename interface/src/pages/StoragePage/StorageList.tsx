@@ -1,40 +1,33 @@
 import { useState } from 'react';
-import type { MockStorageLocation } from './mockData';
-import { formatBytes, getLocationPath } from './mockData';
-import { PlusIcon, SearchIcon } from '../../components/Icons';
+import type { ApiStorageLocation } from '../../services/api';
+import { EditIcon, PlusIcon, SearchIcon, SpinnerIcon, TrashIcon } from '../../components/Icons';
+import { SL_ABBR } from '../../constants';
 import styles from './StorageList.module.css';
 
 interface Props {
-  locations:  MockStorageLocation[];
+  locations:  ApiStorageLocation[];
   selectedId: string | null;
-  onSelect:   (loc: MockStorageLocation) => void;
+  onSelect:   (loc: ApiStorageLocation) => void;
   onAddNew:   () => void;
+  onEdit?:    (loc: ApiStorageLocation) => void;
+  onDelete?:  (loc: ApiStorageLocation) => void;
+  loading?:   boolean;
+  error?:     string | null;
 }
 
-const TYPE_LABEL: Record<string, string> = {
-  local:     'LOCAL',
-  ssh:       'SSH',
-  s3:        'S3',
-  minio:     'MINIO',
-  backblaze: 'B2',
+const STATUS_LABELS: Record<string, string> = {
+  healthy:     'Saudável',
+  full:        'Cheio',
+  unreachable: 'Inacessível',
 };
 
-function formatLastCheck(iso: string): string {
-  const diff = Date.now() - new Date(iso).getTime();
-  const mins = Math.floor(diff / 60_000);
-  if (mins < 2)  return 'agora';
-  if (mins < 60) return `${mins}m atrás`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24)  return `${hrs}h atrás`;
-  return `${Math.floor(hrs / 24)}d atrás`;
-}
-
-export default function StorageList({ locations, selectedId, onSelect, onAddNew }: Props) {
+export default function StorageList({
+  locations, selectedId, onSelect, onAddNew, onEdit, onDelete, loading, error,
+}: Props) {
   const [search, setSearch] = useState('');
 
   const filtered = locations.filter(loc =>
-    loc.name.toLowerCase().includes(search.toLowerCase()) ||
-    getLocationPath(loc).toLowerCase().includes(search.toLowerCase()),
+    loc.name.toLowerCase().includes(search.toLowerCase()),
   );
 
   return (
@@ -61,82 +54,73 @@ export default function StorageList({ locations, selectedId, onSelect, onAddNew 
 
       {/* Lista */}
       <div className={styles.list}>
-        {filtered.length === 0 && (
-          <p className={styles.empty}>Nenhum resultado</p>
+        {loading && (
+          <div className={styles.loadingState}>
+            <SpinnerIcon width={16} height={16} /> Carregando...
+          </div>
         )}
 
-        {filtered.map(loc => {
-          const pct       = loc.totalBytes > 0 ? (loc.usedBytes / loc.totalBytes) * 100 : 0;
-          const fillClass = pct > 90 ? 'danger' : pct > 70 ? 'warning' : 'ok';
-          const isCloud   = loc.totalBytes === 0;
+        {error && !loading && (
+          <p className={styles.errorState}>{error}</p>
+        )}
 
-          return (
-            <div
-              key={loc.id}
-              className={`${styles.card}${selectedId === loc.id ? ` ${styles.selected}` : ''}`}
-              onClick={() => onSelect(loc)}
-            >
-              {/* Topo: ícone de tipo + nome + status */}
-              <div className={styles.cardTop}>
-                <span className={`${styles.typeIcon} ${styles[loc.type]}`}>
-                  {TYPE_LABEL[loc.type]}
-                </span>
-                <div className={styles.cardMeta}>
-                  <div className={styles.cardNameRow}>
-                    <span className={styles.cardName}>{loc.name}</span>
-                    {loc.isDefault && <span className={styles.defaultBadge}>Padrão</span>}
-                  </div>
-                  <span className={styles.cardPath}>{getLocationPath(loc)}</span>
+        {!loading && !error && filtered.length === 0 && (
+          <p className={styles.emptyState}>
+            {locations.length === 0 ? 'Nenhum storage cadastrado' : 'Nenhum resultado'}
+          </p>
+        )}
+
+        {!loading && filtered.map(loc => (
+          <div
+            key={loc.id}
+            className={`${styles.card}${selectedId === loc.id ? ` ${styles.selected}` : ''}`}
+            onClick={() => onSelect(loc)}
+          >
+            {/* Topo */}
+            <div className={styles.cardTop}>
+              <span className={`${styles.typeIcon} ${styles[loc.type]}`}>
+                {SL_ABBR[loc.type]}
+              </span>
+              <div className={styles.cardMeta}>
+                <div className={styles.cardNameRow}>
+                  <span className={styles.cardName}>{loc.name}</span>
+                  {loc.is_default && <span className={styles.defaultBadge}>Padrão</span>}
                 </div>
-                <span className={`${styles.statusDot} ${styles[loc.status]}`} />
+                <span className={styles.cardPath}>{loc.type.toUpperCase()}</span>
               </div>
+              <span className={`${styles.statusDot} ${styles[loc.status]}`} />
+            </div>
 
-              {/* Barra de disco */}
-              <div className={styles.diskWrap}>
-                <div className={styles.diskBar}>
-                  {!isCloud && (
-                    <div
-                      className={`${styles.diskFill} ${styles[fillClass]}`}
-                      style={{ width: `${Math.min(pct, 100)}%` }}
-                    />
-                  )}
-                </div>
-                <div className={styles.diskText}>
-                  <span>{formatBytes(loc.usedBytes)} usados</span>
-                  <span className={styles.diskTotal}>
-                    {isCloud ? '∞ ilimitado' : formatBytes(loc.totalBytes)}
-                  </span>
-                </div>
-                {!isCloud && (
-                  <div className={`${styles.pctBadge} ${styles[fillClass]}`}>
-                    {pct.toFixed(0)}%
-                  </div>
+            {/* Espaço disponível */}
+            {loc.available_space_gb !== null && (
+              <p className={styles.spaceInfo}>{loc.available_space_gb} GB disponíveis</p>
+            )}
+
+            {/* Rodapé */}
+            <div className={styles.cardFooter}>
+              <span className={`${styles.statusLabel} ${styles[`status_${loc.status}`]}`}>
+                {STATUS_LABELS[loc.status]}
+              </span>
+              <div className={styles.cardActions} onClick={(e) => e.stopPropagation()}>
+                {onEdit && (
+                  <button className={styles.actionBtn} title="Editar" onClick={() => onEdit(loc)}>
+                    <EditIcon width={12} height={12} />
+                  </button>
+                )}
+                {onDelete && (
+                  <button
+                    className={`${styles.actionBtn} ${styles.actionBtnDanger}`}
+                    title="Remover"
+                    onClick={() => onDelete(loc)}
+                  >
+                    <TrashIcon width={12} height={12} />
+                  </button>
                 )}
               </div>
-
-              {/* Rodapé: latência + last check */}
-              <div className={styles.cardFooter}>
-                <span className={styles.footerMeta}>
-                  {loc.latencyMs !== null
-                    ? <><PingIcon /> {loc.latencyMs}ms</>
-                    : <span className={styles.offlineText}>offline</span>
-                  }
-                </span>
-                <span className={styles.footerMeta}>{formatLastCheck(loc.lastCheck)}</span>
-              </div>
             </div>
-          );
-        })}
+          </div>
+        ))}
       </div>
     </div>
-  );
-}
-
-/* ── Ícone específico: ping/latência ─────────────────────────────── */
-function PingIcon() {
-  return (
-    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-      <path d="M2 12h4l3 9 4-18 3 9h4" />
-    </svg>
   );
 }

@@ -1,69 +1,94 @@
 import { useState } from 'react';
-import type { MockDatasource, MockTable } from './mockData';
+import type { ApiDatasource, ApiSchema, ApiSchemaTable } from '../../services/api';
+import { SpinnerIcon } from '../../components/Icons';
 import styles from './ObjectExplorer.module.css';
 
 interface Props {
-  datasource:    MockDatasource;
-  selectedTable: MockTable | null;
-  onSelectTable: (table: MockTable) => void;
+  datasource:    ApiDatasource;
+  schemas:       ApiSchema[];
+  loading:       boolean;
+  error:         string | null;
+  selectedTable: ApiSchemaTable | null;
+  onSelectTable: (table: ApiSchemaTable) => void;
+  onRefresh:     () => void;
 }
 
-export default function ObjectExplorer({ datasource, selectedTable, onSelectTable }: Props) {
-  const [openSchemas, setOpenSchemas] = useState<Record<string, boolean>>(
-    Object.fromEntries(datasource.schemas.map((s) => [s.name, true])),
-  );
-  const [openTables, setOpenTables] = useState<Record<string, boolean>>({});
+export default function ObjectExplorer({
+  datasource, schemas, loading, error, selectedTable, onSelectTable, onRefresh,
+}: Props) {
+  const [openSchemas, setOpenSchemas] = useState<Record<string, boolean>>({});
+  const [openTables,  setOpenTables]  = useState<Record<string, boolean>>({});
 
   const toggleSchema = (name: string) =>
-    setOpenSchemas((p) => ({ ...p, [name]: !p[name] }));
+    setOpenSchemas((p) => ({ ...p, [name]: p[name] === false ? true : p[name] === undefined ? false : !p[name] }));
+
+  // Default: first schema is open
+  const isSchemaOpen = (name: string, idx: number) =>
+    openSchemas[name] === undefined ? idx === 0 : openSchemas[name];
 
   const toggleTableExpand = (e: React.MouseEvent, name: string) => {
     e.stopPropagation();
     setOpenTables((p) => ({ ...p, [name]: !p[name] }));
   };
 
-  const formatCount = (n: number) =>
-    n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
-
-  if (datasource.status === 'critical') {
+  // ── Loading state ────────────────────────────────────────────────
+  if (loading) {
     return (
       <div className={styles.panel}>
-        <ExplorerHeader datasource={datasource} />
+        <ExplorerHeader datasource={datasource} onRefresh={onRefresh} />
         <div className={styles.empty}>
-          <svg className={styles.emptyIcon} width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-            <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
-          </svg>
-          <p className={styles.emptyText}>Conexão recusada</p>
-          <p className={styles.emptyHint}>Verifique se o banco está acessível</p>
+          <SpinnerIcon width={24} height={24} />
+          <p className={styles.emptyText}>Carregando schema...</p>
         </div>
       </div>
     );
   }
 
-  if (datasource.schemas.length === 0) {
+  // ── Error state ──────────────────────────────────────────────────
+  if (error) {
     return (
       <div className={styles.panel}>
-        <ExplorerHeader datasource={datasource} />
+        <ExplorerHeader datasource={datasource} onRefresh={onRefresh} />
+        <div className={styles.empty}>
+          <svg className={styles.emptyIcon} width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+          </svg>
+          <p className={styles.emptyText}>Falha ao carregar schema</p>
+          <p className={styles.emptyHint}>{error}</p>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Empty state ──────────────────────────────────────────────────
+  if (schemas.length === 0) {
+    return (
+      <div className={styles.panel}>
+        <ExplorerHeader datasource={datasource} onRefresh={onRefresh} />
         <div className={styles.empty}>
           <svg className={styles.emptyIcon} width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
             <ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4.03 3 9 3s9-1.34 9-3V5"/>
           </svg>
-          <p className={styles.emptyText}>Banco sem schemas</p>
+          <p className={styles.emptyText}>Nenhum schema encontrado</p>
           <p className={styles.emptyHint}>Status: {datasource.status}</p>
         </div>
       </div>
     );
   }
 
+  // ── Tree ─────────────────────────────────────────────────────────
   return (
     <div className={styles.panel}>
-      <ExplorerHeader datasource={datasource} />
+      <ExplorerHeader datasource={datasource} onRefresh={onRefresh} />
       <div className={styles.tree}>
-        {datasource.schemas.map((schema) => (
+        {schemas.map((schema, idx) => (
           <div key={schema.name}>
             {/* Schema header */}
             <div className={styles.schemaRow} onClick={() => toggleSchema(schema.name)}>
-              <svg className={`${styles.chevron}${openSchemas[schema.name] ? ` ${styles.open}` : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+              <svg
+                className={`${styles.chevron}${isSchemaOpen(schema.name, idx) ? ` ${styles.open}` : ''}`}
+                viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"
+              >
                 <polyline points="9 18 15 12 9 6"/>
               </svg>
               <SchemaIcon />
@@ -71,7 +96,7 @@ export default function ObjectExplorer({ datasource, selectedTable, onSelectTabl
             </div>
 
             {/* Tables */}
-            {openSchemas[schema.name] && schema.tables.map((table) => (
+            {isSchemaOpen(schema.name, idx) && schema.tables.map((table) => (
               <div key={table.name}>
                 <button
                   className={`${styles.tableRow}${selectedTable?.name === table.name ? ` ${styles.active}` : ''}`}
@@ -87,7 +112,7 @@ export default function ObjectExplorer({ datasource, selectedTable, onSelectTabl
                   </svg>
                   <TableGridIcon className={styles.tableIcon} />
                   <span className={styles.tableName}>{table.name}</span>
-                  <span className={styles.tableRowCount}>{formatCount(table.rowCount)}</span>
+                  <span className={styles.tableRowCount}>{table.columns.length}c</span>
                 </button>
 
                 {/* Columns */}
@@ -97,8 +122,8 @@ export default function ObjectExplorer({ datasource, selectedTable, onSelectTabl
                       <div key={col.name} className={styles.columnRow}>
                         <ColumnIcon className={styles.colIcon} />
                         <span className={styles.colName}>{col.name}</span>
-                        {col.primaryKey && <span className={`${styles.colBadge} ${styles.pk}`}>PK</span>}
-                        {col.foreignKey && <span className={`${styles.colBadge} ${styles.fk}`}>FK</span>}
+                        {col.primaryKey  && <span className={`${styles.colBadge} ${styles.pk}`}>PK</span>}
+                        {col.foreignKey  && <span className={`${styles.colBadge} ${styles.fk}`}>FK</span>}
                         {col.unique && !col.primaryKey && <span className={`${styles.colBadge} ${styles.uk}`}>UQ</span>}
                         <span className={styles.colType}>{col.type}</span>
                       </div>
@@ -114,14 +139,14 @@ export default function ObjectExplorer({ datasource, selectedTable, onSelectTabl
   );
 }
 
-function ExplorerHeader({ datasource }: { datasource: MockDatasource }) {
+function ExplorerHeader({ datasource, onRefresh }: { datasource: ApiDatasource; onRefresh: () => void }) {
   return (
     <div className={styles.header}>
       <div className={styles.headerLeft}>
         <span className={styles.title}>Explorer</span>
-        <span className={styles.dbName}>{datasource.database}</span>
+        <span className={styles.dbName}>{datasource.name}</span>
       </div>
-      <button className={styles.refreshBtn} title="Atualizar">
+      <button className={styles.refreshBtn} title="Atualizar schema" onClick={onRefresh}>
         <RefreshIcon />
       </button>
     </div>

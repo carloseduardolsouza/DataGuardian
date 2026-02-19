@@ -24,7 +24,7 @@ export const NotificationController = {
 
   async markAsRead(req: Request, res: Response, next: NextFunction) {
     try {
-      const result = await markNotificationAsRead(req.params.id);
+      const result = await markNotificationAsRead(String(req.params.id));
       res.json(result);
     } catch (err) {
       next(err);
@@ -42,7 +42,7 @@ export const NotificationController = {
 
   async remove(req: Request, res: Response, next: NextFunction) {
     try {
-      await deleteNotification(req.params.id);
+      await deleteNotification(String(req.params.id));
       res.status(204).send();
     } catch (err) {
       next(err);

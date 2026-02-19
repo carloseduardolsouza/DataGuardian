@@ -9,11 +9,13 @@ import {
 } from '../../components/Icons';
 import { DATASOURCE_TYPES } from '../../constants';
 import type { DatasourceType } from '../../constants';
+import type { ApiDatasourceDetail } from '../../services/api';
 import styles from './AddDatasourceModal.module.css';
 
 interface Props {
-  onClose: () => void;
-  onSave:  (data: unknown) => void;
+  onClose:   () => void;
+  onSave:    (data: unknown, editId?: string) => void;
+  editData?: ApiDatasourceDetail | null;
 }
 
 // ── Estado do formulário ──────────────────────────────────────────
@@ -46,6 +48,29 @@ const INITIAL_FORM: FormState = {
   tags: [],
 };
 
+function initFormFromEdit(ds: ApiDatasourceDetail): FormState {
+  const cfg = ds.connection_config;
+  return {
+    name:    ds.name,
+    enabled: ds.enabled,
+    tags:    [...ds.tags],
+    host:        String(cfg.host ?? ''),
+    port:        String(cfg.port ?? ''),
+    database:    String(cfg.database ?? ''),
+    username:    String(cfg.username ?? ''),
+    password:    '',  // never pre-fill masked value
+    sslEnabled:  Boolean(cfg.ssl_enabled ?? false),
+    filePath:    String(cfg.file_path ?? ''),
+    sourcePath:  String(cfg.source_path ?? ''),
+    includePatterns: Array.isArray(cfg.include_patterns)
+      ? (cfg.include_patterns as string[]).join(', ')
+      : String(cfg.include_patterns ?? ''),
+    excludePatterns: Array.isArray(cfg.exclude_patterns)
+      ? (cfg.exclude_patterns as string[]).join(', ')
+      : String(cfg.exclude_patterns ?? ''),
+  };
+}
+
 // ── Ícone por tipo de datasource ──────────────────────────────────
 
 const DS_TYPE_ICON: Record<DatasourceType, React.ReactNode> = {
@@ -59,16 +84,23 @@ const DS_TYPE_ICON: Record<DatasourceType, React.ReactNode> = {
 
 // ── Componente principal ──────────────────────────────────────────
 
-export default function AddDatasourceModal({ onClose, onSave }: Props) {
-  const [step, setStep]               = useState<1 | 2>(1);
-  const [selectedType, setSelectedType] = useState<DatasourceType | null>(null);
-  const [form, setForm]               = useState<FormState>(INITIAL_FORM);
-  const [testing, setTesting]         = useState(false);
-  const [testResult, setTestResult]   = useState<'ok' | 'error' | null>(null);
-  const [tagInput, setTagInput]       = useState('');
+export default function AddDatasourceModal({ onClose, onSave, editData }: Props) {
+  const isEdit = !!editData;
 
-  const set = (key: keyof FormState) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
-    setForm(prev => ({ ...prev, [key]: e.target.value }));
+  const [step, setStep]                 = useState<1 | 2>(isEdit ? 2 : 1);
+  const [selectedType, setSelectedType] = useState<DatasourceType | null>(
+    isEdit ? editData.type : null,
+  );
+  const [form, setForm]   = useState<FormState>(
+    isEdit ? initFormFromEdit(editData) : INITIAL_FORM,
+  );
+  const [testing, setTesting]       = useState(false);
+  const [testResult, setTestResult] = useState<'ok' | 'error' | null>(null);
+  const [tagInput, setTagInput]     = useState('');
+
+  const set = (key: keyof FormState) =>
+    (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
+      setForm(prev => ({ ...prev, [key]: e.target.value }));
 
   const setCheck = (key: keyof FormState) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm(prev => ({ ...prev, [key]: e.target.checked }));
@@ -90,6 +122,7 @@ export default function AddDatasourceModal({ onClose, onSave }: Props) {
   };
 
   const handleSave = () => {
+    const isRelational = selectedType && !['sqlite', 'files'].includes(selectedType);
     let connectionConfig: Record<string, unknown> = {};
 
     if (selectedType === 'sqlite') {
@@ -100,24 +133,33 @@ export default function AddDatasourceModal({ onClose, onSave }: Props) {
         ...(form.includePatterns ? { include_patterns: form.includePatterns.split(',').map(s => s.trim()).filter(Boolean) } : {}),
         ...(form.excludePatterns ? { exclude_patterns: form.excludePatterns.split(',').map(s => s.trim()).filter(Boolean) } : {}),
       };
-    } else {
+    } else if (isRelational) {
       connectionConfig = {
         host:        form.host,
         port:        parseInt(form.port) || 5432,
         database:    form.database,
         username:    form.username,
-        password:    form.password,
         ssl_enabled: form.sslEnabled,
+        ...(form.password ? { password: form.password } : {}),
       };
     }
 
-    onSave({
-      name:              form.name,
-      type:              selectedType,
-      connection_config: connectionConfig,
-      enabled:           form.enabled,
-      tags:              form.tags,
-    });
+    if (isEdit) {
+      onSave({
+        name:              form.name,
+        connection_config: connectionConfig,
+        enabled:           form.enabled,
+        tags:              form.tags,
+      }, editData.id);
+    } else {
+      onSave({
+        name:              form.name,
+        type:              selectedType,
+        connection_config: connectionConfig,
+        enabled:           form.enabled,
+        tags:              form.tags,
+      });
+    }
     onClose();
   };
 
@@ -149,14 +191,15 @@ export default function AddDatasourceModal({ onClose, onSave }: Props) {
     if (!form.name.trim()) return false;
     if (selectedType === 'sqlite') return !!form.filePath.trim();
     if (selectedType === 'files') return !!form.sourcePath.trim();
-    return !!form.host.trim() && !!form.database.trim() && !!form.username.trim() && !!form.password.trim();
+    const base = !!form.host.trim() && !!form.database.trim() && !!form.username.trim();
+    return isEdit ? base : base && !!form.password.trim();
   })();
 
   // ── Footer ──────────────────────────────────────────────────────
 
   const footer = (
     <>
-      {step === 2 && (
+      {step === 2 && !isEdit && (
         <div className={styles.footerLeft}>
           <button className={styles.backBtn} onClick={() => { setStep(1); setTestResult(null); }}>
             ← Voltar
@@ -185,7 +228,7 @@ export default function AddDatasourceModal({ onClose, onSave }: Props) {
             </button>
           )}
           <button className={styles.primaryBtn} onClick={handleSave} disabled={!isValid}>
-            Salvar
+            {isEdit ? 'Salvar alterações' : 'Salvar'}
           </button>
         </>
       )}
@@ -198,27 +241,29 @@ export default function AddDatasourceModal({ onClose, onSave }: Props) {
 
   return (
     <Modal
-      title="Adicionar Datasource"
+      title={isEdit ? 'Editar Datasource' : 'Adicionar Datasource'}
       subtitle={step === 1 ? 'Escolha o tipo de banco de dados' : `Configurar conexão ${typeLabel}`}
       onClose={onClose}
       footer={footer}
       size="lg"
     >
-      {/* Steps indicator */}
-      <div className={styles.steps}>
-        <div className={`${styles.step} ${step >= 1 ? styles.stepDone : ''}`}>
-          <span className={styles.stepNum}>{step > 1 ? <CheckIcon width={10} height={10} /> : '1'}</span>
-          <span>Tipo</span>
+      {/* Steps indicator — only in create mode */}
+      {!isEdit && (
+        <div className={styles.steps}>
+          <div className={`${styles.step} ${step >= 1 ? styles.stepDone : ''}`}>
+            <span className={styles.stepNum}>{step > 1 ? <CheckIcon width={10} height={10} /> : '1'}</span>
+            <span>Tipo</span>
+          </div>
+          <div className={styles.stepLine} />
+          <div className={`${styles.step} ${step >= 2 ? styles.stepDone : ''}`}>
+            <span className={styles.stepNum}>2</span>
+            <span>Configuração</span>
+          </div>
         </div>
-        <div className={styles.stepLine} />
-        <div className={`${styles.step} ${step >= 2 ? styles.stepDone : ''}`}>
-          <span className={styles.stepNum}>2</span>
-          <span>Configuração</span>
-        </div>
-      </div>
+      )}
 
-      {/* STEP 1 — Seleção de tipo */}
-      {step === 1 && (
+      {/* STEP 1 — Seleção de tipo (apenas no modo criação) */}
+      {step === 1 && !isEdit && (
         <div className={styles.typeGrid}>
           {DATASOURCE_TYPES.map(opt => (
             <button
@@ -309,10 +354,14 @@ export default function AddDatasourceModal({ onClose, onSave }: Props) {
                     onChange={set('username')}
                   />
                 </FormField>
-                <FormField label="Senha *">
+                <FormField
+                  label={isEdit ? 'Nova senha' : 'Senha *'}
+                  hint={isEdit ? 'Deixe em branco para manter a senha atual' : undefined}
+                >
                   <input
                     className={formStyles.input}
                     type="password"
+                    placeholder={isEdit ? 'Manter senha atual' : ''}
                     value={form.password}
                     onChange={set('password')}
                   />

@@ -16,9 +16,9 @@
   flex-direction: column;
 }
 
-/* ── Painel central: object explorer ─────────── */
+/* ── Painel central: detalhe do datasource ────── */
 .middlePanel {
-  width: 230px;
+  width: 360px;
   flex-shrink: 0;
   border-right: 1px solid var(--color-border);
   overflow: hidden;
@@ -114,4 +114,239 @@
   opacity: 1;
   flex-shrink: 0;
   color: var(--color-primary);
+}
+
+/* ── Painel de detalhes ───────────────────────── */
+.detailPanel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow-y: auto;
+  padding: var(--space-5);
+  gap: var(--space-4);
+  background: var(--color-bg);
+}
+
+.detailHeader {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-4);
+}
+
+.detailTypeIcon {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  flex-shrink: 0;
+  font-weight: var(--font-weight-bold);
+  letter-spacing: -0.5px;
+  font-family: 'JetBrains Mono', 'Consolas', monospace;
+}
+
+.detailTypeIcon.postgres  { background: #336791; color: white; }
+.detailTypeIcon.mysql     { background: #4479A1; color: white; }
+.detailTypeIcon.mongodb   { background: #47A248; color: white; }
+.detailTypeIcon.sqlserver { background: #CC2927; color: white; }
+.detailTypeIcon.sqlite    { background: #044a64; color: white; }
+.detailTypeIcon.files     { background: #6b7280; color: white; }
+
+.detailHeaderInfo {
+  flex: 1;
+  min-width: 0;
+}
+
+.detailTitle {
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semi);
+  color: var(--color-text);
+  margin: 0 0 var(--space-2);
+}
+
+.detailMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.statusBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 9px;
+  border-radius: var(--radius-full);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+}
+
+.status_healthy  { background: var(--color-success-muted); color: var(--color-success); }
+.status_warning  { background: var(--color-warning-muted); color: var(--color-warning); }
+.status_critical { background: var(--color-danger-muted);  color: var(--color-danger);  }
+.status_unknown  { background: var(--color-surface-elevated); color: var(--color-text-muted); }
+
+.disabledBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 9px;
+  border-radius: var(--radius-full);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  background: var(--color-surface-elevated);
+  color: var(--color-text-muted);
+  border: 1px solid var(--color-border);
+}
+
+/* ── Ações do painel de detalhes ─────────────── */
+.detailActions {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.actionBtnTest,
+.actionBtnEdit,
+.actionBtnDelete {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 7px var(--space-3);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semi);
+  cursor: pointer;
+  border: 1px solid var(--color-border);
+  transition:
+    background var(--transition-fast),
+    color var(--transition-fast),
+    border-color var(--transition-fast);
+}
+
+.actionBtnTest {
+  background: var(--color-primary-muted);
+  color: var(--color-primary);
+  border-color: transparent;
+}
+
+.actionBtnTest:hover:not(:disabled) {
+  background: var(--color-primary);
+  color: var(--color-text-on-primary);
+}
+
+.actionBtnTest:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.actionBtnEdit {
+  background: transparent;
+  color: var(--color-text-muted);
+}
+
+.actionBtnEdit:hover {
+  background: var(--color-surface-elevated);
+  color: var(--color-text);
+}
+
+.actionBtnDelete {
+  background: transparent;
+  color: var(--color-danger);
+  border-color: var(--color-danger-muted);
+}
+
+.actionBtnDelete:hover {
+  background: var(--color-danger-muted);
+}
+
+/* ── Resultado do teste de conexão ───────────── */
+.testResult {
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+}
+
+.testOk    { background: var(--color-success-muted); color: var(--color-success); }
+.testError { background: var(--color-danger-muted);  color: var(--color-danger);  }
+
+/* ── Seções de informação ─────────────────────── */
+.detailSection {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+}
+
+.detailSectionTitle {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semi);
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: var(--space-3);
+}
+
+.configGrid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.configRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.configRow:last-child {
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.configKey {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+  min-width: 110px;
+}
+
+.configValue {
+  font-size: var(--font-size-xs);
+  color: var(--color-text);
+  text-align: right;
+  word-break: break-all;
+  font-family: 'JetBrains Mono', 'Consolas', monospace;
+}
+
+.detailLoading {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+}
+
+.detailEmpty {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-subtle);
+}
+
+/* ── Tags no painel de detalhe ────────────────── */
+.detailTags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.detailTag {
+  font-size: var(--font-size-xs);
+  padding: 2px 9px;
+  border-radius: var(--radius-full);
+  background: var(--color-surface-elevated);
+  color: var(--color-text-muted);
+  border: 1px solid var(--color-border);
 }

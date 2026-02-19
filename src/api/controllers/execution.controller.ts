@@ -25,7 +25,7 @@ export const ExecutionController = {
 
   async findById(req: Request, res: Response, next: NextFunction) {
     try {
-      const execution = await findExecutionById(req.params.id);
+      const execution = await findExecutionById(String(req.params.id));
       res.json(execution);
     } catch (err) {
       next(err);
@@ -34,7 +34,7 @@ export const ExecutionController = {
 
   async cancel(req: Request, res: Response, next: NextFunction) {
     try {
-      const result = await cancelExecution(req.params.id);
+      const result = await cancelExecution(String(req.params.id));
       res.json(result);
     } catch (err) {
       next(err);

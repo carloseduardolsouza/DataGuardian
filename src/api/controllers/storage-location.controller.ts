@@ -32,7 +32,7 @@ export const StorageLocationController = {
 
   async findById(req: Request, res: Response, next: NextFunction) {
     try {
-      const storageLocation = await findStorageLocationById(req.params.id);
+      const storageLocation = await findStorageLocationById(String(req.params.id));
       res.json(storageLocation);
     } catch (err) {
       next(err);
@@ -41,7 +41,7 @@ export const StorageLocationController = {
 
   async update(req: Request, res: Response, next: NextFunction) {
     try {
-      const storageLocation = await updateStorageLocation(req.params.id, req.body);
+      const storageLocation = await updateStorageLocation(String(req.params.id), req.body);
       res.json(storageLocation);
     } catch (err) {
       next(err);
@@ -50,7 +50,7 @@ export const StorageLocationController = {
 
   async remove(req: Request, res: Response, next: NextFunction) {
     try {
-      await deleteStorageLocation(req.params.id);
+      await deleteStorageLocation(String(req.params.id));
       res.status(204).send();
     } catch (err) {
       next(err);
@@ -59,7 +59,7 @@ export const StorageLocationController = {
 
   async testConnection(req: Request, res: Response, next: NextFunction) {
     try {
-      const result = await testStorageConnection(req.params.id);
+      const result = await testStorageConnection(String(req.params.id));
       res.status(501).json(result);
     } catch (err) {
       next(err);

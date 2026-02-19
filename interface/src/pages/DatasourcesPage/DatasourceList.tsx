@@ -1,26 +1,40 @@
 import { useState } from 'react';
-import type { MockDatasource } from './mockData';
-import { PlusIcon, SearchIcon, ClockIcon, TableIcon } from '../../components/Icons';
+import type { ApiDatasource } from '../../services/api';
+import { PlusIcon, SearchIcon, EditIcon, TrashIcon, SpinnerIcon } from '../../components/Icons';
 import { DS_ABBR } from '../../constants';
 import styles from './DatasourceList.module.css';
 
 interface Props {
-  datasources: MockDatasource[];
+  datasources: ApiDatasource[];
   selectedId:  string | null;
-  onSelect:    (ds: MockDatasource) => void;
+  onSelect:    (ds: ApiDatasource) => void;
   onAddNew?:   () => void;
+  onEdit?:     (ds: ApiDatasource) => void;
+  onDelete?:   (ds: ApiDatasource) => void;
+  loading?:    boolean;
+  error?:      string | null;
 }
 
-export default function DatasourceList({ datasources, selectedId, onSelect, onAddNew }: Props) {
+const STATUS_LABELS: Record<string, string> = {
+  healthy:  'Saudável',
+  warning:  'Atenção',
+  critical: 'Crítico',
+  unknown:  'Desconhecido',
+};
+
+export default function DatasourceList({
+  datasources, selectedId, onSelect, onAddNew, onEdit, onDelete, loading, error,
+}: Props) {
   const [search, setSearch] = useState('');
 
   const filtered = datasources.filter((ds) =>
     ds.name.toLowerCase().includes(search.toLowerCase()) ||
-    ds.host.toLowerCase().includes(search.toLowerCase()),
+    ds.tags.some(t => t.toLowerCase().includes(search.toLowerCase())),
   );
 
   return (
     <div className={styles.panel}>
+      {/* Cabeçalho */}
       <div className={styles.header}>
         <div className={styles.headerTop}>
           <span className={styles.title}>Datasources</span>
@@ -40,58 +54,73 @@ export default function DatasourceList({ datasources, selectedId, onSelect, onAd
         </div>
       </div>
 
+      {/* Lista */}
       <div className={styles.list}>
-        {filtered.map((ds) => {
-          const latencyClass = ds.latencyMs === null ? 'offline'
-            : ds.latencyMs < 30  ? 'fast'
-            : ds.latencyMs < 100 ? 'medium'
-            : 'slow';
+        {loading && (
+          <div className={styles.loadingState}>
+            <SpinnerIcon width={16} height={16} /> Carregando...
+          </div>
+        )}
 
-          return (
-            <div
-              key={ds.id}
-              className={`${styles.card}${selectedId === ds.id ? ` ${styles.selected}` : ''}`}
-              onClick={() => onSelect(ds)}
-            >
-              <div className={styles.cardTop}>
-                <div className={`${styles.typeIcon} ${styles[ds.type]}`}>
-                  {DS_ABBR[ds.type]}
-                </div>
-                <div className={styles.cardMeta}>
-                  <p className={styles.cardName}>{ds.name}</p>
-                  <p className={styles.cardHost}>
-                    {ds.host}{ds.port ? `:${ds.port}` : ''} / {ds.database}
-                  </p>
-                </div>
-                <span className={`${styles.statusDot} ${styles[ds.status]}`} title={ds.status} />
+        {error && !loading && (
+          <p className={styles.errorState}>{error}</p>
+        )}
+
+        {!loading && !error && filtered.length === 0 && (
+          <p className={styles.emptyState}>
+            {datasources.length === 0 ? 'Nenhum datasource cadastrado' : 'Nenhum resultado'}
+          </p>
+        )}
+
+        {!loading && filtered.map((ds) => (
+          <div
+            key={ds.id}
+            className={`${styles.card}${selectedId === ds.id ? ` ${styles.selected}` : ''}`}
+            onClick={() => onSelect(ds)}
+          >
+            {/* Topo */}
+            <div className={styles.cardTop}>
+              <div className={`${styles.typeIcon} ${styles[ds.type]}`}>
+                {DS_ABBR[ds.type]}
               </div>
-
-              <div className={styles.cardFooter}>
-                <div className={styles.cardStats}>
-                  <span className={styles.cardStat}>
-                    <ClockIcon width={10} height={10} />
-                    {ds.lastCheckAt}
-                  </span>
-                  {ds.schemas.length > 0 && (
-                    <span className={styles.cardStat}>
-                      <TableIcon width={10} height={10} />
-                      {ds.schemas.reduce((acc, s) => acc + s.tables.length, 0)} tabelas
-                    </span>
-                  )}
-                </div>
-                <span className={`${styles.latencyBadge} ${styles[latencyClass]}`}>
-                  {ds.latencyMs !== null ? `${ds.latencyMs}ms` : 'offline'}
-                </span>
+              <div className={styles.cardMeta}>
+                <p className={styles.cardName}>{ds.name}</p>
+                <p className={styles.cardHost}>{ds.type.toUpperCase()}</p>
               </div>
-
-              {ds.tags.length > 0 && (
-                <div className={styles.tags}>
-                  {ds.tags.map((t) => <span key={t} className={styles.tag}>{t}</span>)}
-                </div>
-              )}
+              <span className={`${styles.statusDot} ${styles[ds.status]}`} title={STATUS_LABELS[ds.status]} />
             </div>
-          );
-        })}
+
+            {/* Tags */}
+            {ds.tags.length > 0 && (
+              <div className={styles.tags}>
+                {ds.tags.map((t) => <span key={t} className={styles.tag}>{t}</span>)}
+              </div>
+            )}
+
+            {/* Rodapé */}
+            <div className={styles.cardFooter}>
+              <span className={`${styles.statusLabel} ${styles[`status_${ds.status}`]}`}>
+                {STATUS_LABELS[ds.status]}
+              </span>
+              <div className={styles.cardActions} onClick={(e) => e.stopPropagation()}>
+                {onEdit && (
+                  <button className={styles.actionBtn} title="Editar" onClick={() => onEdit(ds)}>
+                    <EditIcon width={12} height={12} />
+                  </button>
+                )}
+                {onDelete && (
+                  <button
+                    className={`${styles.actionBtn} ${styles.actionBtnDanger}`}
+                    title="Remover"
+                    onClick={() => onDelete(ds)}
+                  >
+                    <TrashIcon width={12} height={12} />
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );

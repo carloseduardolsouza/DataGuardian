@@ -21,3 +21,5 @@ datasourcesRouter.get('/:id',                                                   
 datasourcesRouter.put('/:id',       validate(updateDatasourceSchema),             DatasourceController.update);
 datasourcesRouter.delete('/:id',                                                  DatasourceController.remove);
 datasourcesRouter.post('/:id/test',                                               DatasourceController.testConnection);
+datasourcesRouter.get('/:id/schema',                                              DatasourceController.getSchema);
+datasourcesRouter.post('/:id/query',                                              DatasourceController.executeQuery);

@@ -1,49 +1,64 @@
-import { useState, useCallback } from 'react';
-import type { MockDatasource, MockTable, QueryResult } from './mockData';
-import { runMockQuery } from './mockData';
+import { useState, useCallback, useEffect } from 'react';
+import type { ApiDatasource, ApiSchemaTable } from '../../services/api';
+import { datasourceApi } from '../../services/api';
 import { PlayFilledIcon, TrashIcon, ExportIcon } from '../../components/Icons';
 import styles from './MainPanel.module.css';
 
-type Tab = 'query' | 'data' | 'structure' | 'indexes';
+type Tab = 'query' | 'structure';
 
-interface Props {
-  datasource:    MockDatasource;
-  selectedTable: MockTable | null;
-  initialTab?:   Tab;
+interface QueryResult {
+  columns:       string[];
+  rows:          Record<string, unknown>[];
+  rowCount:      number;
+  executionTime: number;
+  message?:      string;
 }
 
-const PAGE_SIZE = 50;
+interface Props {
+  datasource:    ApiDatasource;
+  selectedTable: ApiSchemaTable | null;
+}
 
-export default function MainPanel({ datasource, selectedTable, initialTab = 'query' }: Props) {
-  const [activeTab,   setActiveTab]   = useState<Tab>(initialTab);
-  const [sql,         setSql]         = useState('SELECT * FROM ' + (selectedTable?.name ?? 'users') + ' LIMIT 50;');
+export default function MainPanel({ datasource, selectedTable }: Props) {
+  const [activeTab,   setActiveTab]   = useState<Tab>('query');
+  const [sql,         setSql]         = useState('');
   const [result,      setResult]      = useState<QueryResult | null>(null);
+  const [queryError,  setQueryError]  = useState<string | null>(null);
   const [running,     setRunning]     = useState(false);
-  const [dataPage,    setDataPage]    = useState(0);
   const [history,     setHistory]     = useState<string[]>([]);
   const [showHistory, setShowHistory] = useState(false);
+
+  // When a table is selected, update the suggested query
+  useEffect(() => {
+    if (selectedTable) {
+      setSql(`SELECT * FROM ${selectedTable.name} LIMIT 50;`);
+      setResult(null);
+      setQueryError(null);
+    }
+  }, [selectedTable?.name]);
 
   const handleRun = useCallback(async () => {
     if (!sql.trim() || running) return;
     setRunning(true);
     setResult(null);
+    setQueryError(null);
 
-    await new Promise((r) => setTimeout(r, 400 + Math.random() * 300));
-
-    const res = runMockQuery(sql, datasource);
-    setResult(res);
-    setRunning(false);
-    if (!res.error) {
-      setHistory((h) => [sql, ...h.filter((q) => q !== sql)].slice(0, 20));
+    try {
+      const res = await datasourceApi.query(datasource.id, sql.trim());
+      setResult(res);
+      setHistory((h) => [sql.trim(), ...h.filter((q) => q !== sql.trim())].slice(0, 20));
+    } catch (err) {
+      setQueryError(err instanceof Error ? err.message : 'Erro ao executar query');
+    } finally {
+      setRunning(false);
     }
-  }, [sql, running, datasource]);
+  }, [sql, running, datasource.id]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
       e.preventDefault();
       handleRun();
     }
-    // Tab = 2 spaces
     if (e.key === 'Tab') {
       e.preventDefault();
       const el    = e.currentTarget;
@@ -55,49 +70,38 @@ export default function MainPanel({ datasource, selectedTable, initialTab = 'que
     }
   };
 
-  // Quando troca de tabela, sugere query
-  if (selectedTable && !sql.includes(selectedTable.name)) {
-    setSql(`SELECT * FROM ${selectedTable.name} LIMIT 50;`);
-    setResult(null);
-  }
-
-  const tableData = selectedTable?.rows ?? [];
-  const totalPages = Math.ceil(tableData.length / PAGE_SIZE);
-  const pageData   = tableData.slice(dataPage * PAGE_SIZE, (dataPage + 1) * PAGE_SIZE);
+  const tabs: Tab[] = ['query', 'structure'];
+  const tabLabels: Record<Tab, string> = { query: 'Query', structure: 'Estrutura' };
 
   return (
     <div className={styles.panel}>
       {/* Tab bar */}
       <div className={styles.toolbar}>
         <div className={styles.tabs}>
-          {(['query', 'data', 'structure', 'indexes'] as Tab[]).map((tab) => {
-            const labels: Record<Tab, string> = { query: 'Query', data: 'Dados', structure: 'Estrutura', indexes: 'Índices' };
-            const disabled = tab !== 'query' && !selectedTable;
-            return (
-              <button
-                key={tab}
-                className={`${styles.tab}${activeTab === tab ? ` ${styles.active}` : ''}`}
-                onClick={() => !disabled && setActiveTab(tab)}
-                disabled={disabled}
-                title={disabled ? 'Selecione uma tabela primeiro' : undefined}
-              >
-                {labels[tab]}
-              </button>
-            );
-          })}
+          {tabs.map((tab) => (
+            <button
+              key={tab}
+              className={`${styles.tab}${activeTab === tab ? ` ${styles.active}` : ''}`}
+              onClick={() => setActiveTab(tab)}
+              disabled={tab === 'structure' && !selectedTable}
+              title={tab === 'structure' && !selectedTable ? 'Selecione uma tabela primeiro' : undefined}
+            >
+              {tabLabels[tab]}
+            </button>
+          ))}
         </div>
 
         <div className={styles.toolbarActions}>
           {activeTab === 'query' && (
             <>
-              <button className={styles.actionBtn} onClick={() => { setSql(''); setResult(null); }}>
+              <button className={styles.actionBtn} onClick={() => { setSql(''); setResult(null); setQueryError(null); }}>
                 <TrashIcon /> Limpar
               </button>
               <button className={styles.actionBtn} onClick={() => setShowHistory((h) => !h)} title="Histórico de queries">
                 <HistoryIcon />
               </button>
-              {result && !result.error && (
-                <button className={styles.actionBtn} onClick={() => exportCSV(result)} title="Exportar CSV">
+              {result && result.columns.length > 0 && (
+                <button className={styles.actionBtn} onClick={() => exportCSV(result!)} title="Exportar CSV">
                   <ExportIcon /> CSV
                 </button>
               )}
@@ -112,8 +116,8 @@ export default function MainPanel({ datasource, selectedTable, initialTab = 'que
               </button>
             </>
           )}
-          {(activeTab === 'data' || activeTab === 'structure') && selectedTable && (
-            <button className={styles.actionBtn} onClick={() => exportCSV({ columns: selectedTable.columns.map(c => c.name), rows: selectedTable.rows, rowCount: selectedTable.rows.length, executionTime: '' })}>
+          {activeTab === 'structure' && selectedTable && (
+            <button className={styles.actionBtn} onClick={() => exportStructureCSV(selectedTable)}>
               <ExportIcon /> Exportar
             </button>
           )}
@@ -126,9 +130,12 @@ export default function MainPanel({ datasource, selectedTable, initialTab = 'que
         {/* ── QUERY TAB ── */}
         {activeTab === 'query' && (
           <div className={styles.queryLayout}>
-            {/* History overlay */}
             {showHistory && (
-              <HistoryPanel history={history} onSelect={(q) => { setSql(q); setShowHistory(false); }} onClose={() => setShowHistory(false)} />
+              <HistoryPanel
+                history={history}
+                onSelect={(q) => { setSql(q); setShowHistory(false); }}
+                onClose={() => setShowHistory(false)}
+              />
             )}
 
             <div className={styles.editorWrap}>
@@ -145,8 +152,8 @@ export default function MainPanel({ datasource, selectedTable, initialTab = 'que
               <div className={styles.editorFooter}>
                 <span className={styles.editorHint}>
                   {selectedTable
-                    ? `Tabela selecionada: ${selectedTable.name} (${selectedTable.rowCount.toLocaleString()} linhas)`
-                    : `Conectado a: ${datasource.database}`}
+                    ? `Tabela: ${selectedTable.name} — ${selectedTable.columns.length} colunas`
+                    : `Datasource: ${datasource.name}`}
                 </span>
                 <span className={styles.editorHint}>Ctrl+Enter para executar</span>
               </div>
@@ -160,7 +167,7 @@ export default function MainPanel({ datasource, selectedTable, initialTab = 'que
                 </div>
               )}
 
-              {!running && !result && (
+              {!running && !result && !queryError && (
                 <div className={styles.emptyState}>
                   <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2">
                     <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
@@ -172,30 +179,28 @@ export default function MainPanel({ datasource, selectedTable, initialTab = 'que
                 </div>
               )}
 
-              {!running && result?.error && (
+              {!running && queryError && (
                 <div className={styles.errorState}>
-                  <div className={styles.errorBanner}>
-                    ERROR: {result.error}
-                  </div>
+                  <div className={styles.errorBanner}>ERROR: {queryError}</div>
                 </div>
               )}
 
-              {!running && result && !result.error && result.columns.length === 0 && (
+              {!running && result && result.columns.length === 0 && (
                 <div className={styles.results} style={{ padding: 'var(--space-4)' }}>
                   <div className={styles.successBanner}>
-                    {result.message ?? 'Query executada com sucesso.'} — {result.executionTime}
+                    {result.message ?? 'Query executada com sucesso.'} — {result.executionTime}ms
                   </div>
                 </div>
               )}
 
-              {!running && result && !result.error && result.columns.length > 0 && (
+              {!running && result && result.columns.length > 0 && (
                 <>
                   <div className={styles.resultsToolbar}>
                     <div className={styles.resultsMeta}>
                       <span><strong>{result.rowCount}</strong> {result.rowCount === 1 ? 'linha' : 'linhas'}</span>
-                      <span>Tempo: <strong>{result.executionTime}</strong></span>
+                      <span>Tempo: <strong>{result.executionTime}ms</strong></span>
                     </div>
-                    <button className={styles.actionBtn} onClick={() => exportCSV(result)}>
+                    <button className={styles.actionBtn} onClick={() => exportCSV(result!)}>
                       <ExportIcon /> Exportar CSV
                     </button>
                   </div>
@@ -204,38 +209,6 @@ export default function MainPanel({ datasource, selectedTable, initialTab = 'que
                   </div>
                 </>
               )}
-            </div>
-          </div>
-        )}
-
-        {/* ── DATA TAB ── */}
-        {activeTab === 'data' && selectedTable && (
-          <div className={styles.queryLayout}>
-            <div className={styles.resultsToolbar}>
-              <div className={styles.resultsMeta}>
-                <span>Tabela: <strong>{selectedTable.name}</strong></span>
-                <span><strong>{selectedTable.rowCount.toLocaleString()}</strong> linhas totais</span>
-                <span>Tamanho: <strong>{selectedTable.size}</strong></span>
-              </div>
-            </div>
-            <div className={styles.tableWrap} style={{ flex: 1 }}>
-              <ResultTable
-                columns={selectedTable.columns.map((c) => c.name)}
-                rows={pageData}
-                showRowNums
-              />
-            </div>
-            <div className={styles.pagination}>
-              <span className={styles.paginationInfo}>
-                Mostrando {dataPage * PAGE_SIZE + 1}–{Math.min((dataPage + 1) * PAGE_SIZE, tableData.length)} de {tableData.length} (mock)
-              </span>
-              <div className={styles.paginationBtns}>
-                <button className={styles.pageBtn} disabled={dataPage === 0} onClick={() => setDataPage(0)}>«</button>
-                <button className={styles.pageBtn} disabled={dataPage === 0} onClick={() => setDataPage((p) => p - 1)}>‹</button>
-                <span className={styles.paginationInfo}>{dataPage + 1} / {Math.max(1, totalPages)}</span>
-                <button className={styles.pageBtn} disabled={dataPage >= totalPages - 1} onClick={() => setDataPage((p) => p + 1)}>›</button>
-                <button className={styles.pageBtn} disabled={dataPage >= totalPages - 1} onClick={() => setDataPage(totalPages - 1)}>»</button>
-              </div>
             </div>
           </div>
         )}
@@ -262,41 +235,15 @@ export default function MainPanel({ datasource, selectedTable, initialTab = 'que
                     <td><span className={styles.typePill}>{col.type}</span></td>
                     <td className={styles.nullable}>{col.nullable ? 'YES' : 'NO'}</td>
                     <td>
-                      {col.primaryKey && <span className={`${styles.badge} ${styles.pk}`}>PK</span>}
-                      {col.foreignKey && <span className={`${styles.badge} ${styles.fk}`} title={col.foreignKey}>FK</span>}
+                      {col.primaryKey  && <span className={`${styles.badge} ${styles.pk}`}>PK</span>}
+                      {col.foreignKey  && <span className={`${styles.badge} ${styles.fk}`}>FK</span>}
                       {col.unique && !col.primaryKey && <span className={`${styles.badge} ${styles.uq}`}>UQ</span>}
                     </td>
-                    <td>{col.defaultValue ? <span className={styles.defaultVal}>{col.defaultValue}</span> : <span className={styles.nullVal}>—</span>}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-
-        {/* ── INDEXES TAB ── */}
-        {activeTab === 'indexes' && selectedTable && (
-          <div className={styles.tableWrap}>
-            <table className={styles.structureTable}>
-              <thead>
-                <tr>
-                  <th>Nome</th>
-                  <th>Tipo</th>
-                  <th>Colunas</th>
-                  <th>Único</th>
-                  <th>Primário</th>
-                  <th>Tamanho</th>
-                </tr>
-              </thead>
-              <tbody>
-                {selectedTable.indexes.map((idx) => (
-                  <tr key={idx.name}>
-                    <td style={{ fontFamily: 'monospace', fontSize: '12px' }}>{idx.name}</td>
-                    <td><span className={styles.typePill}>{idx.type}</span></td>
-                    <td style={{ fontFamily: 'monospace', fontSize: '12px' }}>{idx.columns.join(', ')}</td>
-                    <td>{idx.unique ? <Check /> : <Dash />}</td>
-                    <td>{idx.primary ? <Check /> : <Dash />}</td>
-                    <td className={styles.nullable}>{idx.size ?? '—'}</td>
+                    <td>
+                      {col.defaultValue
+                        ? <span className={styles.defaultVal}>{col.defaultValue}</span>
+                        : <span className={styles.nullVal}>—</span>}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -309,13 +256,13 @@ export default function MainPanel({ datasource, selectedTable, initialTab = 'que
   );
 }
 
-/* ── Componentes internos ───────────────────────────────────── */
+/* ── Internal components ─────────────────────────────────────── */
 
-function ResultTable({ columns, rows, showRowNums = false }: { columns: string[]; rows: Record<string, string | number | boolean | null>[]; showRowNums?: boolean }) {
-  const renderCell = (val: string | number | boolean | null) => {
-    if (val === null)     return <span className={styles.nullVal}>NULL</span>;
-    if (val === true)     return <span className={styles.boolTrue}>true</span>;
-    if (val === false)    return <span className={styles.boolFalse}>false</span>;
+function ResultTable({ columns, rows }: { columns: string[]; rows: Record<string, unknown>[] }) {
+  const renderCell = (val: unknown) => {
+    if (val === null || val === undefined) return <span className={styles.nullVal}>NULL</span>;
+    if (val === true)  return <span className={styles.boolTrue}>true</span>;
+    if (val === false) return <span className={styles.boolFalse}>false</span>;
     if (typeof val === 'number') return <span className={styles.numVal}>{val}</span>;
     return <span>{String(val)}</span>;
   };
@@ -323,16 +270,12 @@ function ResultTable({ columns, rows, showRowNums = false }: { columns: string[]
   return (
     <table className={styles.table}>
       <thead>
-        <tr>
-          {showRowNums && <th className={styles.rowNum}>#</th>}
-          {columns.map((c) => <th key={c}>{c}</th>)}
-        </tr>
+        <tr>{columns.map((c) => <th key={c}>{c}</th>)}</tr>
       </thead>
       <tbody>
         {rows.map((row, i) => (
           <tr key={i}>
-            {showRowNums && <td className={styles.rowNum}>{i + 1}</td>}
-            {columns.map((c) => <td key={c}>{renderCell(row[c] ?? null)}</td>)}
+            {columns.map((c) => <td key={c}>{renderCell(row[c])}</td>)}
           </tr>
         ))}
       </tbody>
@@ -360,16 +303,10 @@ function HistoryPanel({ history, onSelect, onClose }: { history: string[]; onSel
             key={i}
             onClick={() => onSelect(q)}
             style={{
-              padding: 'var(--space-3) var(--space-4)',
-              borderRadius: 'var(--radius-sm)',
-              cursor: 'pointer',
-              fontFamily: 'monospace',
-              fontSize: '12px',
-              color: 'var(--color-text)',
-              marginBottom: 'var(--space-1)',
-              background: 'var(--color-bg)',
-              whiteSpace: 'pre-wrap',
-              wordBreak: 'break-all',
+              padding: 'var(--space-3) var(--space-4)', borderRadius: 'var(--radius-sm)',
+              cursor: 'pointer', fontFamily: 'monospace', fontSize: '12px',
+              color: 'var(--color-text)', marginBottom: 'var(--space-1)',
+              background: 'var(--color-bg)', whiteSpace: 'pre-wrap', wordBreak: 'break-all',
             }}
           >{q}</div>
         ))}
@@ -378,16 +315,20 @@ function HistoryPanel({ history, onSelect, onClose }: { history: string[]; onSel
   );
 }
 
-/* ── Utilitário de export CSV ────────────────── */
+/* ── Utilities ───────────────────────────────────────────────── */
+
 function exportCSV(result: QueryResult) {
   if (!result.columns.length) return;
   const header = result.columns.join(',');
-  const body   = result.rows.map((r) => result.columns.map((c) => {
-    const v = r[c];
-    if (v === null) return '';
-    if (typeof v === 'string' && v.includes(',')) return `"${v}"`;
-    return String(v);
-  }).join(',')).join('\n');
+  const body   = result.rows.map((r) =>
+    result.columns.map((c) => {
+      const v = r[c];
+      if (v === null || v === undefined) return '';
+      if (typeof v === 'string' && (v.includes(',') || v.includes('"') || v.includes('\n')))
+        return `"${v.replace(/"/g, '""')}"`;
+      return String(v);
+    }).join(','),
+  ).join('\n');
   const blob = new Blob([header + '\n' + body], { type: 'text/csv' });
   const url  = URL.createObjectURL(blob);
   const a    = document.createElement('a');
@@ -395,7 +336,25 @@ function exportCSV(result: QueryResult) {
   URL.revokeObjectURL(url);
 }
 
-/* ── Ícones específicos do MainPanel ────────────────────────────── */
-function HistoryIcon() { return <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/><polyline points="12 7 12 12 15 15"/></svg>; }
-function Check() { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--color-success)" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>; }
-function Dash() { return <span style={{ color: 'var(--color-text-subtle)', fontSize: '12px' }}>—</span>; }
+function exportStructureCSV(table: ApiSchemaTable) {
+  const header = 'coluna,tipo,nullable,pk,fk,uq,padrao';
+  const body   = table.columns.map((c) =>
+    [c.name, c.type, c.nullable ? 'YES' : 'NO', c.primaryKey ? 'PK' : '', c.foreignKey ? 'FK' : '', c.unique && !c.primaryKey ? 'UQ' : '', c.defaultValue ?? ''].join(','),
+  ).join('\n');
+  const blob = new Blob([header + '\n' + body], { type: 'text/csv' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = `${table.name}_structure.csv`; a.click();
+  URL.revokeObjectURL(url);
+}
+
+/* ── Icons ───────────────────────────────────────────────────── */
+function HistoryIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+      <polyline points="1 4 1 10 7 10"/>
+      <path d="M3.51 15a9 9 0 102.13-9.36L1 10"/>
+      <polyline points="12 7 12 12 15 15"/>
+    </svg>
+  );
+}

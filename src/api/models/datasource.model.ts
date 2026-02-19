@@ -2,6 +2,16 @@ import { Prisma, DatasourceType, DatasourceStatus } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { AppError } from '../middlewares/error-handler';
 import { maskCredentials } from '../../utils/config';
+import {
+  introspectPostgres,
+  testPostgresConnection,
+  executePostgresQuery,
+} from '../../core/introspect/postgres-introspect';
+import {
+  introspectMysql,
+  testMysqlConnection,
+  executeMysqlQuery,
+} from '../../core/introspect/mysql-introspect';
 
 // ──────────────────────────────────────────
 // Formatter
@@ -151,11 +161,114 @@ export async function deleteDatasource(id: string) {
 
 export async function testDatasourceConnection(id: string) {
   const datasource = await prisma.datasource.findUniqueOrThrow({ where: { id } });
+  const cfg = datasource.connectionConfig as Record<string, unknown>;
 
-  return {
-    error:         'NOT_IMPLEMENTED',
-    message:       `Teste de conexão para datasources do tipo '${datasource.type}' ainda não implementado. O health-checker será ativado junto com os workers.`,
-    datasource_id: datasource.id,
-    type:          datasource.type,
-  };
+  const str = (v: unknown, fallback = '') => (v != null ? String(v) : fallback);
+  const num = (v: unknown, fallback: number) => (v != null ? Number(v) : fallback);
+
+  switch (datasource.type) {
+    case 'postgres':
+      return testPostgresConnection({
+        host:        str(cfg.host, 'localhost'),
+        port:        num(cfg.port, 5432),
+        database:    str(cfg.database),
+        username:    str(cfg.username),
+        password:    str(cfg.password),
+        ssl_enabled: Boolean(cfg.ssl_enabled),
+      });
+
+    case 'mysql':
+      return testMysqlConnection({
+        host:     str(cfg.host, 'localhost'),
+        port:     num(cfg.port, 3306),
+        database: str(cfg.database),
+        username: str(cfg.username),
+        password: str(cfg.password),
+      });
+
+    default:
+      throw new AppError(
+        'TEST_NOT_SUPPORTED',
+        422,
+        `Teste de conexão não suportado para datasources do tipo '${datasource.type}'.`,
+      );
+  }
+}
+
+export async function executeDatasourceQuery(id: string, sql: string) {
+  const datasource = await prisma.datasource.findUniqueOrThrow({ where: { id } });
+  const cfg = datasource.connectionConfig as Record<string, unknown>;
+
+  const str = (v: unknown, fallback = '') => (v != null ? String(v) : fallback);
+  const num = (v: unknown, fallback: number) => (v != null ? Number(v) : fallback);
+
+  switch (datasource.type) {
+    case 'postgres':
+      return executePostgresQuery(
+        {
+          host:        str(cfg.host, 'localhost'),
+          port:        num(cfg.port, 5432),
+          database:    str(cfg.database),
+          username:    str(cfg.username),
+          password:    str(cfg.password),
+          ssl_enabled: Boolean(cfg.ssl_enabled),
+        },
+        sql,
+      );
+
+    case 'mysql':
+      return executeMysqlQuery(
+        {
+          host:     str(cfg.host, 'localhost'),
+          port:     num(cfg.port, 3306),
+          database: str(cfg.database),
+          username: str(cfg.username),
+          password: str(cfg.password),
+        },
+        sql,
+      );
+
+    default:
+      throw new AppError(
+        'QUERY_NOT_SUPPORTED',
+        422,
+        `Execução de queries não suportada para datasources do tipo '${datasource.type}'.`,
+      );
+  }
+}
+
+export async function getDatasourceSchema(id: string) {
+  const datasource = await prisma.datasource.findUniqueOrThrow({ where: { id } });
+  const cfg = datasource.connectionConfig as Record<string, unknown>;
+
+  const str = (v: unknown, fallback = '') => (v != null ? String(v) : fallback);
+  const num = (v: unknown, fallback: number) => (v != null ? Number(v) : fallback);
+
+  switch (datasource.type) {
+    case 'postgres':
+      return introspectPostgres({
+        host:        str(cfg.host, 'localhost'),
+        port:        num(cfg.port, 5432),
+        database:    str(cfg.database),
+        username:    str(cfg.username),
+        password:    str(cfg.password),
+        ssl_enabled: Boolean(cfg.ssl_enabled),
+      });
+
+    case 'mysql':
+      return introspectMysql({
+        host:     str(cfg.host, 'localhost'),
+        port:     num(cfg.port, 3306),
+        database: str(cfg.database),
+        username: str(cfg.username),
+        password: str(cfg.password),
+      });
+
+    default:
+      throw new AppError(
+        'SCHEMA_NOT_SUPPORTED',
+        422,
+        `Introspecção de schema não suportada para datasources do tipo '${datasource.type}'.`,
+      );
+  }
 }

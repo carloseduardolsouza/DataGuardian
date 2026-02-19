@@ -6,6 +6,8 @@ import {
   updateDatasource,
   deleteDatasource,
   testDatasourceConnection,
+  getDatasourceSchema,
+  executeDatasourceQuery,
 } from '../models/datasource.model';
 import { getPaginationParams, buildPaginatedResponse } from '../../utils/config';
 
@@ -32,7 +34,7 @@ export const DatasourceController = {
 
   async findById(req: Request, res: Response, next: NextFunction) {
     try {
-      const datasource = await findDatasourceById(req.params.id);
+      const datasource = await findDatasourceById(String(req.params.id));
       res.json(datasource);
     } catch (err) {
       next(err);
@@ -41,7 +43,7 @@ export const DatasourceController = {
 
   async update(req: Request, res: Response, next: NextFunction) {
     try {
-      const datasource = await updateDatasource(req.params.id, req.body);
+      const datasource = await updateDatasource(String(req.params.id), req.body);
       res.json(datasource);
     } catch (err) {
       next(err);
@@ -50,7 +52,7 @@ export const DatasourceController = {
 
   async remove(req: Request, res: Response, next: NextFunction) {
     try {
-      await deleteDatasource(req.params.id);
+      await deleteDatasource(String(req.params.id));
       res.status(204).send();
     } catch (err) {
       next(err);
@@ -59,8 +61,31 @@ export const DatasourceController = {
 
   async testConnection(req: Request, res: Response, next: NextFunction) {
     try {
-      const result = await testDatasourceConnection(req.params.id);
-      res.status(501).json(result);
+      const result = await testDatasourceConnection(String(req.params.id));
+      res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async getSchema(req: Request, res: Response, next: NextFunction) {
+    try {
+      const schemas = await getDatasourceSchema(String(req.params.id));
+      res.json(schemas);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async executeQuery(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { sql } = req.body as { sql: string };
+      if (!sql || !String(sql).trim()) {
+        res.status(400).json({ message: 'O campo "sql" é obrigatório.' });
+        return;
+      }
+      const result = await executeDatasourceQuery(String(req.params.id), String(sql));
+      res.json(result);
     } catch (err) {
       next(err);
     }
