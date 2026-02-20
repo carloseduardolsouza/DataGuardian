@@ -23,6 +23,21 @@
   gap: 1px;
 }
 
+.dbNameBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  border: none;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+}
+
+.dbNameBtn:hover .dbName {
+  color: var(--color-primary);
+}
+
 .title {
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-semi);
@@ -60,6 +75,39 @@
 .refreshBtn svg {
   width: 13px;
   height: 13px;
+}
+
+.contextMenu {
+  position: fixed;
+  z-index: 40;
+  min-width: 180px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  padding: var(--space-1);
+}
+
+.contextAction {
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: var(--color-text);
+  text-align: left;
+  border-radius: var(--radius-sm);
+  padding: 7px var(--space-3);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+}
+
+.contextAction:hover:not(:disabled) {
+  background: var(--color-primary-muted);
+  color: var(--color-primary);
+}
+
+.contextAction:disabled {
+  color: var(--color-text-subtle);
+  cursor: not-allowed;
 }
 
 /* ── Estado vazio / offline ───────────────────── */

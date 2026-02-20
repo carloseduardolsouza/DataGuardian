@@ -58,6 +58,22 @@ export interface ApiSchema {
   tables: ApiSchemaTable[];
 }
 
+export interface ApiCreateTableColumnInput {
+  name: string;
+  type: string;
+  nullable?: boolean;
+  primary_key?: boolean;
+  unique?: boolean;
+  auto_increment?: boolean;
+}
+
+export interface ApiCreateTableInput {
+  table_name: string;
+  schema_name?: string;
+  if_not_exists?: boolean;
+  columns: ApiCreateTableColumnInput[];
+}
+
 export interface PaginatedResponse<T> {
   data: T[];
   pagination: {
@@ -448,6 +464,12 @@ export const datasourceApi = {
     }>(`/datasources/${id}/query`, {
       method: 'POST',
       body:   JSON.stringify({ sql }),
+    }),
+
+  createTable: (id: string, data: ApiCreateTableInput) =>
+    request<{ message: string; sql: string }>(`/datasources/${id}/tables`, {
+      method: 'POST',
+      body: JSON.stringify(data),
     }),
 };
 

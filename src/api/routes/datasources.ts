@@ -15,6 +15,22 @@ export const listDatasourceQuerySchema = z.object({
   tag:     z.string().optional(),
 });
 
+const createDatasourceTableSchema = z.object({
+  table_name: z.string().min(1).max(128),
+  schema_name: z.string().min(1).max(128).optional(),
+  if_not_exists: z.boolean().optional(),
+  columns: z.array(
+    z.object({
+      name: z.string().min(1).max(128),
+      type: z.string().min(1).max(64),
+      nullable: z.boolean().optional(),
+      primary_key: z.boolean().optional(),
+      unique: z.boolean().optional(),
+      auto_increment: z.boolean().optional(),
+    }),
+  ).min(1),
+});
+
 datasourcesRouter.get('/',          validate(listDatasourceQuerySchema, 'query'), DatasourceController.list);
 datasourcesRouter.post('/',         validate(createDatasourceSchema),             DatasourceController.create);
 datasourcesRouter.get('/:id',                                                     DatasourceController.findById);
@@ -23,3 +39,4 @@ datasourcesRouter.delete('/:id',                                                
 datasourcesRouter.post('/:id/test',                                               DatasourceController.testConnection);
 datasourcesRouter.get('/:id/schema',                                              DatasourceController.getSchema);
 datasourcesRouter.post('/:id/query',                                              DatasourceController.executeQuery);
+datasourcesRouter.post('/:id/tables', validate(createDatasourceTableSchema),      DatasourceController.createTable);

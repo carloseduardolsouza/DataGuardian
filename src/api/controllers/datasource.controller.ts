@@ -8,6 +8,7 @@ import {
   testDatasourceConnection,
   getDatasourceSchema,
   executeDatasourceQuery,
+  createDatasourceTable,
 } from '../models/datasource.model';
 import { getPaginationParams, buildPaginatedResponse } from '../../utils/config';
 
@@ -86,6 +87,15 @@ export const DatasourceController = {
       }
       const result = await executeDatasourceQuery(String(req.params.id), String(sql));
       res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async createTable(req: Request, res: Response, next: NextFunction) {
+    try {
+      const table = await createDatasourceTable(String(req.params.id), req.body);
+      res.status(201).json(table);
     } catch (err) {
       next(err);
     }

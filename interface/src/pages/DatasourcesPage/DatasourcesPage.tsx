@@ -4,6 +4,7 @@ import type { ApiDatasource, ApiDatasourceDetail, ApiSchema, ApiSchemaTable } fr
 import { useResizableWidth } from '../../hooks/useResizableWidth';
 import DatasourceList from './DatasourceList';
 import AddDatasourceModal from './AddDatasourceModal';
+import CreateTableModal from './CreateTableModal';
 import ObjectExplorer from './ObjectExplorer';
 import MainPanel from './MainPanel';
 import {
@@ -265,6 +266,8 @@ export default function DatasourcesPage() {
 
   const [showModal, setShowModal] = useState(false);
   const [editData, setEditData] = useState<ApiDatasourceDetail | null>(null);
+  const [tableModalDs, setTableModalDs] = useState<ApiDatasource | null>(null);
+  const [tableModalSchema, setTableModalSchema] = useState<string | null>(null);
 
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ status: string; latency_ms: number | null } | null>(null);
@@ -455,6 +458,15 @@ export default function DatasourcesPage() {
     }
   }, [selectedDs]);
 
+  const handleOpenCreateTable = useCallback((ds: ApiDatasource, schemaName?: string | null) => {
+    if (ds.type !== 'postgres' && ds.type !== 'mysql' && ds.type !== 'mariadb') {
+      alert(`Criacao de tabela nao suportada para datasource do tipo '${ds.type}'.`);
+      return;
+    }
+    setTableModalDs(ds);
+    setTableModalSchema(schemaName ?? null);
+  }, []);
+
   return (
     <div className={styles.layout}>
       <div className={styles.leftPanel} style={isDesktop ? { width: listPane.width } : undefined}>
@@ -526,6 +538,7 @@ export default function DatasourcesPage() {
                 selectedTable={selectedTable}
                 onSelectTable={setSelectedTable}
                 onRefresh={() => void loadSchema(selectedDs, detail, true)}
+                onCreateTable={(schemaName) => handleOpenCreateTable(selectedDs, schemaName)}
               />
             </div>
             {isDesktop && (
@@ -561,6 +574,25 @@ export default function DatasourcesPage() {
             setEditData(null);
           }}
           onSave={handleSave}
+        />
+      )}
+
+      {tableModalDs && (
+        <CreateTableModal
+          datasource={tableModalDs}
+          initialSchemaName={tableModalSchema}
+          onClose={() => {
+            setTableModalDs(null);
+            setTableModalSchema(null);
+          }}
+          onCreated={async () => {
+            if (selectedDs?.id === tableModalDs.id) {
+              await loadSchema(selectedDs, detail, true);
+            }
+            if (selectedDs?.id !== tableModalDs.id) {
+              await handleSelect(tableModalDs);
+            }
+          }}
         />
       )}
     </div>

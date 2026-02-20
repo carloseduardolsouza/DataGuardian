@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { ApiDatasource, ApiSchema, ApiSchemaTable } from '../../services/api';
 import { SpinnerIcon } from '../../components/Icons';
 import styles from './ObjectExplorer.module.css';
@@ -11,13 +11,35 @@ interface Props {
   selectedTable: ApiSchemaTable | null;
   onSelectTable: (table: ApiSchemaTable) => void;
   onRefresh:     () => void;
+  onCreateTable?: (schemaName?: string) => void;
 }
 
 export default function ObjectExplorer({
-  datasource, schemas, loading, error, selectedTable, onSelectTable, onRefresh,
+  datasource, schemas, loading, error, selectedTable, onSelectTable, onRefresh, onCreateTable,
 }: Props) {
   const [openSchemas, setOpenSchemas] = useState<Record<string, boolean>>({});
   const [openTables,  setOpenTables]  = useState<Record<string, boolean>>({});
+  const [menu, setMenu] = useState<{ x: number; y: number; schemaName?: string } | null>(null);
+
+  useEffect(() => {
+    const close = () => setMenu(null);
+    window.addEventListener('click', close);
+    window.addEventListener('resize', close);
+    window.addEventListener('scroll', close, true);
+    return () => {
+      window.removeEventListener('click', close);
+      window.removeEventListener('resize', close);
+      window.removeEventListener('scroll', close, true);
+    };
+  }, []);
+
+  const openMenu = (x: number, y: number, schemaName?: string) => {
+    const menuWidth = 190;
+    const menuHeight = 46;
+    const nextX = Math.min(x, window.innerWidth - menuWidth - 8);
+    const nextY = Math.min(y, window.innerHeight - menuHeight - 8);
+    setMenu({ x: Math.max(8, nextX), y: Math.max(8, nextY), schemaName });
+  };
 
   const toggleSchema = (name: string) =>
     setOpenSchemas((p) => ({ ...p, [name]: p[name] === false ? true : p[name] === undefined ? false : !p[name] }));
@@ -84,7 +106,15 @@ export default function ObjectExplorer({
         {schemas.map((schema, idx) => (
           <div key={schema.name}>
             {/* Schema header */}
-            <div className={styles.schemaRow} onClick={() => toggleSchema(schema.name)}>
+            <div
+              className={styles.schemaRow}
+              onClick={() => toggleSchema(schema.name)}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                openMenu(e.clientX, e.clientY, schema.name);
+              }}
+            >
               <svg
                 className={`${styles.chevron}${isSchemaOpen(schema.name, idx) ? ` ${styles.open}` : ''}`}
                 viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"
@@ -101,6 +131,11 @@ export default function ObjectExplorer({
                 <button
                   className={`${styles.tableRow}${selectedTable?.name === table.name ? ` ${styles.active}` : ''}`}
                   onClick={() => onSelectTable(table)}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    openMenu(e.clientX, e.clientY, schema.name);
+                  }}
                 >
                   <svg
                     className={`${styles.chevron}${openTables[table.name] ? ` ${styles.open}` : ''}`}
@@ -135,6 +170,25 @@ export default function ObjectExplorer({
           </div>
         ))}
       </div>
+
+      {menu && (
+        <div
+          className={styles.contextMenu}
+          style={{ top: menu.y, left: menu.x }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            className={styles.contextAction}
+            onClick={() => {
+              onCreateTable?.(menu.schemaName);
+              setMenu(null);
+            }}
+            disabled={!onCreateTable}
+          >
+            Criar tabela
+          </button>
+        </div>
+      )}
     </div>
   );
 }
