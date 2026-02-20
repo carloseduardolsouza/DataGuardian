@@ -88,6 +88,12 @@ enum NotificationEntityType {
   system
 }
 
+enum AlertChannel {
+  smtp
+  webhook
+  whatsapp
+}
+
 // ──────────────────────────────────────────
 // Models
 // ──────────────────────────────────────────
@@ -124,6 +130,7 @@ model StorageLocation {
 
   backupJobs       BackupJob[]
   backupExecutions BackupExecution[]
+  healthChecks     StorageHealthCheck[]
 
   @@map("storage_locations")
 }
@@ -344,4 +351,38 @@ model AuditLog {
   @@index([resourceType, resourceId])
   @@index([actorUserId])
   @@map("audit_logs")
+}
+
+model StorageHealthCheck {
+  id                String   @id @default(uuid())
+  storageLocationId String   @map("storage_location_id")
+  checkedAt         DateTime @default(now()) @map("checked_at")
+  status            String   @db.VarChar(20)
+  latencyMs         Int?     @map("latency_ms")
+  availableSpaceGb  Decimal? @db.Decimal(10, 2) @map("available_space_gb")
+  errorMessage      String?  @map("error_message")
+  metadata          Json?
+
+  storageLocation StorageLocation @relation(fields: [storageLocationId], references: [id], onDelete: Cascade)
+
+  @@index([storageLocationId, checkedAt(sort: Desc)])
+  @@index([checkedAt(sort: Desc)])
+  @@map("storage_health_checks")
+}
+
+model NotificationTemplate {
+  id          String           @id @default(uuid())
+  channel     AlertChannel
+  type        NotificationType
+  version     Int              @default(1)
+  enabled     Boolean          @default(true)
+  isDefault   Boolean          @default(false) @map("is_default")
+  titleTpl    String?          @map("title_tpl")
+  messageTpl  String           @map("message_tpl")
+  createdAt   DateTime         @default(now()) @map("created_at")
+  updatedAt   DateTime         @updatedAt @map("updated_at")
+
+  @@unique([channel, type, version])
+  @@index([channel, type, enabled, version])
+  @@map("notification_templates")
 }

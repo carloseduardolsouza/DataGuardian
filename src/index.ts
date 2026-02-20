@@ -4,12 +4,14 @@ import { seedDefaultSettings } from './api/models/system.model';
 import { config } from './utils/config';
 import { logger } from './utils/logger';
 import { startBackupWorker, stopBackupWorker } from './workers/backup-worker';
+import { startRestoreWorker, stopRestoreWorker } from './workers/restore-worker';
 import { startSchedulerWorker, stopSchedulerWorker } from './workers/scheduler-worker';
 import { startHealthWorker, stopHealthWorker } from './workers/health-worker';
 import { startCleanupWorker, stopCleanupWorker } from './workers/cleanup-worker';
 import { closeQueues } from './queue/queues';
 import { closeRedis, connectRedis, ensureRedisAvailable } from './queue/redis-client';
 import { seedAuthDefaults } from './core/auth/auth.service';
+import { seedDefaultNotificationTemplates } from './api/models/notification-template.model';
 
 async function bootstrap() {
   logger.info('Iniciando DataGuardian...');
@@ -46,6 +48,13 @@ async function bootstrap() {
     logger.warn({ err }, 'Erro ao verificar roles/permissoes padrao');
   }
 
+  try {
+    await seedDefaultNotificationTemplates();
+    logger.info('Templates de notificacao padrao verificados/criados');
+  } catch (err) {
+    logger.warn({ err }, 'Erro ao verificar templates de notificacao');
+  }
+
   const app = createApp();
   const port = config.port;
 
@@ -62,17 +71,19 @@ async function bootstrap() {
     if (queueServicesEnabled) return;
     startSchedulerWorker();
     startBackupWorker();
+    startRestoreWorker();
     queueServicesEnabled = true;
-    logger.info('Servicos de fila ativados (Scheduler/Backup)');
+    logger.info('Servicos de fila ativados (Scheduler/Backup/Restore)');
   };
 
   const stopQueueServices = async () => {
     if (!queueServicesEnabled) return;
     stopSchedulerWorker();
     await stopBackupWorker();
+    await stopRestoreWorker();
     await closeQueues();
     queueServicesEnabled = false;
-    logger.warn('Servicos de fila desativados por indisponibilidade do Redis');
+    logger.warn('Servicos de fila desativados por indisponibilidade do Redis (Scheduler/Backup/Restore)');
   };
 
   const syncQueueServicesWithRedis = async () => {

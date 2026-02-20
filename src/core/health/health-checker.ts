@@ -4,7 +4,6 @@ import { logger } from '../../utils/logger';
 import { createNotification } from '../../utils/notifications';
 import { testDatasourceConnection } from '../../api/models/datasource.model';
 import { testStorageConnection } from '../../api/models/storage-location.model';
-import { pushStorageHealthEntry } from './storage-health-store';
 
 function mapDatasourceFailureStatus(err: unknown): HealthCheckStatus {
   const code = (err as { code?: string })?.code;
@@ -119,14 +118,19 @@ async function checkStorageConnection(storage: {
   try {
     const result = await testStorageConnection(storage.id);
 
-    pushStorageHealthEntry({
-      storage_location_id: storage.id,
-      storage_name: storage.name,
-      storage_type: storage.type,
-      status: 'ok',
-      latency_ms: result.latency_ms,
-      available_space_gb: result.available_space_gb ?? null,
-      error_message: null,
+    await prisma.storageHealthCheck.create({
+      data: {
+        storageLocationId: storage.id,
+        status: 'ok',
+        latencyMs: result.latency_ms ?? null,
+        availableSpaceGb: result.available_space_gb ?? null,
+        errorMessage: null,
+        metadata: {
+          worker: 'health-worker',
+          storage_name: storage.name,
+          storage_type: storage.type,
+        },
+      },
     });
 
     if (storage.status === 'unreachable') {
@@ -142,14 +146,19 @@ async function checkStorageConnection(storage: {
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
 
-    pushStorageHealthEntry({
-      storage_location_id: storage.id,
-      storage_name: storage.name,
-      storage_type: storage.type,
-      status: 'error',
-      latency_ms: null,
-      available_space_gb: null,
-      error_message: message,
+    await prisma.storageHealthCheck.create({
+      data: {
+        storageLocationId: storage.id,
+        status: 'error',
+        latencyMs: null,
+        availableSpaceGb: null,
+        errorMessage: message,
+        metadata: {
+          worker: 'health-worker',
+          storage_name: storage.name,
+          storage_type: storage.type,
+        },
+      },
     });
 
     if (storage.status !== 'unreachable') {

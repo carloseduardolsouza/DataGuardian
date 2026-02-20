@@ -25,6 +25,46 @@ const updateSettingSchema = z.object({
 const whatsappQrSchema = z.object({
   instance: z.string().min(1).optional(),
 });
+const notificationTemplateQuerySchema = z.object({
+  channel: z.enum(['smtp', 'webhook', 'whatsapp']).optional(),
+  type: z.enum([
+    'backup_success',
+    'backup_failed',
+    'connection_lost',
+    'connection_restored',
+    'storage_full',
+    'storage_unreachable',
+    'health_degraded',
+    'cleanup_completed',
+  ]).optional(),
+});
+const createNotificationTemplateSchema = z.object({
+  channel: z.enum(['smtp', 'webhook', 'whatsapp']),
+  type: z.enum([
+    'backup_success',
+    'backup_failed',
+    'connection_lost',
+    'connection_restored',
+    'storage_full',
+    'storage_unreachable',
+    'health_degraded',
+    'cleanup_completed',
+  ]),
+  version: z.number().int().positive().optional(),
+  enabled: z.boolean().optional(),
+  title_tpl: z.string().nullable().optional(),
+  message_tpl: z.string().min(1),
+});
+const updateNotificationTemplateSchema = z.object({
+  enabled: z.boolean().optional(),
+  title_tpl: z.string().nullable().optional(),
+  message_tpl: z.string().min(1).optional(),
+}).refine((v) => v.enabled !== undefined || v.title_tpl !== undefined || v.message_tpl !== undefined, {
+  message: 'Informe ao menos um campo para atualizar.',
+});
+const templateIdParamsSchema = z.object({
+  id: z.string().uuid(),
+});
 
 systemRouter.get("/settings", requirePermission(PERMISSIONS.SYSTEM_READ), SystemController.getSettings);
 systemRouter.post(
@@ -64,4 +104,31 @@ systemRouter.delete(
   requirePermission(PERMISSIONS.SYSTEM_WRITE),
   validate(settingKeySchema, "params"),
   SystemController.deleteSettingByKey,
+);
+
+systemRouter.get(
+  '/notification-templates',
+  requirePermission(PERMISSIONS.SYSTEM_READ),
+  validate(notificationTemplateQuerySchema, 'query'),
+  SystemController.listNotificationTemplates,
+);
+systemRouter.post(
+  '/notification-templates',
+  requirePermission(PERMISSIONS.SYSTEM_WRITE),
+  validate(createNotificationTemplateSchema),
+  SystemController.createNotificationTemplate,
+);
+systemRouter.put(
+  '/notification-templates/:id',
+  requirePermission(PERMISSIONS.SYSTEM_WRITE),
+  validate(templateIdParamsSchema, 'params'),
+  validate(updateNotificationTemplateSchema),
+  SystemController.updateNotificationTemplate,
+);
+systemRouter.post(
+  '/notification-templates/:id/new-version',
+  requirePermission(PERMISSIONS.SYSTEM_WRITE),
+  validate(templateIdParamsSchema, 'params'),
+  validate(updateNotificationTemplateSchema),
+  SystemController.createNotificationTemplateVersion,
 );

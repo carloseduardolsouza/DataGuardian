@@ -1,5 +1,12 @@
 ﻿import { useEffect, useMemo, useState } from 'react';
-import { accessApi, systemApi, type ApiAccessPermission, type ApiAccessRole, type ApiAccessUser } from '../../services/api';
+import {
+  accessApi,
+  systemApi,
+  type ApiAccessPermission,
+  type ApiAccessRole,
+  type ApiAccessUser,
+  type ApiNotificationTemplate,
+} from '../../services/api';
 import { AlertTriangleIcon, CheckCircleIcon, SpinnerIcon } from '../../components/Icons';
 import Modal from '../../components/Modal/Modal';
 import styles from './SettingsPage.module.css';
@@ -113,6 +120,8 @@ export default function SettingsPage({ canManageAccess = false }: Props) {
   const [smtpTo, setSmtpTo] = useState('');
 
   const [webhookUrl, setWebhookUrl] = useState('');
+  const [webhookHeadersJson, setWebhookHeadersJson] = useState('{}');
+  const [webhookTimeoutMs, setWebhookTimeoutMs] = useState(10000);
 
   const [whatsappEnabled, setWhatsappEnabled] = useState(false);
   const [waApiUrl, setWaApiUrl] = useState('http://localhost:8080');
@@ -150,6 +159,15 @@ export default function SettingsPage({ canManageAccess = false }: Props) {
   const [passwordUserId, setPasswordUserId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<{ type: 'role' | 'user'; id: string; label: string } | null>(null);
 
+  const [templatesLoading, setTemplatesLoading] = useState(false);
+  const [templates, setTemplates] = useState<ApiNotificationTemplate[]>([]);
+  const [templateChannel, setTemplateChannel] = useState<'smtp' | 'webhook' | 'whatsapp'>('smtp');
+  const [templateType, setTemplateType] = useState<ApiNotificationTemplate['type']>('backup_failed');
+  const [templateVersion, setTemplateVersion] = useState<number | null>(null);
+  const [templateEnabled, setTemplateEnabled] = useState(true);
+  const [templateTitle, setTemplateTitle] = useState('');
+  const [templateMessage, setTemplateMessage] = useState('');
+
   async function loadSettings() {
     try {
       setLoading(true);
@@ -173,6 +191,8 @@ export default function SettingsPage({ canManageAccess = false }: Props) {
       setSmtpTo(Array.isArray(smtp.to) ? smtp.to.join(', ') : '');
 
       setWebhookUrl(asString(data['notifications.webhook_url']?.value, ''));
+      setWebhookHeadersJson(JSON.stringify(data['notifications.webhook_headers']?.value ?? {}, null, 2));
+      setWebhookTimeoutMs(asNumber(data['notifications.webhook_timeout_ms']?.value, 10000));
 
       setWhatsappEnabled(asBool(data['notifications.whatsapp_enabled']?.value, false));
       const wa = (data['notifications.whatsapp_evolution_config']?.value ?? {}) as WhatsappEvolutionConfig;
@@ -211,12 +231,45 @@ export default function SettingsPage({ canManageAccess = false }: Props) {
     }
   }
 
+  async function loadTemplates() {
+    try {
+      setTemplatesLoading(true);
+      const response = await systemApi.listNotificationTemplates();
+      setTemplates(response.data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Falha ao carregar templates de notificacao.');
+    } finally {
+      setTemplatesLoading(false);
+    }
+  }
+
   useEffect(() => {
     void loadSettings();
+    void loadTemplates();
     if (canManageAccess) {
       void loadAccess();
     }
   }, [canManageAccess]);
+
+  useEffect(() => {
+    const filtered = templates
+      .filter((item) => item.channel === templateChannel && item.type === templateType)
+      .sort((a, b) => b.version - a.version);
+    const selected = templateVersion
+      ? filtered.find((item) => item.version === templateVersion) ?? filtered[0]
+      : filtered[0];
+    if (!selected) {
+      setTemplateVersion(null);
+      setTemplateEnabled(true);
+      setTemplateTitle('');
+      setTemplateMessage('');
+      return;
+    }
+    setTemplateVersion(selected.version);
+    setTemplateEnabled(selected.enabled);
+    setTemplateTitle(selected.title_tpl ?? '');
+    setTemplateMessage(selected.message_tpl);
+  }, [templates, templateChannel, templateType]);
 
   const smtpConfigured = useMemo(() => {
     return Boolean(
@@ -278,6 +331,14 @@ export default function SettingsPage({ canManageAccess = false }: Props) {
         },
 
         'notifications.webhook_url': webhookUrl.trim() ? webhookUrl.trim() : null,
+        'notifications.webhook_headers': (() => {
+          try {
+            return webhookHeadersJson.trim() ? JSON.parse(webhookHeadersJson) : {};
+          } catch {
+            throw new Error('JSON de headers do webhook invalido');
+          }
+        })(),
+        'notifications.webhook_timeout_ms': Math.max(1000, webhookTimeoutMs),
 
         'notifications.whatsapp_enabled': whatsappEnabled,
         'notifications.whatsapp_evolution_config': {
@@ -313,6 +374,52 @@ export default function SettingsPage({ canManageAccess = false }: Props) {
       setError(err instanceof Error ? err.message : 'Falha ao obter QR Code.');
     } finally {
       setLoadingQr(false);
+    }
+  }
+
+  async function handleSaveTemplate() {
+    try {
+      setError(null);
+      const current = templates.find((item) => item.channel === templateChannel && item.type === templateType && item.version === templateVersion);
+      if (!current) {
+        const created = await systemApi.createNotificationTemplate({
+          channel: templateChannel,
+          type: templateType,
+          enabled: templateEnabled,
+          title_tpl: templateTitle || null,
+          message_tpl: templateMessage || '{{message}}',
+        });
+        setSuccess(`Template ${created.channel}/${created.type} v${created.version} criado.`);
+      } else {
+        const updated = await systemApi.updateNotificationTemplate(current.id, {
+          enabled: templateEnabled,
+          title_tpl: templateTitle || null,
+          message_tpl: templateMessage || '{{message}}',
+        });
+        setSuccess(`Template ${updated.channel}/${updated.type} v${updated.version} atualizado.`);
+      }
+      await loadTemplates();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Falha ao salvar template.');
+    }
+  }
+
+  async function handleCreateTemplateVersion() {
+    try {
+      setError(null);
+      const current = templates.find((item) => item.channel === templateChannel && item.type === templateType && item.version === templateVersion);
+      if (!current) {
+        throw new Error('Selecione um template existente para criar nova versao.');
+      }
+      const created = await systemApi.createNotificationTemplateVersion(current.id, {
+        enabled: true,
+        title_tpl: templateTitle || null,
+        message_tpl: templateMessage || '{{message}}',
+      });
+      setSuccess(`Nova versao criada: v${created.version}`);
+      await loadTemplates();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Falha ao criar nova versao de template.');
     }
   }
 
@@ -512,7 +619,11 @@ export default function SettingsPage({ canManageAccess = false }: Props) {
             <input className={styles.input} type="text" value={smtpTo} onChange={(e) => setSmtpTo(e.target.value)} placeholder="admin@empresa.com, devops@empresa.com" />
           </label>
 
-          <p className={styles.infoLine}>Teste SMTP ainda nao implementado no backend. Salve e valide com uma notificacao real.</p>
+          <div className={styles.actionsRow}>
+            <button className={styles.secondaryBtn} onClick={() => void systemApi.testSmtp()} disabled={!emailEnabled}>
+              Testar SMTP
+            </button>
+          </div>
         </section>
 
         <section className={styles.card}>
@@ -525,6 +636,69 @@ export default function SettingsPage({ canManageAccess = false }: Props) {
             <input className={styles.input} type="text" value={webhookUrl} onChange={(e) => setWebhookUrl(e.target.value)} placeholder="https://hooks.slack.com/services/..." />
             <small className={styles.hint}>Deixe vazio para desativar.</small>
           </label>
+          <label className={styles.field}>
+            <span>Headers (JSON)</span>
+            <textarea className={styles.input} rows={4} value={webhookHeadersJson} onChange={(e) => setWebhookHeadersJson(e.target.value)} />
+          </label>
+          <label className={styles.field}>
+            <span>Timeout (ms)</span>
+            <input className={styles.input} type="number" min={1000} value={webhookTimeoutMs} onChange={(e) => setWebhookTimeoutMs(Math.max(1000, Number(e.target.value) || 1000))} />
+          </label>
+        </section>
+
+        <section className={styles.card}>
+          <div className={styles.cardHeader}>
+            <h3 className={styles.cardTitle}>Templates de Alertas</h3>
+            <div className={styles.actionsRow}>
+              <button className={styles.secondaryBtn} onClick={() => void loadTemplates()} disabled={templatesLoading}>
+                {templatesLoading ? 'Atualizando...' : 'Atualizar'}
+              </button>
+            </div>
+          </div>
+          <div className={styles.twoCols}>
+            <label className={styles.field}>
+              <span>Canal</span>
+              <select className={styles.input} value={templateChannel} onChange={(e) => setTemplateChannel(e.target.value as 'smtp' | 'webhook' | 'whatsapp')}>
+                <option value="smtp">smtp</option>
+                <option value="webhook">webhook</option>
+                <option value="whatsapp">whatsapp</option>
+              </select>
+            </label>
+            <label className={styles.field}>
+              <span>Tipo</span>
+              <select className={styles.input} value={templateType} onChange={(e) => setTemplateType(e.target.value as ApiNotificationTemplate['type'])}>
+                <option value="backup_success">backup_success</option>
+                <option value="backup_failed">backup_failed</option>
+                <option value="connection_lost">connection_lost</option>
+                <option value="connection_restored">connection_restored</option>
+                <option value="storage_full">storage_full</option>
+                <option value="storage_unreachable">storage_unreachable</option>
+                <option value="health_degraded">health_degraded</option>
+                <option value="cleanup_completed">cleanup_completed</option>
+              </select>
+            </label>
+            <label className={styles.field}>
+              <span>Versao</span>
+              <input className={styles.input} type="number" value={templateVersion ?? 1} disabled />
+            </label>
+            <label className={styles.checkboxRow}>
+              <input type="checkbox" checked={templateEnabled} onChange={(e) => setTemplateEnabled(e.target.checked)} />
+              <span>Template habilitado</span>
+            </label>
+          </div>
+          <label className={styles.field}>
+            <span>Template de titulo</span>
+            <input className={styles.input} value={templateTitle} onChange={(e) => setTemplateTitle(e.target.value)} placeholder="{{title}}" />
+          </label>
+          <label className={styles.field}>
+            <span>Template de mensagem</span>
+            <textarea className={styles.input} rows={6} value={templateMessage} onChange={(e) => setTemplateMessage(e.target.value)} />
+          </label>
+          <p className={styles.hint}>Placeholders disponiveis: {'{{title}}'}, {'{{message}}'}, {'{{severity}}'}, {'{{type}}'}, {'{{entity_type}}'}, {'{{entity_id}}'}, {'{{created_at}}'}.</p>
+          <div className={styles.actionsRow}>
+            <button className={styles.primaryBtn} onClick={() => void handleSaveTemplate()}>Salvar template</button>
+            <button className={styles.secondaryBtn} onClick={() => void handleCreateTemplateVersion()}>Nova versao</button>
+          </div>
         </section>
 
         <section className={styles.card}>

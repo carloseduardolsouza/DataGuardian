@@ -1,6 +1,5 @@
 import { prisma } from '../../lib/prisma';
 import { getWorkersSnapshot } from '../../workers/worker-registry';
-import { listStorageHealthEntries } from '../../core/health/storage-health-store';
 import { isRedisAvailable } from '../../queue/redis-client';
 
 export interface HealthHistoryFilters {
@@ -58,6 +57,7 @@ export async function getSystemHealth() {
       redis: redisStatus,
       workers: {
         backup: workers.backup.status,
+        restore: workers.restore.status,
         scheduler: workers.scheduler.status,
         health: workers.health.status,
         cleanup: workers.cleanup.status,
@@ -74,6 +74,7 @@ export async function getSystemHealth() {
     },
     worker_details: {
       backup: workers.backup,
+      restore: workers.restore,
       scheduler: workers.scheduler,
       health: workers.health,
       cleanup: workers.cleanup,
@@ -135,13 +136,42 @@ export async function getStorageHealthHistory(
   skip: number,
   limit: number,
 ) {
-  const { data, total } = listStorageHealthEntries({
-    storage_location_id: filters.storage_location_id,
-    from: filters.from,
-    to: filters.to,
-    skip,
-    limit,
-  });
+  const where: Record<string, unknown> = {};
+  if (filters.storage_location_id) where.storageLocationId = filters.storage_location_id;
+  if (filters.from || filters.to) {
+    where.checkedAt = {
+      ...(filters.from && { gte: new Date(filters.from) }),
+      ...(filters.to && { lte: new Date(filters.to) }),
+    };
+  }
+
+  const [rows, total] = await Promise.all([
+    prisma.storageHealthCheck.findMany({
+      where,
+      include: {
+        storageLocation: {
+          select: { name: true, type: true },
+        },
+      },
+      orderBy: { checkedAt: 'desc' },
+      skip,
+      take: limit,
+    }),
+    prisma.storageHealthCheck.count({ where }),
+  ]);
+
+  const data = rows.map((item) => ({
+    id: item.id,
+    storage_location_id: item.storageLocationId,
+    storage_name: item.storageLocation?.name ?? item.storageLocationId,
+    storage_type: item.storageLocation?.type ?? 'local',
+    checked_at: item.checkedAt.toISOString(),
+    status: item.status,
+    latency_ms: item.latencyMs,
+    available_space_gb: item.availableSpaceGb ? Number(item.availableSpaceGb) : null,
+    error_message: item.errorMessage,
+    metadata: item.metadata,
+  }));
 
   return {
     data,

@@ -215,6 +215,7 @@ export async function getDashboardOverview() {
       redis: redisStatus,
       workers: {
         backup: workers.backup.status,
+        restore: workers.restore.status,
         scheduler: workers.scheduler.status,
         health: workers.health.status,
         cleanup: workers.cleanup.status,

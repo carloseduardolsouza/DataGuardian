@@ -117,6 +117,24 @@ export default function HealthPage() {
       </div>
 
       {system && (
+        <div className={styles.metricsCard}>
+          <div>
+            <h3 className={styles.sectionTitle}>Prometheus Metrics</h3>
+            <p className={styles.tableMeta}>Endpoint nativo para scraping e observabilidade.</p>
+          </div>
+          <div className={styles.metricsActions}>
+            <code className={styles.metricsCode}>/metrics</code>
+            <button
+              className={styles.refreshBtn}
+              onClick={() => navigator.clipboard.writeText(`${window.location.origin}/metrics`)}
+            >
+              Copiar URL
+            </button>
+          </div>
+        </div>
+      )}
+
+      {system && (
         <div className={styles.summaryGrid}>
           <div className={styles.summaryCard}>
             <span className={styles.summaryLabel}>Status geral</span>

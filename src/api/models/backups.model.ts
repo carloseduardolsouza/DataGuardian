@@ -14,6 +14,8 @@ import { logger } from '../../utils/logger';
 import { config } from '../../utils/config';
 import { normalizeLocalStoragePath } from '../../utils/runtime';
 import { materializeExecutionRawSnapshot } from '../../core/backup/execution-artifacts';
+import { ensureRedisAvailable } from '../../queue/redis-client';
+import { enqueueRestoreExecution } from '../../queue/queues';
 
 type StorageBackupStatus = 'available' | 'missing' | 'unreachable' | 'unknown';
 type ExecutionLogLevel = 'info' | 'warn' | 'error' | 'debug' | 'success';
@@ -861,6 +863,117 @@ export async function listBackupsByDatasource(datasourceId: string) {
   };
 }
 
+function orderStorageCandidates(candidates: StorageSnapshotEntry[]) {
+  const score = (value: StorageBackupStatus) => {
+    if (value === 'available') return 0;
+    if (value === 'unknown') return 1;
+    if (value === 'missing') return 2;
+    return 3;
+  };
+  return [...candidates].sort((a, b) => score(a.status) - score(b.status));
+}
+
+export async function processRestoreExecutionNow(restoreExecutionId: string) {
+  const startedAt = new Date();
+  const locked = await prisma.backupExecution.updateMany({
+    where: { id: restoreExecutionId, status: 'queued' },
+    data: { status: 'running', startedAt, finishedAt: null, errorMessage: null },
+  });
+
+  if (locked.count === 0) {
+    const existing = await prisma.backupExecution.findUnique({
+      where: { id: restoreExecutionId },
+      select: { status: true },
+    });
+    if (!existing) throw new AppError('NOT_FOUND', 404, 'Execucao de restore nao encontrada');
+    if (existing.status === 'running' || existing.status === 'completed') return;
+    throw new AppError(
+      'RESTORE_NOT_PROCESSABLE',
+      409,
+      `Execucao '${restoreExecutionId}' com status '${existing.status}' nao pode ser processada`,
+    );
+  }
+
+  try {
+    const restoreExecution = await prisma.backupExecution.findUniqueOrThrow({
+      where: { id: restoreExecutionId },
+      include: {
+        datasource: {
+          select: {
+            id: true,
+            name: true,
+            type: true,
+            connectionConfig: true,
+          },
+        },
+      },
+    });
+
+    const metadata = asObject(restoreExecution.metadata);
+    const restoreReq = asObject(metadata.restore_request);
+    const sourceExecutionId = asString(restoreReq.source_execution_id);
+    if (!sourceExecutionId) {
+      throw new AppError('RESTORE_INVALID_METADATA', 422, 'Restore sem source_execution_id');
+    }
+
+    const sourceExecution = await prisma.backupExecution.findUniqueOrThrow({
+      where: { id: sourceExecutionId },
+      include: {
+        datasource: {
+          select: { id: true, name: true, type: true },
+        },
+        job: {
+          select: { id: true, name: true },
+        },
+        storageLocation: {
+          select: { id: true, name: true, type: true, status: true },
+        },
+      },
+    });
+
+    const requestedStorageId = asString(restoreReq.storage_location_id) ?? undefined;
+    const verificationMode = restoreReq.verification_mode === true;
+    const keepVerificationDatabase = restoreReq.keep_verification_database === true;
+    const dropExisting = verificationMode ? false : restoreReq.drop_existing === true;
+
+    const snapshot = await getStorageSnapshot(sourceExecution);
+    const filtered = requestedStorageId
+      ? snapshot.filter((item) => item.storage_location_id === requestedStorageId)
+      : snapshot;
+    const orderedCandidates = orderStorageCandidates(filtered);
+
+    if (orderedCandidates.length === 0) {
+      throw new AppError('BACKUP_STORAGE_UNAVAILABLE', 503, 'Nenhum storage disponivel para restore');
+    }
+
+    await runRestoreExecutionInBackground({
+      restoreExecutionId,
+      sourceExecutionId,
+      datasource: {
+        id: restoreExecution.datasource.id,
+        name: restoreExecution.datasource.name,
+        type: restoreExecution.datasource.type,
+        connectionConfig: restoreExecution.datasource.connectionConfig as Prisma.JsonValue,
+      },
+      candidates: orderedCandidates,
+      dropExisting,
+      verificationMode,
+      keepVerificationDatabase,
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    await prisma.backupExecution.updateMany({
+      where: { id: restoreExecutionId, status: 'running' },
+      data: {
+        status: 'failed',
+        finishedAt: new Date(),
+        errorMessage: message,
+      },
+    });
+    throw err;
+  }
+}
+
 export async function restoreBackupExecution(params: {
   executionId: string;
   storageLocationId?: string;
@@ -871,16 +984,9 @@ export async function restoreBackupExecution(params: {
   const execution = await prisma.backupExecution.findUniqueOrThrow({
     where: { id: params.executionId },
     include: {
-      job: {
-        select: { id: true },
-      },
+      job: { select: { id: true } },
       datasource: {
-        select: {
-          id: true,
-          name: true,
-          type: true,
-          connectionConfig: true,
-        },
+        select: { id: true, name: true, type: true, connectionConfig: true },
       },
       storageLocation: {
         select: { id: true, name: true, type: true, config: true },
@@ -899,19 +1005,11 @@ export async function restoreBackupExecution(params: {
 
   const datasourceType = String(execution.datasource.type);
   if (datasourceType !== 'postgres' && datasourceType !== 'mysql' && datasourceType !== 'mariadb') {
-    throw new AppError(
-      'RESTORE_NOT_SUPPORTED',
-      422,
-      `Restore nao suportado para datasource '${datasourceType}'`,
-    );
+    throw new AppError('RESTORE_NOT_SUPPORTED', 422, `Restore nao suportado para datasource '${datasourceType}'`);
   }
 
   const storageSnapshot = await getStorageSnapshot(execution);
-  const candidates = params.storageLocationId
-    ? storageSnapshot.filter((item) => item.storage_location_id === params.storageLocationId)
-    : storageSnapshot;
-
-  if (params.storageLocationId && candidates.length === 0) {
+  if (params.storageLocationId && !storageSnapshot.some((item) => item.storage_location_id === params.storageLocationId)) {
     throw new AppError(
       'STORAGE_NOT_FOUND_FOR_BACKUP',
       404,
@@ -919,75 +1017,75 @@ export async function restoreBackupExecution(params: {
     );
   }
 
-  const orderedCandidates = candidates.sort((a, b) => {
-    const score = (value: StorageBackupStatus) => {
-      if (value === 'available') return 0;
-      if (value === 'unknown') return 1;
-      if (value === 'missing') return 2;
-      return 3;
-    };
-    return score(a.status) - score(b.status);
-  });
-
-  if (orderedCandidates.length === 0) {
-    throw new AppError('BACKUP_STORAGE_UNAVAILABLE', 503, 'Nenhum storage disponivel para restore');
-  }
-
-  const startedAt = new Date();
   const verificationMode = params.verificationMode ?? false;
   const keepVerificationDatabase = params.keepVerificationDatabase ?? false;
   const dropExisting = verificationMode ? false : (params.dropExisting ?? true);
 
+  const redisReady = await ensureRedisAvailable();
+  if (!redisReady) {
+    throw new AppError(
+      'SERVICE_UNAVAILABLE',
+      503,
+      'Redis indisponivel: restores estao temporariamente desativados',
+      { warning: 'Inicie/restaure o Redis para executar restores.' },
+    );
+  }
+
+  const createdAt = new Date();
   const restoreExecution = await prisma.backupExecution.create({
     data: {
       jobId: execution.job.id,
       datasourceId: execution.datasource.id,
       storageLocationId: params.storageLocationId ?? execution.storageLocationId,
-      status: 'running',
+      status: 'queued',
       backupType: execution.backupType,
-      startedAt,
       metadata: {
         operation: 'restore',
         source_execution_id: execution.id,
+        restore_request: {
+          source_execution_id: execution.id,
+          storage_location_id: params.storageLocationId ?? null,
+          drop_existing: dropExisting,
+          verification_mode: verificationMode,
+          keep_verification_database: keepVerificationDatabase,
+        },
         execution_logs: [
           {
-            ts: startedAt.toISOString(),
+            ts: createdAt.toISOString(),
             level: 'info',
             message: verificationMode
-              ? 'Restore verification enfileirado e iniciado'
-              : 'Restore enfileirado e iniciado',
+              ? 'Restore verification enfileirado'
+              : 'Restore enfileirado',
           },
         ],
-        verification_mode: verificationMode,
-        keep_verification_database: keepVerificationDatabase,
       } as unknown as Prisma.InputJsonValue,
     },
   });
 
-  void runRestoreExecutionInBackground({
-    restoreExecutionId: restoreExecution.id,
-    sourceExecutionId: execution.id,
-    datasource: {
-      id: execution.datasource.id,
-      name: execution.datasource.name,
-      type: execution.datasource.type,
-      connectionConfig: execution.datasource.connectionConfig as Prisma.JsonValue,
-    },
-    candidates: orderedCandidates,
-    dropExisting,
-    verificationMode,
-    keepVerificationDatabase,
-  });
+  try {
+    await enqueueRestoreExecution(restoreExecution.id, 'manual');
+  } catch (err) {
+    await prisma.backupExecution.update({
+      where: { id: restoreExecution.id },
+      data: {
+        status: 'failed',
+        finishedAt: new Date(),
+        errorMessage: 'Falha ao enfileirar restore no Redis',
+      },
+    });
+    logger.error({ err, executionId: restoreExecution.id }, 'Falha no enqueue de restore');
+    throw new AppError('SERVICE_UNAVAILABLE', 503, 'Falha ao iniciar restore no momento');
+  }
 
   return {
-    message: verificationMode ? 'Restore verification iniciado com sucesso' : 'Restore iniciado com sucesso',
+    message: verificationMode ? 'Restore verification enfileirado com sucesso' : 'Restore enfileirado com sucesso',
     execution_id: restoreExecution.id,
     source_execution_id: execution.id,
     datasource_id: execution.datasource.id,
     datasource_name: execution.datasource.name,
     datasource_type: execution.datasource.type as DatasourceType,
     verification_mode: verificationMode,
-    status: 'running',
-    started_at: startedAt.toISOString(),
+    status: 'queued',
+    started_at: createdAt.toISOString(),
   };
 }

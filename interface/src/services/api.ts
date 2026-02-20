@@ -109,6 +109,7 @@ export interface ApiSystemHealth {
     redis: string;
     workers: {
       backup: string;
+      restore: string;
       scheduler: string;
       health: string;
       cleanup: string;
@@ -252,6 +253,19 @@ export type ApiSystemSettingsMap = Record<string, {
   updated_at: string;
 }>;
 
+export interface ApiNotificationTemplate {
+  id: string;
+  channel: 'smtp' | 'webhook' | 'whatsapp';
+  type: ApiNotification['type'];
+  version: number;
+  enabled: boolean;
+  is_default: boolean;
+  title_tpl: string | null;
+  message_tpl: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface ApiNotification {
   id: string;
   type: 'backup_success' | 'backup_failed' | 'connection_lost' | 'connection_restored' | 'storage_full' | 'storage_unreachable' | 'health_degraded' | 'cleanup_completed';
@@ -337,6 +351,7 @@ export interface ApiDashboardOverview {
     redis: 'ok' | 'error';
     workers: {
       backup: string;
+      restore: string;
       scheduler: string;
       health: string;
       cleanup: string;
@@ -1006,6 +1021,53 @@ export const systemApi = {
     request<{ instance: string; qr_code: string }>('/system/settings/whatsapp/qr', {
       method: 'POST',
       body: JSON.stringify(data ?? {}),
+    }),
+
+  listNotificationTemplates: (params?: { channel?: 'smtp' | 'webhook' | 'whatsapp'; type?: ApiNotification['type'] }) => {
+    const qs = new URLSearchParams();
+    if (params?.channel) qs.set('channel', params.channel);
+    if (params?.type) qs.set('type', params.type);
+    const query = qs.toString();
+    return request<{ data: ApiNotificationTemplate[] }>(`/system/notification-templates${query ? `?${query}` : ''}`);
+  },
+
+  createNotificationTemplate: (data: {
+    channel: 'smtp' | 'webhook' | 'whatsapp';
+    type: ApiNotification['type'];
+    version?: number;
+    enabled?: boolean;
+    title_tpl?: string | null;
+    message_tpl: string;
+  }) =>
+    request<ApiNotificationTemplate>('/system/notification-templates', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  updateNotificationTemplate: (
+    id: string,
+    patch: {
+      enabled?: boolean;
+      title_tpl?: string | null;
+      message_tpl?: string;
+    },
+  ) =>
+    request<ApiNotificationTemplate>(`/system/notification-templates/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(patch),
+    }),
+
+  createNotificationTemplateVersion: (
+    id: string,
+    patch?: {
+      enabled?: boolean;
+      title_tpl?: string | null;
+      message_tpl?: string;
+    },
+  ) =>
+    request<ApiNotificationTemplate>(`/system/notification-templates/${id}/new-version`, {
+      method: 'POST',
+      body: JSON.stringify(patch ?? {}),
     }),
 };
 

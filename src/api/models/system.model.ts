@@ -8,6 +8,7 @@ import {
   fetchEvolutionQrCode,
   resetEvolutionInstanceAndFetchQr,
 } from '../../integrations/evolution-api/client';
+import nodemailer from 'nodemailer';
 
 export function getDefaultSettings(): Record<string, { value: unknown; description: string }> {
   return {
@@ -29,6 +30,14 @@ export function getDefaultSettings(): Record<string, { value: unknown; descripti
     'notifications.webhook_url': {
       value: null,
       description: 'URL de webhook para notificacoes (Slack, Discord, etc.)',
+    },
+    'notifications.webhook_headers': {
+      value: {},
+      description: 'Headers adicionais para envio de webhook de notificacoes',
+    },
+    'notifications.webhook_timeout_ms': {
+      value: 10000,
+      description: 'Timeout em milissegundos para chamadas de webhook',
     },
     'notifications.whatsapp_enabled': {
       value: false,
@@ -284,11 +293,12 @@ export async function deleteSystemSettingByKey(key: string): Promise<void> {
 }
 
 export async function testSmtpConnection() {
-  const emailEnabled = await prisma.systemSetting.findUnique({
-    where: { key: 'notifications.email_enabled' },
-  });
+  const [emailEnabled, smtpSetting] = await Promise.all([
+    prisma.systemSetting.findUnique({ where: { key: 'notifications.email_enabled' } }),
+    prisma.systemSetting.findUnique({ where: { key: 'notifications.email_smtp_config' } }),
+  ]);
 
-  if (!emailEnabled?.value) {
+  if (!Boolean(emailEnabled?.value)) {
     return {
       status: 400,
       body: {
@@ -298,11 +308,48 @@ export async function testSmtpConnection() {
     };
   }
 
+  const smtp = asObject(smtpSetting?.value);
+  const host = asString(smtp.host);
+  const user = asString(smtp.user);
+  const password = asString(smtp.password);
+  const port = Number(smtp.port) > 0 ? Number(smtp.port) : 587;
+
+  if (!host || !user || !password) {
+    return {
+      status: 422,
+      body: {
+        error: 'SMTP_CONFIG_INVALID',
+        message: 'Configuracao SMTP incompleta: informe host, user e password.',
+      },
+    };
+  }
+
+  try {
+    const transport = nodemailer.createTransport({
+      host,
+      port,
+      secure: port === 465,
+      auth: { user, pass: password },
+      connectionTimeout: 10_000,
+      greetingTimeout: 10_000,
+      socketTimeout: 15_000,
+    });
+    await transport.verify();
+  } catch (err) {
+    return {
+      status: 502,
+      body: {
+        error: 'SMTP_CONNECTION_FAILED',
+        message: err instanceof Error ? err.message : 'Falha ao conectar no SMTP',
+      },
+    };
+  }
+
   return {
-    status: 501,
+    status: 200,
     body: {
-      error: 'NOT_IMPLEMENTED',
-      message: 'Envio de e-mail de teste ainda nao implementado. Sera ativado junto com o sistema de notificacoes.',
+      status: 'ok',
+      message: 'Conexao SMTP validada com sucesso.',
     },
   };
 }

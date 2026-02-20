@@ -7,9 +7,9 @@ export interface WorkerState {
   lastError: string | null;
 }
 
-export type WorkerName = 'backup' | 'scheduler' | 'health' | 'cleanup';
+export type WorkerName = 'backup' | 'restore' | 'scheduler' | 'health' | 'cleanup';
 
-const WORKER_NAMES: WorkerName[] = ['backup', 'scheduler', 'health', 'cleanup'];
+const WORKER_NAMES: WorkerName[] = ['backup', 'restore', 'scheduler', 'health', 'cleanup'];
 
 const initialState = (): WorkerState => ({
   status: 'stopped',
@@ -54,6 +54,7 @@ export function markWorkerError(name: WorkerName, error: unknown) {
 export function getWorkersSnapshot() {
   const snapshot: Record<WorkerName, WorkerState> = {
     backup: initialState(),
+    restore: initialState(),
     scheduler: initialState(),
     health: initialState(),
     cleanup: initialState(),

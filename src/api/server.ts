@@ -22,6 +22,7 @@ import { auditLogsRouter } from './routes/audit-logs';
 import { requireAuth, requirePermission } from './middlewares/auth';
 import { PERMISSIONS } from '../core/auth/permissions';
 import { auditTrailMiddleware } from './middlewares/audit-trail';
+import { getPrometheusMetricsText } from './models/metrics.model';
 
 export function createApp() {
   const app = express();
@@ -41,6 +42,16 @@ export function createApp() {
 
   app.get('/health', (_req: Request, res: Response) => {
     res.status(200).json({ status: 'ok' });
+  });
+
+  app.get('/metrics', async (_req: Request, res: Response, next) => {
+    try {
+      const payload = await getPrometheusMetricsText();
+      res.setHeader('Content-Type', 'text/plain; version=0.0.4; charset=utf-8');
+      res.status(200).send(payload);
+    } catch (err) {
+      next(err);
+    }
   });
 
   app.use('/api', auditTrailMiddleware);

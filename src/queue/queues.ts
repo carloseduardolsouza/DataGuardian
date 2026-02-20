@@ -6,6 +6,7 @@ import { logger } from '../utils/logger';
 
 export const QueueName = {
   backup: 'backup-queue',
+  restore: 'restore-queue',
   health: 'health-queue',
   cleanup: 'cleanup-queue',
   notification: 'notification-queue',
@@ -14,9 +15,14 @@ export const QueueName = {
 export interface BackupQueueJobData {
   executionId: string;
 }
+export interface RestoreQueueJobData {
+  executionId: string;
+}
 
 let backupQueue: Queue<BackupQueueJobData, void, 'backup'> | null = null;
 let backupQueueEvents: QueueEvents | null = null;
+let restoreQueue: Queue<RestoreQueueJobData, void, 'restore'> | null = null;
+let restoreQueueEvents: QueueEvents | null = null;
 
 function getBackupQueue() {
   if (!backupQueue) {
@@ -36,9 +42,33 @@ function getBackupQueueEvents() {
   return backupQueueEvents;
 }
 
+function getRestoreQueue() {
+  if (!restoreQueue) {
+    restoreQueue = new Queue<RestoreQueueJobData, void, 'restore'>(QueueName.restore, {
+      connection: getBullConnection(),
+    });
+  }
+  return restoreQueue;
+}
+
+function getRestoreQueueEvents() {
+  if (!restoreQueueEvents) {
+    restoreQueueEvents = new QueueEvents(QueueName.restore, {
+      connection: getBullConnection(),
+    });
+  }
+  return restoreQueueEvents;
+}
+
 const baseBackupOptions: JobsOptions = {
   attempts: 3,
   backoff: { type: 'exponential', delay: 30_000 },
+  removeOnComplete: { count: 100 },
+  removeOnFail: { count: 200 },
+};
+const baseRestoreOptions: JobsOptions = {
+  attempts: 3,
+  backoff: { type: 'exponential', delay: 20_000 },
   removeOnComplete: { count: 100 },
   removeOnFail: { count: 200 },
 };
@@ -78,13 +108,51 @@ export function onBackupQueueEvent(
   events.on(event, handler as never);
 }
 
+export async function enqueueRestoreExecution(
+  executionId: string,
+  origin: 'manual' | 'retry',
+) {
+  const queue = getRestoreQueue();
+  try {
+    return await queue.add(
+      'restore',
+      { executionId },
+      {
+        ...baseRestoreOptions,
+        priority: origin === 'manual' ? 1 : 5,
+        jobId: executionId,
+      },
+    );
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes('Job') && msg.includes('already exists')) {
+      logger.info({ executionId }, 'Execucao ja enfileirada no restore-queue');
+      const existing = await queue.getJob(executionId);
+      if (existing) return existing;
+    }
+    throw err;
+  }
+}
+
+export function onRestoreQueueEvent(
+  event: 'error' | 'failed',
+  handler: (...args: any[]) => void,
+) {
+  const events = getRestoreQueueEvents();
+  events.on(event, handler as never);
+}
+
 export async function closeQueues() {
   const closeOps: Array<Promise<void>> = [];
   if (backupQueue) closeOps.push(backupQueue.close());
   if (backupQueueEvents) closeOps.push(backupQueueEvents.close());
+  if (restoreQueue) closeOps.push(restoreQueue.close());
+  if (restoreQueueEvents) closeOps.push(restoreQueueEvents.close());
   await Promise.all(closeOps);
   backupQueue = null;
   backupQueueEvents = null;
+  restoreQueue = null;
+  restoreQueueEvents = null;
 }
 
 export function getBackupWorkerConcurrency() {
