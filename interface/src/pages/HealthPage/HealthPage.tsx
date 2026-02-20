@@ -138,12 +138,12 @@ export default function HealthPage() {
           </div>
 
           <div className={styles.summaryCard}>
-            <span className={styles.summaryLabel}>Checks recentes de storage</span>
+            <span className={styles.summaryLabel}>Storages</span>
             <div className={styles.summaryValueRow}>
               <ServerIcon width={16} height={16} />
               <span className={styles.summaryValue}>{storageSummary.ok}/{storageSummary.total}</span>
             </div>
-            <span className={styles.summarySub}>Com sucesso</span>
+            <span className={styles.summarySub}>Saudáveis</span>
           </div>
         </div>
       )}

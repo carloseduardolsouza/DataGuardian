@@ -5,7 +5,8 @@ import SetupPage from './pages/SetupPage/SetupPage';
 import DashboardPage from './pages/DashboardPage/DashboardPage';
 import { ROUTE_PATHS, type NavKey } from './components/Sidebar/Sidebar';
 import { ToastProvider } from './components/Toast/ToastProvider';
-import { authApi } from './services/api';
+import { notify } from './components/Toast/notify';
+import { authApi, notificationsApi } from './services/api';
 
 type Theme = 'dark' | 'light';
 
@@ -37,6 +38,7 @@ export default function App() {
   const [hasUser, setHasUser] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [currentUsername, setCurrentUsername] = useState<string | null>(null);
+  const [unreadNotifications, setUnreadNotifications] = useState(0);
 
   useEffect(() => {
     const bootstrapAuth = async () => {
@@ -61,10 +63,65 @@ export default function App() {
     const handler = () => {
       setIsAuthenticated(false);
       setCurrentUsername(null);
+      setUnreadNotifications(0);
     };
     window.addEventListener('dg:unauthorized', handler);
     return () => window.removeEventListener('dg:unauthorized', handler);
   }, []);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    let stopped = false;
+    let bootstrapped = false;
+    const seenIds = new Set<string>();
+
+    const pollNotifications = async () => {
+      try {
+        const response = await notificationsApi.list({ page: 1, limit: 20 });
+        if (stopped) return;
+
+        setUnreadNotifications(response.unread_count ?? 0);
+
+        const items = response.data ?? [];
+        if (!bootstrapped) {
+          for (const item of items) seenIds.add(item.id);
+          bootstrapped = true;
+          return;
+        }
+
+        for (const item of [...items].reverse()) {
+          if (seenIds.has(item.id)) continue;
+          seenIds.add(item.id);
+          notify({
+            title: item.title || 'Nova notificacao',
+            message: item.message,
+            tone: item.severity === 'critical' ? 'error' : item.severity === 'warning' ? 'warning' : 'info',
+            durationMs: item.severity === 'critical' ? 9000 : 6000,
+          });
+        }
+
+        if (seenIds.size > 500) {
+          const keep = new Set(items.map((item) => item.id));
+          for (const id of [...seenIds]) {
+            if (!keep.has(id)) seenIds.delete(id);
+          }
+        }
+      } catch {
+        // ignore transient notification polling errors
+      }
+    };
+
+    void pollNotifications();
+    const timer = window.setInterval(() => {
+      void pollNotifications();
+    }, 10000);
+
+    return () => {
+      stopped = true;
+      window.clearInterval(timer);
+    };
+  }, [isAuthenticated]);
 
   const toggleTheme = () => {
     setTheme((current) => {
@@ -161,6 +218,7 @@ export default function App() {
                       onToggleTheme={toggleTheme}
                       onLogout={handleLogout}
                       currentUsername={currentUsername ?? undefined}
+                      unreadNotifications={unreadNotifications}
                     />
                   }
                 />

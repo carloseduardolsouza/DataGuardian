@@ -1,8 +1,7 @@
 import { spawn } from 'node:child_process';
-import { createReadStream, createWriteStream, promises as fs } from 'node:fs';
+import { createReadStream, promises as fs } from 'node:fs';
 import * as path from 'node:path';
 import { pipeline } from 'node:stream/promises';
-import { createGunzip } from 'node:zlib';
 import { DatasourceType, Prisma, StorageLocationType } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { bigIntToSafe } from '../../utils/config';
@@ -12,6 +11,7 @@ import { resolveBinaryPath } from '../../core/backup/engines/base-engine';
 import { logger } from '../../utils/logger';
 import { config } from '../../utils/config';
 import { normalizeLocalStoragePath } from '../../utils/runtime';
+import { materializeExecutionRawSnapshot } from '../../core/backup/execution-artifacts';
 
 type StorageBackupStatus = 'available' | 'missing' | 'unreachable' | 'unknown';
 type ExecutionLogLevel = 'info' | 'warn' | 'error' | 'debug' | 'success';
@@ -448,72 +448,36 @@ async function runRestoreExecutionInBackground(params: {
     params.restoreExecutionId,
     Date.now().toString(),
   );
-  let downloadedFile = '';
-  let restoreInputFile = '';
   let chosenStorage: StorageSnapshotEntry | null = null;
+  let restoreInputFile = '';
 
   try {
     await fs.mkdir(restoreRoot, { recursive: true });
     currentPhase = 'preparando ambiente';
     pushLog('info', `Restore iniciado para datasource '${params.datasource.name}'`, true);
 
-    let lastError: string | null = null;
-    for (const candidate of params.candidates) {
-      if (!candidate.relative_path) {
-        lastError = `Storage '${candidate.storage_name}' sem caminho relativo valido`;
-        pushLog('warn', lastError, true);
-        continue;
-      }
-
-      const storage = await prisma.storageLocation.findUnique({
-        where: { id: candidate.storage_location_id },
-        select: { id: true, name: true, type: true, config: true },
-      });
-
-      if (!storage) {
-        lastError = `Storage '${candidate.storage_location_id}' nao encontrado`;
-        pushLog('warn', lastError, true);
-        continue;
-      }
-
-      const fileName = path.basename(candidate.relative_path);
-      const destination = path.join(restoreRoot, fileName);
-
-      try {
-        pushLog('info', `Baixando backup do storage '${storage.name}'`, true);
-        currentPhase = `baixando dump de ${storage.name}`;
-        const adapter = createStorageAdapter(storage.type, storage.config);
-        await adapter.download(candidate.relative_path, destination);
-        downloadedFile = destination;
-        chosenStorage = candidate;
-        pushLog('success', `Download concluido: ${fileName}`, true);
-        break;
-      } catch (err) {
-        lastError = err instanceof Error ? err.message : String(err);
-        pushLog('warn', `Falha no storage '${storage.name}': ${lastError}`, true);
-      }
-    }
-
-    if (!downloadedFile || !chosenStorage) {
-      throw new AppError(
-        'BACKUP_DOWNLOAD_FAILED',
-        503,
-        `Nao foi possivel baixar backup de nenhum storage${lastError ? `: ${lastError}` : ''}`,
-      );
-    }
-
-    if (downloadedFile.endsWith('.gz')) {
-      restoreInputFile = downloadedFile.slice(0, -3);
-      pushLog('info', 'Descompactando arquivo .gz para restore', true);
-      currentPhase = 'descompactando dump';
-      await pipeline(
-        createReadStream(downloadedFile),
-        createGunzip(),
-        createWriteStream(restoreInputFile),
-      );
-      pushLog('success', 'Descompactacao concluida', true);
-    } else {
-      restoreInputFile = downloadedFile;
+    const preferredStorageIds = params.candidates.map((item) => item.storage_location_id);
+    currentPhase = 'baixando e reconstruindo cadeia de backup';
+    const materialized = await materializeExecutionRawSnapshot({
+      executionId: params.sourceExecutionId,
+      outputDir: restoreRoot,
+      preferredStorageIds,
+      onLog: (line) => pushLog('debug', `[artifact] ${line}`, true),
+    });
+    restoreInputFile = materialized.rawFile;
+    if (materialized.sourceStorage) {
+      chosenStorage =
+        params.candidates.find((item) => item.storage_location_id === materialized.sourceStorage?.id)
+        ?? {
+          storage_location_id: materialized.sourceStorage.id,
+          storage_name: materialized.sourceStorage.name,
+          storage_type: null,
+          configured_status: 'healthy',
+          backup_path: null,
+          relative_path: materialized.sourceStorage.relativePath,
+          status: 'available',
+          message: null,
+        };
     }
 
     const datasourceType = String(params.datasource.type);
@@ -529,10 +493,14 @@ async function runRestoreExecutionInBackground(params: {
     }
 
     const durationSeconds = Math.max(1, Math.floor((Date.now() - startedAtMs) / 1000));
+    const resolvedStorage = chosenStorage ?? params.candidates[0];
+    if (!resolvedStorage) {
+      throw new AppError('BACKUP_STORAGE_UNAVAILABLE', 503, 'Nenhum storage disponivel para concluir restore');
+    }
     runtimeMetadata.source_storage = {
-      id: chosenStorage.storage_location_id,
-      name: chosenStorage.storage_name,
-      type: chosenStorage.storage_type,
+      id: resolvedStorage.storage_location_id,
+      name: resolvedStorage.storage_name,
+      type: resolvedStorage.storage_type,
     };
     runtimeMetadata.drop_existing = params.dropExisting;
     pushLog('success', `Restore concluido em ${durationSeconds}s`, true);
@@ -544,7 +512,7 @@ async function runRestoreExecutionInBackground(params: {
         status: 'completed',
         finishedAt: new Date(),
         durationSeconds,
-        storageLocationId: chosenStorage.storage_location_id,
+        storageLocationId: resolvedStorage.storage_location_id,
         metadata: runtimeMetadata as unknown as Prisma.InputJsonValue,
       },
     });

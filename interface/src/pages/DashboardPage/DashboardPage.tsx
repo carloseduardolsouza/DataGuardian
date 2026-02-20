@@ -19,7 +19,7 @@ import ExecutionsPage from '../ExecutionsPage/ExecutionsPage';
 import HealthPage from '../HealthPage/HealthPage';
 import SettingsPage from '../SettingsPage/SettingsPage';
 import NotificationsPage from '../NotificationsPage/NotificationsPage';
-import { dashboardApi, notificationsApi, type ApiDashboardOverview } from '../../services/api';
+import { dashboardApi, type ApiDashboardOverview } from '../../services/api';
 import styles from './DashboardPage.module.css';
 
 interface Props {
@@ -28,6 +28,7 @@ interface Props {
   onToggleTheme: () => void;
   onLogout: () => void;
   currentUsername?: string;
+  unreadNotifications?: number;
 }
 
 const PAGE_TITLES: Record<NavKey, { title: string; sub: string }> = {
@@ -79,28 +80,22 @@ function mapHealthDot(status: 'healthy' | 'warning' | 'critical' | 'unknown') {
   return 'error';
 }
 
-export default function DashboardPage({ activePage, theme, onToggleTheme, onLogout, currentUsername }: Props) {
-  const [unreadCount, setUnreadCount] = useState(0);
+export default function DashboardPage({
+  activePage,
+  theme,
+  onToggleTheme,
+  onLogout,
+  currentUsername,
+  unreadNotifications = 0,
+}: Props) {
   const { title, sub } = PAGE_TITLES[activePage];
-
-  useEffect(() => {
-    const loadUnread = async () => {
-      try {
-        const response = await notificationsApi.list({ limit: 1, read: 'false' });
-        setUnreadCount(response.unread_count ?? 0);
-      } catch {
-        setUnreadCount(0);
-      }
-    };
-    void loadUnread();
-  }, []);
 
   return (
     <div className={styles.layout}>
       <Sidebar
         active={activePage}
         onLogout={onLogout}
-        unreadNotifications={unreadCount}
+        unreadNotifications={unreadNotifications}
         currentUsername={currentUsername}
       />
 
@@ -141,7 +136,7 @@ export default function DashboardPage({ activePage, theme, onToggleTheme, onLogo
           {activePage === 'executions' && <ExecutionsPage />}
           {activePage === 'health' && <HealthPage />}
           {activePage === 'notifications' && (
-            <NotificationsPage onUnreadCountChange={setUnreadCount} />
+            <NotificationsPage />
           )}
           {activePage === 'settings' && <SettingsPage />}
           {activePage !== 'dashboard' && activePage !== 'datasources' && activePage !== 'storage' && activePage !== 'backup-jobs' && activePage !== 'backups' && activePage !== 'executions' && activePage !== 'health' && activePage !== 'notifications' && activePage !== 'settings' && (

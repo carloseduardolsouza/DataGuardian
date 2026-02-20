@@ -13,6 +13,11 @@ import { markWorkerError, markWorkerRunning, markWorkerStopped } from './worker-
 import { createStorageAdapter } from '../core/storage/storage-factory';
 import { executeBackupDump } from '../core/backup/executor';
 import { compressBackupFile } from '../core/backup/compressor';
+import { createDeltaArtifact } from '../core/backup/delta';
+import {
+  findBaseExecutionForBackupType,
+  materializeExecutionRawSnapshot,
+} from '../core/backup/execution-artifacts';
 import {
   QueueName,
   onBackupQueueEvent,
@@ -425,6 +430,7 @@ async function processExecution(executionId: string) {
     await fs.mkdir(tempDir, { recursive: true });
 
     const rawDumpFile = path.join(tempDir, 'backup.raw');
+    const baseSnapshotDir = path.join(tempDir, 'base-snapshot');
     let lastDumpProgressLogAt = 0;
     let lastDumpBytes = 0;
 
@@ -451,24 +457,95 @@ async function processExecution(executionId: string) {
     });
 
     pushLog('success', `Dump concluido (${dumpInfo.extension})`, true);
+
+    let artifactInputFile = rawDumpFile;
+    let artifactExtension = dumpInfo.extension;
+    let artifactKind: 'full' | 'delta' = 'full';
+    let deltaBaseExecutionId: string | null = null;
+    let backupTypeEffective = execution.backupType;
+
+    if (execution.backupType === 'incremental' || execution.backupType === 'differential') {
+      const baseExecution = await findBaseExecutionForBackupType({
+        jobId: execution.jobId,
+        beforeExecutionId: execution.id,
+        backupType: execution.backupType,
+      });
+
+      if (!baseExecution) {
+        backupTypeEffective = 'full';
+        pushLog(
+          'warn',
+          `Sem base anterior para backup ${execution.backupType}; executando como full nesta execucao`,
+          true,
+        );
+      } else {
+        pushLog(
+          'info',
+          `Montando base ${execution.backupType} a partir da execucao ${baseExecution.id}`,
+          true,
+        );
+        const baseSnapshot = await materializeExecutionRawSnapshot({
+          executionId: baseExecution.id,
+          outputDir: baseSnapshotDir,
+          onLog: (line) => pushLog('debug', `[base] ${line}`),
+        });
+
+        const deltaFile = path.join(tempDir, 'backup.delta.json');
+        const delta = await createDeltaArtifact({
+          baseFile: baseSnapshot.rawFile,
+          targetFile: rawDumpFile,
+          outputFile: deltaFile,
+          mode: execution.backupType,
+          targetExtension: dumpInfo.extension,
+        });
+
+        if (!delta.usable) {
+          backupTypeEffective = 'full';
+          pushLog(
+            'warn',
+            `Delta descartado: ${delta.reason ?? 'patch ineficiente'}. Mantendo dump full`,
+            true,
+          );
+        } else {
+          artifactInputFile = deltaFile;
+          artifactExtension = '.delta.json';
+          artifactKind = 'delta';
+          deltaBaseExecutionId = baseExecution.id;
+          pushLog(
+            'success',
+            `Delta ${execution.backupType} gerado (${delta.changedBlocks} blocos, ${delta.patchSizeBytes} bytes)`,
+            true,
+          );
+        }
+      }
+    }
+
     pushLog('info', 'Iniciando compactacao do dump', true);
 
     const rawStat = await fs.stat(rawDumpFile);
-    const compressed = await compressBackupFile(rawDumpFile, compression);
+    const artifactStat = await fs.stat(artifactInputFile);
+    const compressed = await compressBackupFile(artifactInputFile, compression);
     pushLog('success', `Compactacao concluida (${compressed.compressedSizeBytes} bytes)`, true);
     pushLog('info', 'Calculando checksum do arquivo compactado', true);
     const checksum = await computeSha256(compressed.outputFile);
     pushLog('success', 'Checksum calculado com sucesso', true);
 
-    runtimeMetadata.compression_ratio = rawStat.size > 0
-      ? Number((compressed.compressedSizeBytes / rawStat.size).toFixed(4))
+    runtimeMetadata.requested_backup_type = execution.backupType;
+    runtimeMetadata.backup_type_effective = backupTypeEffective;
+    runtimeMetadata.backup_artifact_kind = artifactKind;
+    runtimeMetadata.delta_base_execution_id = deltaBaseExecutionId;
+    runtimeMetadata.delta_target_extension = artifactKind === 'delta' ? dumpInfo.extension : null;
+    runtimeMetadata.logical_dump_size_bytes = rawStat.size;
+    runtimeMetadata.artifact_input_size_bytes = artifactStat.size;
+    runtimeMetadata.compression_ratio = artifactStat.size > 0
+      ? Number((compressed.compressedSizeBytes / artifactStat.size).toFixed(4))
       : 1;
     runtimeMetadata.checksum = `sha256:${checksum}`;
 
     const datasourceFolder = resolveDatabaseFolderName(execution.datasource);
     const executionFolder = formatExecutionFolder(new Date(execution.createdAt));
     const baseRelativeFolder = path.posix.join(datasourceFolder, executionFolder);
-    const backupFilename = `backup${dumpInfo.extension}${compressed.compressionExtension}`;
+    const backupFilename = `backup${artifactExtension}${compressed.compressionExtension}`;
     const backupRelativePath = path.posix.join(baseRelativeFolder, backupFilename);
 
     const manifest = {
@@ -478,8 +555,13 @@ async function processExecution(executionId: string) {
       job_id: execution.jobId,
       datasource_type: execution.datasource.type,
       backup_type: execution.backupType,
+      backup_type_effective: backupTypeEffective,
+      artifact_kind: artifactKind,
+      delta_base_execution_id: deltaBaseExecutionId,
+      target_extension: dumpInfo.extension,
       compression,
       total_size_bytes: rawStat.size,
+      artifact_input_size_bytes: artifactStat.size,
       compressed_size_bytes: compressed.compressedSizeBytes,
       compression_ratio: runtimeMetadata.compression_ratio,
       checksum: `sha256:${checksum}`,
