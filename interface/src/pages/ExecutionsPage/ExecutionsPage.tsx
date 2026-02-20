@@ -233,10 +233,28 @@ export default function ExecutionsPage() {
   }
 
   async function retryUploadExecution(id: string) {
+    setExecutions((prev) => prev.map((item) => {
+      if (item.id !== id) return item;
+      return {
+        ...item,
+        status: 'running',
+        error_message: null,
+        finished_at: null,
+        duration_seconds: null,
+        started_at: item.started_at ?? new Date().toISOString(),
+      };
+    }));
+    setCounts((prev) => ({
+      ...prev,
+      failed: Math.max(0, prev.failed - 1),
+      running: prev.running + 1,
+    }));
+
     try {
       await executionsApi.retryUpload(id);
       await Promise.all([loadExecutions(), loadCounts()]);
     } catch (err) {
+      await Promise.all([loadExecutions(), loadCounts()]);
       setError(err instanceof Error ? err.message : 'Erro ao retomar envio do dump');
     }
   }

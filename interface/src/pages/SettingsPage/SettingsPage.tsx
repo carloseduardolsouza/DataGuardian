@@ -1,7 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { systemApi } from '../../services/api';
-import type { ApiSystemSettingsMap } from '../../services/api';
-import { AlertTriangleIcon, CheckCircleIcon, PlusIcon, SpinnerIcon, TrashIcon } from '../../components/Icons';
+import { AlertTriangleIcon, CheckCircleIcon, SpinnerIcon } from '../../components/Icons';
 import styles from './SettingsPage.module.css';
 
 type SmtpConfig = {
@@ -11,6 +10,14 @@ type SmtpConfig = {
   password?: string;
   from?: string;
   to?: string[];
+};
+
+type WhatsappEvolutionConfig = {
+  api_url?: string;
+  api_key?: string;
+  instance?: string;
+  to?: string[];
+  important_only?: boolean;
 };
 
 function asString(value: unknown, fallback = '') {
@@ -30,8 +37,11 @@ function asBool(value: unknown, fallback = false) {
   return typeof value === 'boolean' ? value : fallback;
 }
 
+function parseCsv(value: string) {
+  return value.split(',').map((v) => v.trim()).filter(Boolean);
+}
+
 export default function SettingsPage() {
-  const [settings, setSettings] = useState<ApiSystemSettingsMap>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -51,17 +61,18 @@ export default function SettingsPage() {
   const [smtpFrom, setSmtpFrom] = useState('');
   const [smtpTo, setSmtpTo] = useState('');
 
-  const [newKey, setNewKey] = useState('');
-  const [newDescription, setNewDescription] = useState('');
-  const [newValueJson, setNewValueJson] = useState('""');
-  const [creating, setCreating] = useState(false);
+  const [whatsappEnabled, setWhatsappEnabled] = useState(false);
+  const [waApiUrl, setWaApiUrl] = useState('http://localhost:8080');
+  const [waApiKey, setWaApiKey] = useState('');
+  const [waInstance, setWaInstance] = useState('');
+  const [waRecipients, setWaRecipients] = useState('');
+  const [waImportantOnly, setWaImportantOnly] = useState(true);
 
   async function loadSettings() {
     try {
       setLoading(true);
       setError(null);
       const data = await systemApi.list();
-      setSettings(data);
 
       setMaxConcurrentBackups(asNumber(data['system.max_concurrent_backups']?.value, 3));
       setTempDirectory(asString(data['system.temp_directory']?.value, '/tmp/dataguardian'));
@@ -78,6 +89,14 @@ export default function SettingsPage() {
       setSmtpPassword('');
       setSmtpFrom(asString(smtp.from));
       setSmtpTo(Array.isArray(smtp.to) ? smtp.to.join(', ') : '');
+
+      setWhatsappEnabled(asBool(data['notifications.whatsapp_enabled']?.value, false));
+      const wa = (data['notifications.whatsapp_evolution_config']?.value ?? {}) as WhatsappEvolutionConfig;
+      setWaApiUrl(asString(wa.api_url, 'http://localhost:8080'));
+      setWaApiKey('');
+      setWaInstance(asString(wa.instance));
+      setWaRecipients(Array.isArray(wa.to) ? wa.to.join(', ') : '');
+      setWaImportantOnly(asBool(wa.important_only, true));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Falha ao carregar configuracoes.');
     } finally {
@@ -89,11 +108,7 @@ export default function SettingsPage() {
     void loadSettings();
   }, []);
 
-  const advancedKeys = useMemo(() => {
-    return Object.keys(settings).sort();
-  }, [settings]);
-
-  async function handleSaveCoreAndNotifications() {
+  async function handleSave() {
     try {
       setSaving(true);
       setError(null);
@@ -112,7 +127,15 @@ export default function SettingsPage() {
           user: smtpUser.trim(),
           ...(smtpPassword.trim() ? { password: smtpPassword } : {}),
           from: smtpFrom.trim(),
-          to: smtpTo.split(',').map((v) => v.trim()).filter(Boolean),
+          to: parseCsv(smtpTo),
+        },
+        'notifications.whatsapp_enabled': whatsappEnabled,
+        'notifications.whatsapp_evolution_config': {
+          api_url: waApiUrl.trim(),
+          ...(waApiKey.trim() ? { api_key: waApiKey.trim() } : {}),
+          instance: waInstance.trim(),
+          to: parseCsv(waRecipients),
+          important_only: waImportantOnly,
         },
       });
 
@@ -136,58 +159,6 @@ export default function SettingsPage() {
     }
   }
 
-  async function handleCreateSetting() {
-    try {
-      setCreating(true);
-      setError(null);
-      setSuccess(null);
-
-      const parsed = JSON.parse(newValueJson);
-      await systemApi.create({
-        key: newKey.trim(),
-        value: parsed,
-        description: newDescription.trim() || null,
-      });
-
-      setNewKey('');
-      setNewDescription('');
-      setNewValueJson('""');
-      setSuccess('Configuracao criada com sucesso.');
-      await loadSettings();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Falha ao criar configuracao.');
-    } finally {
-      setCreating(false);
-    }
-  }
-
-  async function handleUpdateAdvancedKey(key: string, valueJson: string) {
-    try {
-      setError(null);
-      setSuccess(null);
-      const parsed = JSON.parse(valueJson);
-      await systemApi.updateByKey(key, { value: parsed });
-      setSuccess(`Configuracao '${key}' atualizada.`);
-      await loadSettings();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : `Falha ao atualizar '${key}'.`);
-    }
-  }
-
-  async function handleDeleteAdvancedKey(key: string) {
-    if (!confirm(`Remover configuracao '${key}'?`)) return;
-
-    try {
-      setError(null);
-      setSuccess(null);
-      await systemApi.removeByKey(key);
-      setSuccess(`Configuracao '${key}' removida.`);
-      await loadSettings();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : `Falha ao remover '${key}'.`);
-    }
-  }
-
   if (loading) {
     return (
       <div className={styles.centerState}>
@@ -201,9 +172,9 @@ export default function SettingsPage() {
       <div className={styles.headerRow}>
         <div>
           <h2 className={styles.title}>Configuracoes do Sistema</h2>
-          <p className={styles.subtitle}>Gerencie parametros globais, notificacoes e chaves avancadas.</p>
+          <p className={styles.subtitle}>Tela guiada para configurar sistema, e-mail, webhook e WhatsApp sem JSON manual.</p>
         </div>
-        <button className={styles.primaryBtn} onClick={() => void handleSaveCoreAndNotifications()} disabled={saving}>
+        <button className={styles.primaryBtn} onClick={() => void handleSave()} disabled={saving}>
           {saving ? 'Salvando...' : 'Salvar alteracoes'}
         </button>
       </div>
@@ -233,7 +204,7 @@ export default function SettingsPage() {
         </section>
 
         <section className={styles.card}>
-          <h3 className={styles.cardTitle}>Notificacoes</h3>
+          <h3 className={styles.cardTitle}>Notificacoes por E-mail / Webhook</h3>
           <label className={styles.checkboxRow}>
             <input type="checkbox" checked={emailEnabled} onChange={(e) => setEmailEnabled(e.target.checked)} />
             <span>Habilitar envio por e-mail</span>
@@ -249,80 +220,40 @@ export default function SettingsPage() {
           <label className={styles.field}><span>Usuario</span><input className={styles.input} type="text" value={smtpUser} onChange={(e) => setSmtpUser(e.target.value)} /></label>
           <label className={styles.field}><span>Nova senha (opcional)</span><input className={styles.input} type="password" value={smtpPassword} onChange={(e) => setSmtpPassword(e.target.value)} /></label>
           <label className={styles.field}><span>From</span><input className={styles.input} type="text" value={smtpFrom} onChange={(e) => setSmtpFrom(e.target.value)} /></label>
-          <label className={styles.field}><span>Destinatarios (separados por virgula)</span><input className={styles.input} type="text" value={smtpTo} onChange={(e) => setSmtpTo(e.target.value)} /></label>
+          <label className={styles.field}><span>Destinatarios (separados por virgula)</span><input className={styles.input} type="text" value={smtpTo} onChange={(e) => setSmtpTo(e.target.value)} placeholder="admin@empresa.com,devops@empresa.com" /></label>
 
           <button className={styles.secondaryBtn} onClick={() => void handleTestSmtp()}>
             Testar SMTP
           </button>
         </section>
-      </div>
 
-      <section className={styles.card}>
-        <h3 className={styles.cardTitle}>CRUD de chaves (avancado)</h3>
-
-        <div className={styles.newRow}>
-          <input className={styles.input} type="text" placeholder="Nova chave (ex: app.custom_key)" value={newKey} onChange={(e) => setNewKey(e.target.value)} />
-          <input className={styles.input} type="text" placeholder="Descricao" value={newDescription} onChange={(e) => setNewDescription(e.target.value)} />
-          <input className={styles.input} type="text" placeholder='Valor JSON (ex: {"enabled":true})' value={newValueJson} onChange={(e) => setNewValueJson(e.target.value)} />
-          <button className={styles.primaryBtn} onClick={() => void handleCreateSetting()} disabled={creating || !newKey.trim()}>
-            <PlusIcon width={14} height={14} /> {creating ? 'Criando...' : 'Criar'}
-          </button>
-        </div>
-
-        <div className={styles.advancedList}>
-          {advancedKeys.map((key) => (
-            <AdvancedRow
-              key={key}
-              settingKey={key}
-              initialValue={JSON.stringify(settings[key]?.value ?? null)}
-              description={settings[key]?.description ?? ''}
-              updatedAt={settings[key]?.updated_at ?? ''}
-              onSave={handleUpdateAdvancedKey}
-              onDelete={handleDeleteAdvancedKey}
-            />
-          ))}
-        </div>
-      </section>
-    </div>
-  );
-}
-
-function AdvancedRow({
-  settingKey,
-  initialValue,
-  description,
-  updatedAt,
-  onSave,
-  onDelete,
-}: {
-  settingKey: string;
-  initialValue: string;
-  description: string;
-  updatedAt: string;
-  onSave: (key: string, valueJson: string) => Promise<void>;
-  onDelete: (key: string) => Promise<void>;
-}) {
-  const [valueJson, setValueJson] = useState(initialValue);
-  const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    setValueJson(initialValue);
-  }, [initialValue]);
-
-  return (
-    <div className={styles.advancedRow}>
-      <div className={styles.advancedMeta}>
-        <p className={styles.advancedKey}>{settingKey}</p>
-        <p className={styles.advancedDesc}>{description || 'Sem descricao'} • {updatedAt ? new Date(updatedAt).toLocaleString('pt-BR') : '-'}</p>
-      </div>
-      <textarea className={styles.textarea} rows={3} value={valueJson} onChange={(e) => setValueJson(e.target.value)} />
-      <div className={styles.actionsRow}>
-        <button className={styles.secondaryBtn} onClick={async () => { setSaving(true); await onSave(settingKey, valueJson); setSaving(false); }} disabled={saving}>
-          {saving ? 'Salvando...' : 'Salvar'}
-        </button>
-        <button className={styles.dangerBtn} onClick={() => void onDelete(settingKey)}>
-          <TrashIcon width={14} height={14} /> Remover
-        </button>
+        <section className={styles.card}>
+          <h3 className={styles.cardTitle}>WhatsApp (Evolution API)</h3>
+          <label className={styles.checkboxRow}>
+            <input type="checkbox" checked={whatsappEnabled} onChange={(e) => setWhatsappEnabled(e.target.checked)} />
+            <span>Habilitar notificacoes via WhatsApp</span>
+          </label>
+          <label className={styles.field}>
+            <span>URL da Evolution API</span>
+            <input className={styles.input} type="text" value={waApiUrl} onChange={(e) => setWaApiUrl(e.target.value)} placeholder="http://localhost:8080" />
+          </label>
+          <label className={styles.field}>
+            <span>API Key (deixe vazio para manter a atual)</span>
+            <input className={styles.input} type="password" value={waApiKey} onChange={(e) => setWaApiKey(e.target.value)} />
+          </label>
+          <label className={styles.field}>
+            <span>Nome da instancia</span>
+            <input className={styles.input} type="text" value={waInstance} onChange={(e) => setWaInstance(e.target.value)} placeholder="dataguardian" />
+          </label>
+          <label className={styles.field}>
+            <span>Numeros de destino (com DDI, separados por virgula)</span>
+            <input className={styles.input} type="text" value={waRecipients} onChange={(e) => setWaRecipients(e.target.value)} placeholder="5511999999999,5511888888888" />
+          </label>
+          <label className={styles.checkboxRow}>
+            <input type="checkbox" checked={waImportantOnly} onChange={(e) => setWaImportantOnly(e.target.checked)} />
+            <span>Enviar somente notificacoes importantes (warning e critical)</span>
+          </label>
+        </section>
       </div>
     </div>
   );

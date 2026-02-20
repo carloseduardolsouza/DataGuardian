@@ -35,6 +35,7 @@ export function formatExecution(exec: {
 }) {
   const meta = getMetadataObject(exec.metadata);
   const operation = meta.operation === 'restore' ? 'restore' : 'backup';
+  const backupType = operation === 'restore' ? 'restore' : exec.backupType;
 
   return {
     id: exec.id,
@@ -42,7 +43,7 @@ export function formatExecution(exec: {
     datasource_id: exec.datasourceId,
     storage_location_id: exec.storageLocationId,
     status: exec.status,
-    backup_type: exec.backupType,
+    backup_type: backupType,
     started_at: exec.startedAt?.toISOString() ?? null,
     finished_at: exec.finishedAt?.toISOString() ?? null,
     duration_seconds: exec.durationSeconds,

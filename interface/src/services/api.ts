@@ -169,7 +169,7 @@ export interface ApiExecution {
   datasource_id: string;
   storage_location_id: string;
   status: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';
-  backup_type: 'full' | 'incremental' | 'differential';
+  backup_type: 'full' | 'incremental' | 'differential' | 'restore';
   started_at: string | null;
   finished_at: string | null;
   duration_seconds: number | null;
