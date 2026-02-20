@@ -10,7 +10,9 @@ import {
   browseStorageFiles,
   deleteStorageFilePath,
   copyStoragePath,
+  prepareStorageFileDownload,
 } from '../models/storage-location.model';
+import { promises as fs } from 'node:fs';
 import { getPaginationParams, buildPaginatedResponse } from '../../utils/config';
 
 export const StorageLocationController = {
@@ -110,6 +112,24 @@ export const StorageLocationController = {
         destination_path: destinationPath,
       });
       res.status(200).json(result);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async downloadFile(req: Request, res: Response, next: NextFunction) {
+    try {
+      const targetPath = typeof req.query.path === 'string' ? req.query.path : '';
+      const prepared = await prepareStorageFileDownload(String(req.params.id), targetPath);
+
+      const cleanup = async () => {
+        await fs.rm(prepared.cleanup_dir, { recursive: true, force: true }).catch(() => undefined);
+      };
+
+      res.on('finish', () => { void cleanup(); });
+      res.on('close', () => { void cleanup(); });
+
+      res.download(prepared.file_path, prepared.file_name);
     } catch (err) {
       next(err);
     }

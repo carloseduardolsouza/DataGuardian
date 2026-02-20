@@ -157,9 +157,10 @@ export interface ApiBackupJob {
   schedule_timezone: string;
   enabled: boolean;
   retention_policy: {
-    keep_daily: number;
-    keep_weekly: number;
-    keep_monthly: number;
+    max_backups?: number;
+    keep_daily?: number;
+    keep_weekly?: number;
+    keep_monthly?: number;
     auto_delete: boolean;
   };
   backup_options: {
@@ -557,6 +558,33 @@ export const storageApi = {
         destination_path: destinationPath,
       }),
     }),
+
+  downloadPath: async (id: string, path: string) => {
+    const url = `${BASE}/storage-locations/${id}/files/download?path=${encodeURIComponent(path)}`;
+    const res = await fetch(url, { credentials: 'include' });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ message: 'Falha ao baixar arquivo' }));
+      const message = err.message || `Erro HTTP ${res.status}`;
+      notifyError(message);
+      throw new Error(message);
+    }
+
+    const blob = await res.blob();
+    const contentDisposition = res.headers.get('content-disposition') ?? '';
+    const fallbackName = path.split('/').pop() || 'download.bin';
+    const match = contentDisposition.match(/filename\*?=(?:UTF-8''|")?([^\";]+)/i);
+    const fileName = match ? decodeURIComponent(match[1].replace(/"/g, '').trim()) : fallbackName;
+
+    const objectUrl = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = objectUrl;
+    anchor.download = fileName;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(objectUrl);
+  },
 };
 
 // ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ Health API ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬
@@ -640,9 +668,10 @@ export const backupJobsApi = {
     schedule_timezone: string;
     enabled: boolean;
     retention_policy: {
-      keep_daily: number;
-      keep_weekly: number;
-      keep_monthly: number;
+      max_backups?: number;
+      keep_daily?: number;
+      keep_weekly?: number;
+      keep_monthly?: number;
       auto_delete: boolean;
     };
     backup_options: {
@@ -672,9 +701,10 @@ export const backupJobsApi = {
     schedule_timezone?: string;
     enabled?: boolean;
     retention_policy?: {
-      keep_daily: number;
-      keep_weekly: number;
-      keep_monthly: number;
+      max_backups?: number;
+      keep_daily?: number;
+      keep_weekly?: number;
+      keep_monthly?: number;
       auto_delete: boolean;
     };
     backup_options?: {

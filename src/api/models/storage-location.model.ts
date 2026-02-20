@@ -1,6 +1,7 @@
 import { Prisma, StorageLocationType, StorageLocationStatus } from '@prisma/client';
 import { promises as fs } from 'node:fs';
 import * as path from 'node:path';
+import * as os from 'node:os';
 import * as net from 'node:net';
 import { prisma } from '../../lib/prisma';
 import { AppError } from '../middlewares/error-handler';
@@ -863,5 +864,55 @@ export async function copyStoragePath(id: string, params: { source_path: string;
   return {
     message: 'Copia concluida com sucesso',
     copied_paths: copied,
+  };
+}
+
+export async function prepareStorageFileDownload(id: string, rawPath: string) {
+  const storage = await prisma.storageLocation.findUniqueOrThrow({
+    where: { id },
+    select: { type: true, config: true },
+  });
+
+  const targetPath = normalizeStorageRelativePath(rawPath);
+  if (!targetPath) {
+    throw new AppError('INVALID_STORAGE_PATH', 422, 'Informe um caminho valido para download');
+  }
+
+  const adapter = createStorageAdapter(storage.type, storage.config);
+  const fileExists = await adapter.exists(targetPath);
+
+  if (!fileExists) {
+    const descendants = await adapter.list(targetPath);
+    const hasChildren = descendants
+      .map((item) => normalizeStorageRelativePath(item))
+      .some((item) => item.startsWith(`${targetPath}/`));
+
+    if (hasChildren) {
+      throw new AppError(
+        'STORAGE_FOLDER_DOWNLOAD_NOT_SUPPORTED',
+        422,
+        'Download de pasta ainda nao e suportado pelo explorer',
+      );
+    }
+
+    throw new AppError('STORAGE_PATH_NOT_FOUND', 404, `Arquivo nao encontrado: '${targetPath}'`);
+  }
+
+  const tempRoot = path.join(
+    config.workers.tempDirectory || os.tmpdir(),
+    'storage-download',
+    Date.now().toString(),
+    Math.random().toString(36).slice(2, 8),
+  );
+  await fs.mkdir(tempRoot, { recursive: true });
+
+  const fileName = path.posix.basename(targetPath);
+  const localFilePath = path.join(tempRoot, fileName);
+  await adapter.download(targetPath, localFilePath);
+
+  return {
+    file_path: localFilePath,
+    file_name: fileName,
+    cleanup_dir: tempRoot,
   };
 }

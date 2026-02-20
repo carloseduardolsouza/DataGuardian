@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+ï»¿import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ApiStorageBrowserEntry } from '../../services/api';
 import { storageApi } from '../../services/api';
-import { CopyIcon, TrashIcon } from '../../components/Icons';
+import { CopyIcon, ExportIcon, TrashIcon } from '../../components/Icons';
 import styles from './FileBrowser.module.css';
 
 interface Props {
@@ -125,7 +125,7 @@ export default function FileBrowser({ locationId, locationName }: Props) {
 
   const deletePaths = async (paths: string[]) => {
     if (paths.length === 0) return;
-    const confirmed = confirm(`Excluir ${paths.length} item(ns)? Esta ação não pode ser desfeita.`);
+    const confirmed = confirm(`Excluir ${paths.length} item(ns)? Esta aÃ§Ã£o nÃ£o pode ser desfeita.`);
     if (!confirmed) return;
 
     try {
@@ -147,6 +147,13 @@ export default function FileBrowser({ locationId, locationName }: Props) {
       setRefreshTick((v) => v + 1);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Falha ao copiar arquivo');
+    }
+  };
+  const downloadPath = async (targetPath: string) => {
+    try {
+      await storageApi.downloadPath(locationId, targetPath);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Falha ao baixar arquivo');
     }
   };
 
@@ -237,6 +244,9 @@ export default function FileBrowser({ locationId, locationName }: Props) {
                   <td className={styles.actionsCol}>
                     {entry.kind === 'file' && (
                       <>
+                        <button className={styles.downloadBtn} title="Baixar" onClick={() => void downloadPath(entry.path)}>
+                          <ExportIcon width={12} height={12} />
+                        </button>
                         <button className={styles.copyBtn} title="Copiar" onClick={() => void copyPath(entry.path)}>
                           <CopyIcon width={12} height={12} />
                         </button>
@@ -259,7 +269,7 @@ export default function FileBrowser({ locationId, locationName }: Props) {
       </div>
 
       <div className={styles.statusBar}>
-        <span>{sorted.filter((e) => e.kind === 'folder').length} pasta(s) · {sorted.filter((e) => e.kind === 'file').length} arquivo(s)</span>
+        <span>{sorted.filter((e) => e.kind === 'folder').length} pasta(s) Â· {sorted.filter((e) => e.kind === 'file').length} arquivo(s)</span>
       </div>
     </div>
   );
@@ -283,3 +293,6 @@ function RefreshIcon() {
 function FolderEmptyIcon() {
   return <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z" /></svg>;
 }
+
+
+

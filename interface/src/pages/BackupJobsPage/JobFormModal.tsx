@@ -23,9 +23,7 @@ interface JobPayload {
   schedule_timezone: string;
   enabled: boolean;
   retention_policy: {
-    keep_daily: number;
-    keep_weekly: number;
-    keep_monthly: number;
+    max_backups: number;
     auto_delete: boolean;
   };
   backup_options: {
@@ -144,9 +142,15 @@ export default function JobFormModal({
   const [daysOfWeek, setDaysOfWeek] = useState<number[]>(parsed.daysOfWeek);
   const [dayOfMonth, setDayOfMonth] = useState(parsed.dayOfMonth);
 
-  const [retDaily, setRetDaily] = useState(Number(job?.retention_policy?.keep_daily ?? 7));
-  const [retWeekly, setRetWeekly] = useState(Number(job?.retention_policy?.keep_weekly ?? 4));
-  const [retMonthly, setRetMonthly] = useState(Number(job?.retention_policy?.keep_monthly ?? 12));
+  const initialMaxBackups = Number(
+    job?.retention_policy?.max_backups
+      ?? (
+        Number(job?.retention_policy?.keep_daily ?? 7)
+        + Number(job?.retention_policy?.keep_weekly ?? 4)
+        + Number(job?.retention_policy?.keep_monthly ?? 12)
+      ),
+  );
+  const [maxBackups, setMaxBackups] = useState(Number.isFinite(initialMaxBackups) ? Math.max(1, initialMaxBackups) : 23);
   const [autoDelete, setAutoDelete] = useState(Boolean(job?.retention_policy?.auto_delete ?? true));
 
   const [compression, setCompression] = useState<'gzip' | 'zstd' | 'lz4' | 'none'>(
@@ -199,9 +203,7 @@ export default function JobFormModal({
       schedule_timezone: 'UTC',
       enabled,
       retention_policy: {
-        keep_daily: retDaily,
-        keep_weekly: retWeekly,
-        keep_monthly: retMonthly,
+        max_backups: maxBackups,
         auto_delete: autoDelete,
       },
       backup_options: {
@@ -459,10 +461,16 @@ export default function JobFormModal({
         </label>
 
         <div className={styles.retentionGrid}>
-          <RetentionField label="Backups diários" value={retDaily} onChange={setRetDaily} />
-          <RetentionField label="Backups semanais" value={retWeekly} onChange={setRetWeekly} />
-          <RetentionField label="Backups mensais" value={retMonthly} onChange={setRetMonthly} />
+          <RetentionField
+            label="Maximo de backups por banco"
+            value={maxBackups}
+            onChange={(value) => setMaxBackups(Math.max(1, value))}
+          />
         </div>
+
+        <p className={styles.sectionHint}>
+          Exemplo: limite 3. Quando o 4o backup concluir, o mais antigo sera removido.
+        </p>
 
         <div className={styles.field}>
           <label className={styles.label}>Compressão</label>
@@ -495,7 +503,7 @@ function RetentionField({ label, value, onChange }: { label: string; value: numb
     <div className={styles.retField}>
       <label className={styles.retLabel}>{label}</label>
       <div className={styles.retControl}>
-        <button className={styles.retBtn} onClick={() => onChange(Math.max(0, value - 1))} type="button">-</button>
+        <button className={styles.retBtn} onClick={() => onChange(Math.max(1, value - 1))} type="button">-</button>
         <span className={styles.retValue}>{value}</span>
         <button className={styles.retBtn} onClick={() => onChange(value + 1)} type="button">+</button>
       </div>

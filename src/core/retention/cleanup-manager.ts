@@ -3,7 +3,12 @@ import { prisma } from '../../lib/prisma';
 import { logger } from '../../utils/logger';
 
 function asNumber(value: unknown, fallback: number) {
-  return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string' && value.trim() !== '') {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return fallback;
 }
 
 function shouldAutoDelete(retentionPolicy: Prisma.JsonValue) {
@@ -13,21 +18,20 @@ function shouldAutoDelete(retentionPolicy: Prisma.JsonValue) {
 
 function computeKeepCount(retentionPolicy: Prisma.JsonValue) {
   const policy = retentionPolicy as Record<string, unknown>;
+  const maxBackups = asNumber(policy?.max_backups, -1);
+  if (maxBackups >= 0) {
+    return Math.max(0, Math.floor(maxBackups));
+  }
+
   const keepDaily = asNumber(policy?.keep_daily, 7);
   const keepWeekly = asNumber(policy?.keep_weekly, 4);
   const keepMonthly = asNumber(policy?.keep_monthly, 12);
   return Math.max(0, keepDaily + keepWeekly + keepMonthly);
 }
 
-export async function runCleanupCycle() {
-  const jobs = await prisma.backupJob.findMany({
-    select: {
-      id: true,
-      name: true,
-      retentionPolicy: true,
-    },
-  });
-
+async function cleanupForJobs(
+  jobs: Array<{ id: string; name: string; retentionPolicy: Prisma.JsonValue }>,
+) {
   let deletedExecutions = 0;
   let processedJobs = 0;
 
@@ -64,5 +68,37 @@ export async function runCleanupCycle() {
     processed_jobs: processedJobs,
     deleted_executions: deletedExecutions,
   };
+}
+
+export async function runCleanupCycle() {
+  const jobs = await prisma.backupJob.findMany({
+    select: {
+      id: true,
+      name: true,
+      retentionPolicy: true,
+    },
+  });
+
+  return cleanupForJobs(jobs);
+}
+
+export async function runCleanupForJob(jobId: string) {
+  const job = await prisma.backupJob.findUnique({
+    where: { id: jobId },
+    select: {
+      id: true,
+      name: true,
+      retentionPolicy: true,
+    },
+  });
+
+  if (!job) {
+    return {
+      processed_jobs: 0,
+      deleted_executions: 0,
+    };
+  }
+
+  return cleanupForJobs([job]);
 }
 

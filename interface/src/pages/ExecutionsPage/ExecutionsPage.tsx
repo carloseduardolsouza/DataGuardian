@@ -142,7 +142,7 @@ export default function ExecutionsPage() {
       setPagination(response.pagination);
       setSelected(new Set());
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erro ao carregar execuÃ§Ãµes');
+      setError(err instanceof Error ? err.message : 'Erro ao carregar execucoes');
     } finally {
       setLoading(false);
     }
@@ -276,9 +276,9 @@ export default function ExecutionsPage() {
     <div className={styles.page}>
       <div className={styles.pageHeader}>
         <div>
-          <h2 className={styles.pageTitle}>ExecuÃ§Ãµes</h2>
+          <h2 className={styles.pageTitle}>Execucoes</h2>
           <p className={styles.pageSub}>
-            {counts.all} execuÃ§Ãµes Â· {formatBytes(totalSize)} nesta pÃ¡gina
+            {counts.all} execucoes Â· {formatBytes(totalSize)} nesta pÃ¡gina
           </p>
         </div>
         {selected.size > 0 && (
@@ -358,7 +358,7 @@ export default function ExecutionsPage() {
 
       <div className={styles.tableWrap}>
         {loading ? (
-          <div className={styles.empty}><SpinnerIcon /><p>Carregando execuÃ§Ãµes...</p></div>
+          <div className={styles.empty}><SpinnerIcon /><p>Carregando execucoes...</p></div>
         ) : executions.length === 0 ? (
           <div className={styles.empty}>
             <EmptyExecIcon />
@@ -557,6 +557,7 @@ function ExecRow({
     </>
   );
 }
+
 
 
 

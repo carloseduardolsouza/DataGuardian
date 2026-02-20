@@ -11,6 +11,7 @@ import { AppError } from '../api/middlewares/error-handler';
 import { createNotification } from '../utils/notifications';
 import { markWorkerError, markWorkerRunning, markWorkerStopped } from './worker-registry';
 import { createStorageAdapter } from '../core/storage/storage-factory';
+import { runCleanupForJob } from '../core/retention/cleanup-manager';
 import { executeBackupDump } from '../core/backup/executor';
 import { compressBackupFile } from '../core/backup/compressor';
 import { createDeltaArtifact } from '../core/backup/delta';
@@ -654,6 +655,22 @@ async function processExecution(executionId: string) {
         data: { lastExecutionAt: finishedAt },
       }),
     ]);
+
+    try {
+      const cleanupResult = await runCleanupForJob(execution.jobId);
+      if (cleanupResult.deleted_executions > 0) {
+        pushLog(
+          'info',
+          `Retencao aplicada: ${cleanupResult.deleted_executions} backup(s) antigo(s) removido(s)`,
+          true,
+        );
+      }
+    } catch (cleanupErr) {
+      logger.error(
+        { err: cleanupErr, executionId, jobId: execution.jobId },
+        '[BACKUP] Falha ao aplicar retencao pos-execucao',
+      );
+    }
   } catch (err) {
     const durationSeconds = Math.max(1, Math.floor((Date.now() - startedAt) / 1000));
     const message = err instanceof Error ? err.message : String(err);
@@ -899,6 +916,15 @@ export async function retryExecutionUploadNow(executionId: string) {
         },
       }),
     ]);
+
+    try {
+      await runCleanupForJob(execution.jobId);
+    } catch (cleanupErr) {
+      logger.error(
+        { err: cleanupErr, executionId, jobId: execution.jobId },
+        '[BACKUP] Falha ao aplicar retencao apos retry-upload',
+      );
+    }
 
     shouldCleanupTempDir = true;
     return {

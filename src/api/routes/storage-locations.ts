@@ -71,3 +71,8 @@ storageLocationsRouter.post(
   validate(copyFileSchema),
   StorageLocationController.copyFile,
 );
+storageLocationsRouter.get(
+  "/:id/files/download",
+  validate(browseFilesQuerySchema, "query"),
+  StorageLocationController.downloadFile,
+);

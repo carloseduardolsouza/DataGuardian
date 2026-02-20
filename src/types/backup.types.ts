@@ -5,10 +5,23 @@ import { z } from 'zod';
 // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export const retentionPolicySchema = z.object({
-  keep_daily:   z.number().int().min(0),
-  keep_weekly:  z.number().int().min(0),
-  keep_monthly: z.number().int().min(0),
+  max_backups:  z.number().int().min(1).optional(),
+  keep_daily:   z.number().int().min(0).optional(),
+  keep_weekly:  z.number().int().min(0).optional(),
+  keep_monthly: z.number().int().min(0).optional(),
   auto_delete:  z.boolean(),
+}).superRefine((value, ctx) => {
+  const hasMaxBackups = typeof value.max_backups === 'number';
+  const hasLegacyRules = typeof value.keep_daily === 'number'
+    || typeof value.keep_weekly === 'number'
+    || typeof value.keep_monthly === 'number';
+
+  if (!hasMaxBackups && !hasLegacyRules) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'retention_policy requer max_backups ou campos legados keep_*',
+    });
+  }
 });
 
 export type RetentionPolicy = z.infer<typeof retentionPolicySchema>;

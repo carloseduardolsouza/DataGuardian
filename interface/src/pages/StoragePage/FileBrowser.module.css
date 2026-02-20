@@ -230,8 +230,31 @@
   margin-right: 4px;
 }
 
+.downloadBtn {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  color: var(--color-text-subtle);
+  transition: color var(--transition-fast), background var(--transition-fast), border-color var(--transition-fast);
+  opacity: 0;
+  margin-right: 4px;
+}
+
 .table tr:hover .deleteBtn,
-.table tr:hover .copyBtn { opacity: 1; }
+.table tr:hover .copyBtn,
+.table tr:hover .downloadBtn { opacity: 1; }
+
+.downloadBtn:hover {
+  color: var(--color-info);
+  background: var(--color-info-muted);
+  border-color: var(--color-info);
+}
 
 .copyBtn:hover {
   color: var(--color-primary);
