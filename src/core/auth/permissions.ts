@@ -18,6 +18,7 @@ export const PERMISSIONS = {
   NOTIFICATIONS_MANAGE: 'notifications.manage',
   SYSTEM_READ: 'system.read',
   SYSTEM_WRITE: 'system.write',
+  AUDIT_READ: 'audit.read',
   ACCESS_MANAGE: 'access.manage',
 } as const;
 
@@ -49,6 +50,7 @@ export const PERMISSION_SEEDS: PermissionSeed[] = [
   { key: PERMISSIONS.NOTIFICATIONS_MANAGE, label: 'Notificações - gestão', description: 'Marcar leitura, limpar e excluir notificações' },
   { key: PERMISSIONS.SYSTEM_READ, label: 'Sistema - leitura', description: 'Visualizar configurações do sistema' },
   { key: PERMISSIONS.SYSTEM_WRITE, label: 'Sistema - escrita', description: 'Alterar configurações de sistema/integracões' },
+  { key: PERMISSIONS.AUDIT_READ, label: 'Auditoria - leitura', description: 'Visualizar trilha de auditoria e mudanças' },
   { key: PERMISSIONS.ACCESS_MANAGE, label: 'Acesso - gestão', description: 'Gerenciar usuários, roles e permissões' },
 ];
 
@@ -90,6 +92,7 @@ export const DEFAULT_ROLE_SEEDS: Array<{
       PERMISSIONS.NOTIFICATIONS_READ,
       PERMISSIONS.NOTIFICATIONS_MANAGE,
       PERMISSIONS.SYSTEM_READ,
+      PERMISSIONS.AUDIT_READ,
     ],
   },
   {
@@ -106,6 +109,7 @@ export const DEFAULT_ROLE_SEEDS: Array<{
       PERMISSIONS.HEALTH_READ,
       PERMISSIONS.NOTIFICATIONS_READ,
       PERMISSIONS.SYSTEM_READ,
+      PERMISSIONS.AUDIT_READ,
     ],
   },
 ];

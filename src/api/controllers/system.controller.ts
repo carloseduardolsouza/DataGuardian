@@ -9,6 +9,7 @@ import {
   testSmtpConnection,
   getWhatsappEvolutionQrCode,
 } from '../models/system.model';
+import { createAuditLog, extractAuditContextFromRequest } from '../models/audit-log.model';
 
 export const SystemController = {
   async getSettings(_req: Request, res: Response, next: NextFunction) {
@@ -22,7 +23,18 @@ export const SystemController = {
 
   async updateSettings(req: Request, res: Response, next: NextFunction) {
     try {
+      const before = await getSystemSettings();
       const settings = await updateSystemSettings(req.body);
+      await createAuditLog({
+        ...extractAuditContextFromRequest(req, res.locals.authUser),
+        action: 'system.settings.update_many',
+        resource_type: 'system_setting',
+        changes: {
+          keys: Object.keys(req.body ?? {}),
+          before,
+          after: settings,
+        },
+      });
       res.json(settings);
     } catch (err) {
       next(err);
@@ -32,6 +44,13 @@ export const SystemController = {
   async createSetting(req: Request, res: Response, next: NextFunction) {
     try {
       const created = await createSystemSetting(req.body);
+      await createAuditLog({
+        ...extractAuditContextFromRequest(req, res.locals.authUser),
+        action: 'system.settings.create',
+        resource_type: 'system_setting',
+        resource_id: String(req.body?.key ?? ''),
+        changes: { created },
+      });
       res.status(201).json(created);
     } catch (err) {
       next(err);
@@ -49,7 +68,15 @@ export const SystemController = {
 
   async updateSettingByKey(req: Request, res: Response, next: NextFunction) {
     try {
+      const before = await getSystemSettingByKey(String(req.params.key));
       const updated = await updateSystemSettingByKey(String(req.params.key), req.body);
+      await createAuditLog({
+        ...extractAuditContextFromRequest(req, res.locals.authUser),
+        action: 'system.settings.update',
+        resource_type: 'system_setting',
+        resource_id: String(req.params.key),
+        changes: { before, after: updated },
+      });
       res.json(updated);
     } catch (err) {
       next(err);
@@ -58,7 +85,15 @@ export const SystemController = {
 
   async deleteSettingByKey(req: Request, res: Response, next: NextFunction) {
     try {
+      const before = await getSystemSettingByKey(String(req.params.key));
       await deleteSystemSettingByKey(String(req.params.key));
+      await createAuditLog({
+        ...extractAuditContextFromRequest(req, res.locals.authUser),
+        action: 'system.settings.delete',
+        resource_type: 'system_setting',
+        resource_id: String(req.params.key),
+        changes: { deleted: before },
+      });
       res.status(204).send();
     } catch (err) {
       next(err);

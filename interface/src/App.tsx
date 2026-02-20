@@ -20,6 +20,7 @@ const APP_PAGES: NavKey[] = [
   'executions',
   'health',
   'notifications',
+  'audit',
   'settings',
 ];
 
@@ -32,6 +33,7 @@ const PAGE_PERMISSIONS: Record<NavKey, string> = {
   executions: PERMISSIONS.EXECUTIONS_READ,
   health: PERMISSIONS.HEALTH_READ,
   notifications: PERMISSIONS.NOTIFICATIONS_READ,
+  audit: PERMISSIONS.AUDIT_READ,
   settings: PERMISSIONS.SYSTEM_READ,
 };
 

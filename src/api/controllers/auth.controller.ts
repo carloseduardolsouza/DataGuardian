@@ -10,6 +10,7 @@ import {
   loginWithPassword,
   setupInitialUser,
 } from '../../core/auth/auth.service';
+import { createAuditLog, extractAuditContextFromRequest } from '../models/audit-log.model';
 
 function cookieOptions() {
   return {
@@ -55,6 +56,13 @@ export const AuthController = {
     try {
       const { username, password } = req.body as { username: string; password: string };
       const session = await setupInitialUser({ username, password }, requestMeta(req));
+      await createAuditLog({
+        ...extractAuditContextFromRequest(req, session.user),
+        action: 'auth.setup',
+        resource_type: 'user',
+        resource_id: session.user.id,
+        changes: { created_username: session.user.username },
+      });
       res.cookie(AUTH_COOKIE_NAME, session.token, cookieOptions());
 
       res.status(201).json({
@@ -70,6 +78,12 @@ export const AuthController = {
     try {
       const { username, password } = req.body as { username: string; password: string };
       const session = await loginWithPassword({ username, password }, requestMeta(req));
+      await createAuditLog({
+        ...extractAuditContextFromRequest(req, session.user),
+        action: 'auth.login',
+        resource_type: 'user',
+        resource_id: session.user.id,
+      });
       res.cookie(AUTH_COOKIE_NAME, session.token, cookieOptions());
 
       res.json({
@@ -84,6 +98,12 @@ export const AuthController = {
   async logout(req: Request, res: Response, next: NextFunction) {
     try {
       const token = req.cookies?.[AUTH_COOKIE_NAME] as string | undefined;
+      await createAuditLog({
+        ...extractAuditContextFromRequest(req, res.locals.authUser),
+        action: 'auth.logout',
+        resource_type: 'user',
+        resource_id: String(res.locals.authUser?.id ?? ''),
+      });
       await clearAuthSession(token);
       res.clearCookie(AUTH_COOKIE_NAME, { path: '/' });
       res.json({ message: 'Logout efetuado com sucesso' });

@@ -249,6 +249,7 @@ model User {
 
   sessions AuthSession[]
   roles    UserRole[]
+  auditLogs AuditLog[]
 
   @@map("users")
 }
@@ -321,4 +322,26 @@ model AuthSession {
   @@index([userId])
   @@index([expiresAt])
   @@map("auth_sessions")
+}
+
+model AuditLog {
+  id            String   @id @default(uuid())
+  actorUserId   String?  @map("actor_user_id")
+  actorUsername String?  @map("actor_username") @db.VarChar(64)
+  action        String   @db.VarChar(160)
+  resourceType  String?  @map("resource_type") @db.VarChar(80)
+  resourceId    String?  @map("resource_id")
+  ip            String?  @db.VarChar(80)
+  userAgent     String?  @map("user_agent") @db.VarChar(255)
+  changes       Json?
+  metadata      Json?
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  actorUser User? @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt(sort: Desc)])
+  @@index([action])
+  @@index([resourceType, resourceId])
+  @@index([actorUserId])
+  @@map("audit_logs")
 }

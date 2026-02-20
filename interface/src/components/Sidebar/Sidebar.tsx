@@ -11,6 +11,7 @@ import {
   PlayIcon,
   HealthIcon,
   BellIcon,
+  LogIcon,
   SettingsIcon,
   LogoutIcon,
 } from '../Icons';
@@ -25,6 +26,7 @@ export type NavKey =
   | 'executions'
   | 'health'
   | 'notifications'
+  | 'audit'
   | 'settings';
 
 export const ROUTE_PATHS: Record<NavKey, string> = {
@@ -36,6 +38,7 @@ export const ROUTE_PATHS: Record<NavKey, string> = {
   executions: '/executions',
   health: '/health',
   notifications: '/notifications',
+  audit: '/audit',
   settings: '/settings',
 };
 
@@ -69,6 +72,7 @@ const mainNav: NavItem[] = [
 const systemNav: NavItem[] = [
   { key: 'health', label: 'Health', icon: <HealthIcon />, permission: PERMISSIONS.HEALTH_READ },
   { key: 'notifications', label: 'Notificacoes', icon: <BellIcon />, permission: PERMISSIONS.NOTIFICATIONS_READ },
+  { key: 'audit', label: 'Auditoria', icon: <LogIcon />, permission: PERMISSIONS.AUDIT_READ },
   { key: 'settings', label: 'Configuracoes', icon: <SettingsIcon />, permission: PERMISSIONS.SYSTEM_READ },
 ];
 

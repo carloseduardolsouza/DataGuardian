@@ -8,6 +8,7 @@ export const PERMISSIONS = {
   HEALTH_READ: 'health.read',
   NOTIFICATIONS_READ: 'notifications.read',
   SYSTEM_READ: 'system.read',
+  AUDIT_READ: 'audit.read',
   ACCESS_MANAGE: 'access.manage',
 } as const;
 

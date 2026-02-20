@@ -19,6 +19,7 @@ import ExecutionsPage from '../ExecutionsPage/ExecutionsPage';
 import HealthPage from '../HealthPage/HealthPage';
 import SettingsPage from '../SettingsPage/SettingsPage';
 import NotificationsPage from '../NotificationsPage/NotificationsPage';
+import AuditPage from '../AuditPage/AuditPage';
 import { dashboardApi, type ApiDashboardOverview } from '../../services/api';
 import styles from './DashboardPage.module.css';
 import { PERMISSIONS } from '../../constants/permissions';
@@ -46,6 +47,7 @@ const PAGE_TITLES: Record<NavKey, { title: string; sub: string }> = {
   executions: { title: 'Execucoes', sub: 'Historico de execucoes' },
   health: { title: 'Health', sub: 'Monitoramento de saude' },
   notifications: { title: 'Notificacoes', sub: 'Central de alertas' },
+  audit: { title: 'Auditoria', sub: 'Quem fez o que e quando' },
   settings: { title: 'Configuracoes', sub: 'Preferencias do sistema' },
 };
 
@@ -131,6 +133,7 @@ export default function DashboardPage({
             || activePage === 'backups'
             || activePage === 'executions'
             || activePage === 'notifications'
+            || activePage === 'audit'
               ? styles.contentFull
               : styles.content
           }
@@ -145,8 +148,9 @@ export default function DashboardPage({
           {activePage === 'notifications' && (
             <NotificationsPage />
           )}
+          {activePage === 'audit' && <AuditPage />}
           {activePage === 'settings' && <SettingsPage canManageAccess={permissions.includes(PERMISSIONS.ACCESS_MANAGE)} />}
-          {activePage !== 'dashboard' && activePage !== 'datasources' && activePage !== 'storage' && activePage !== 'backup-jobs' && activePage !== 'backups' && activePage !== 'executions' && activePage !== 'health' && activePage !== 'notifications' && activePage !== 'settings' && (
+          {activePage !== 'dashboard' && activePage !== 'datasources' && activePage !== 'storage' && activePage !== 'backup-jobs' && activePage !== 'backups' && activePage !== 'executions' && activePage !== 'health' && activePage !== 'notifications' && activePage !== 'audit' && activePage !== 'settings' && (
             <EmptyPage page={activePage} />
           )}
         </main>

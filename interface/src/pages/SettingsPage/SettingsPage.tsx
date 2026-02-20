@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+ï»¿import { useEffect, useMemo, useState } from 'react';
 import { accessApi, systemApi, type ApiAccessPermission, type ApiAccessRole, type ApiAccessUser } from '../../services/api';
 import { AlertTriangleIcon, CheckCircleIcon, SpinnerIcon } from '../../components/Icons';
 import Modal from '../../components/Modal/Modal';
@@ -110,6 +110,12 @@ export default function SettingsPage({ canManageAccess = false }: Props) {
   const [roleDrafts, setRoleDrafts] = useState<Record<string, string[]>>({});
   const [userRoleDrafts, setUserRoleDrafts] = useState<Record<string, string[]>>({});
   const [passwordDrafts, setPasswordDrafts] = useState<Record<string, string>>({});
+  const [showCreateRoleModal, setShowCreateRoleModal] = useState(false);
+  const [showCreateUserModal, setShowCreateUserModal] = useState(false);
+  const [editingRoleId, setEditingRoleId] = useState<string | null>(null);
+  const [editingUserId, setEditingUserId] = useState<string | null>(null);
+  const [passwordUserId, setPasswordUserId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ type: 'role' | 'user'; id: string; label: string } | null>(null);
 
   async function loadSettings() {
     try {
@@ -201,6 +207,21 @@ export default function SettingsPage({ canManageAccess = false }: Props) {
     );
   }, [waApiKey, waApiUrl, waHasApiKey, waInstance, waRecipients]);
 
+  const editingRole = useMemo(
+    () => roles.find((role) => role.id === editingRoleId) ?? null,
+    [roles, editingRoleId],
+  );
+
+  const editingUser = useMemo(
+    () => users.find((user) => user.id === editingUserId) ?? null,
+    [users, editingUserId],
+  );
+
+  const passwordUser = useMemo(
+    () => users.find((user) => user.id === passwordUserId) ?? null,
+    [users, passwordUserId],
+  );
+
   async function handleSave() {
     try {
       setSaving(true);
@@ -273,6 +294,7 @@ export default function SettingsPage({ canManageAccess = false }: Props) {
       setNewRoleName('');
       setNewRoleDescription('');
       setNewRolePermissionIds([]);
+      setShowCreateRoleModal(false);
       await loadAccess();
       setSuccess('Role criada com sucesso.');
     } catch (err) {
@@ -284,6 +306,7 @@ export default function SettingsPage({ canManageAccess = false }: Props) {
     try {
       const permissionIds = roleDrafts[roleId] ?? [];
       await accessApi.updateRole(roleId, { permission_ids: permissionIds });
+      setEditingRoleId(null);
       await loadAccess();
       setSuccess('Permissoes da role atualizadas.');
     } catch (err) {
@@ -294,6 +317,8 @@ export default function SettingsPage({ canManageAccess = false }: Props) {
   async function handleDeleteRole(roleId: string) {
     try {
       await accessApi.removeRole(roleId);
+      setDeleteTarget(null);
+      setEditingRoleId(null);
       await loadAccess();
       setSuccess('Role removida com sucesso.');
     } catch (err) {
@@ -313,6 +338,7 @@ export default function SettingsPage({ canManageAccess = false }: Props) {
         role_ids: newUser.role_ids,
       });
       setNewUser({ username: '', password: '', full_name: '', email: '', is_owner: false, role_ids: [] });
+      setShowCreateUserModal(false);
       await loadAccess();
       setSuccess('Usuario criado com sucesso.');
     } catch (err) {
@@ -327,6 +353,7 @@ export default function SettingsPage({ canManageAccess = false }: Props) {
         is_owner: user.is_owner,
         role_ids: userRoleDrafts[user.id] ?? roleIdsOf(user),
       });
+      setEditingUserId(null);
       await loadAccess();
       setSuccess(`Usuario ${user.username} atualizado.`);
     } catch (err) {
@@ -344,6 +371,7 @@ export default function SettingsPage({ canManageAccess = false }: Props) {
     try {
       await accessApi.updateUserPassword(userId, { password });
       setPasswordDrafts((current) => ({ ...current, [userId]: '' }));
+      setPasswordUserId(null);
       setSuccess('Senha atualizada com sucesso.');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Falha ao atualizar senha.');
@@ -353,6 +381,8 @@ export default function SettingsPage({ canManageAccess = false }: Props) {
   async function handleRemoveUser(userId: string) {
     try {
       await accessApi.removeUser(userId);
+      setDeleteTarget(null);
+      setEditingUserId(null);
       await loadAccess();
       setSuccess('Usuario removido com sucesso.');
     } catch (err) {
@@ -382,6 +412,18 @@ export default function SettingsPage({ canManageAccess = false }: Props) {
       else existing.add(roleId);
       return { ...current, [userId]: [...existing] };
     });
+  }
+
+  function openCreateRoleModal() {
+    setNewRoleName('');
+    setNewRoleDescription('');
+    setNewRolePermissionIds([]);
+    setShowCreateRoleModal(true);
+  }
+
+  function openCreateUserModal() {
+    setNewUser({ username: '', password: '', full_name: '', email: '', is_owner: false, role_ids: [] });
+    setShowCreateUserModal(true);
   }
 
   if (loading) {
@@ -513,169 +555,280 @@ export default function SettingsPage({ canManageAccess = false }: Props) {
           <section className={styles.card}>
             <div className={styles.cardHeader}>
               <h3 className={styles.cardTitle}>Controle de Acesso (RBAC)</h3>
-              <button className={styles.secondaryBtn} onClick={() => void loadAccess()} disabled={accessLoading}>
-                {accessLoading ? 'Atualizando...' : 'Atualizar'}
-              </button>
-            </div>
-            <p className={styles.subtitle}>Crie roles dinâmicas, defina permissões por role e atribua roles aos usuários.</p>
-          </section>
-
-          <section className={styles.card}>
-            <h3 className={styles.cardTitle}>Criar Role</h3>
-            <div className={styles.twoCols}>
-              <label className={styles.field}><span>Nome</span><input className={styles.input} value={newRoleName} onChange={(e) => setNewRoleName(e.target.value)} placeholder="devops" /></label>
-              <label className={styles.field}><span>Descricao</span><input className={styles.input} value={newRoleDescription} onChange={(e) => setNewRoleDescription(e.target.value)} placeholder="Acesso para equipe DevOps" /></label>
-            </div>
-            <div className={styles.checkboxGrid}>
-              {permissions.map((permission) => (
-                <label key={permission.id} className={styles.checkboxRow}>
-                  <input
-                    type="checkbox"
-                    checked={newRolePermissionIds.includes(permission.id)}
-                    onChange={() => toggleNewRolePermission(permission.id)}
-                  />
-                  <span>{permission.key}</span>
-                </label>
-              ))}
-            </div>
-            <button className={styles.primaryBtn} onClick={() => void handleCreateRole()} disabled={!newRoleName.trim()}>
-              Criar role
-            </button>
-          </section>
-
-          <section className={styles.card}>
-            <h3 className={styles.cardTitle}>Roles existentes</h3>
-            {roles.map((role) => (
-              <div key={role.id} className={styles.accessBlock}>
-                <div className={styles.accessRow}>
-                  <div>
-                    <strong>{role.name}</strong>
-                    <p className={styles.hint}>{role.description || 'Sem descricao'} · {role.users_count} usuario(s)</p>
-                  </div>
-                  {!role.is_system && (
-                    <button className={styles.dangerBtn} onClick={() => void handleDeleteRole(role.id)}>
-                      Remover
-                    </button>
-                  )}
-                </div>
-                <div className={styles.checkboxGrid}>
-                  {permissions.map((permission) => (
-                    <label key={`${role.id}-${permission.id}`} className={styles.checkboxRow}>
-                      <input
-                        type="checkbox"
-                        checked={(roleDrafts[role.id] ?? []).includes(permission.id)}
-                        onChange={() => toggleRolePermission(role.id, permission.id)}
-                      />
-                      <span>{permission.key}</span>
-                    </label>
-                  ))}
-                </div>
-                <button className={styles.secondaryBtn} onClick={() => void handleUpdateRolePermissions(role.id)}>
-                  Salvar permissoes
+              <div className={styles.actionsRow}>
+                <button className={styles.secondaryBtn} onClick={() => void loadAccess()} disabled={accessLoading}>
+                  {accessLoading ? 'Atualizando...' : 'Atualizar'}
                 </button>
+                <button className={styles.primaryBtn} onClick={openCreateUserModal}>Novo usuario</button>
+                <button className={styles.primaryBtn} onClick={openCreateRoleModal}>Nova role</button>
               </div>
-            ))}
+            </div>
+            <div className={styles.helpGrid}>
+              <div className={styles.helpItem}>
+                <p className={styles.helpTitle}>Usuario</p>
+                <p className={styles.hint}>Pessoa/equipe que faz login no sistema.</p>
+              </div>
+              <div className={styles.helpItem}>
+                <p className={styles.helpTitle}>Role</p>
+                <p className={styles.hint}>Conjunto de permissoes que voce atribui a um usuario.</p>
+              </div>
+              <div className={styles.helpItem}>
+                <p className={styles.helpTitle}>Permissao</p>
+                <p className={styles.hint}>Regra de acesso para tela ou acao especifica.</p>
+              </div>
+            </div>
           </section>
 
-          <section className={styles.card}>
-            <h3 className={styles.cardTitle}>Criar Usuario</h3>
-            <div className={styles.twoCols}>
-              <label className={styles.field}><span>Username</span><input className={styles.input} value={newUser.username} onChange={(e) => setNewUser((c) => ({ ...c, username: e.target.value }))} /></label>
-              <label className={styles.field}><span>Senha</span><input className={styles.input} type="password" value={newUser.password} onChange={(e) => setNewUser((c) => ({ ...c, password: e.target.value }))} /></label>
-              <label className={styles.field}><span>Nome completo</span><input className={styles.input} value={newUser.full_name} onChange={(e) => setNewUser((c) => ({ ...c, full_name: e.target.value }))} /></label>
-              <label className={styles.field}><span>E-mail</span><input className={styles.input} value={newUser.email} onChange={(e) => setNewUser((c) => ({ ...c, email: e.target.value }))} /></label>
-            </div>
-            <label className={styles.checkboxRow}>
-              <input type="checkbox" checked={newUser.is_owner} onChange={(e) => setNewUser((c) => ({ ...c, is_owner: e.target.checked }))} />
-              <span>Marcar como owner</span>
-            </label>
-            <div className={styles.checkboxGrid}>
+          <div className={styles.accessSplit}>
+            <section className={styles.card}>
+              <h3 className={styles.cardTitle}>Roles existentes</h3>
               {roles.map((role) => (
-                <label key={`new-${role.id}`} className={styles.checkboxRow}>
-                  <input
-                    type="checkbox"
-                    checked={newUser.role_ids.includes(role.id)}
-                    onChange={() => setNewUser((c) => ({
-                      ...c,
-                      role_ids: c.role_ids.includes(role.id)
-                        ? c.role_ids.filter((id) => id !== role.id)
-                        : [...c.role_ids, role.id],
-                    }))}
-                  />
-                  <span>{role.name}</span>
-                </label>
-              ))}
-            </div>
-            <button className={styles.primaryBtn} onClick={() => void handleCreateUser()} disabled={!newUser.username.trim() || newUser.password.length < 8}>
-              Criar usuario
-            </button>
-          </section>
-
-          <section className={styles.card}>
-            <h3 className={styles.cardTitle}>Usuarios existentes</h3>
-            {users.map((user) => (
-              <div key={user.id} className={styles.accessBlock}>
-                <div className={styles.accessRow}>
-                  <div>
-                    <strong>{user.username}</strong>
-                    <p className={styles.hint}>Ultimo login: {formatWhen(user.last_login_at)}</p>
+                <div key={role.id} className={styles.accessBlock}>
+                  <div className={styles.accessRow}>
+                    <div>
+                      <strong className={styles.helpTitle}>{role.name}</strong>
+                      <p className={styles.hint} >{role.description || 'Sem descricao'} Â· {role.users_count} usuario(s)</p>
+                    </div>
+                    <div className={styles.actionsRow}>
+                      <button className={styles.secondaryBtn} onClick={() => setEditingRoleId(role.id)}>Editar</button>
+                      {!role.is_system && (
+                        <button className={styles.dangerBtn} onClick={() => setDeleteTarget({ type: 'role', id: role.id, label: role.name })}>
+                          Remover
+                        </button>
+                      )}
+                    </div>
                   </div>
-                  <button className={styles.dangerBtn} onClick={() => void handleRemoveUser(user.id)}>
-                    Remover
-                  </button>
                 </div>
+              ))}
+            </section>
 
-                <div className={styles.toggleRow}>
-                  <label className={styles.checkboxRow}>
-                    <input
-                      type="checkbox"
-                      checked={user.is_active}
-                      onChange={(e) => setUsers((curr) => curr.map((item) => item.id === user.id ? { ...item, is_active: e.target.checked } : item))}
-                    />
-                    <span>Ativo</span>
-                  </label>
-                  <label className={styles.checkboxRow}>
-                    <input
-                      type="checkbox"
-                      checked={user.is_owner}
-                      onChange={(e) => setUsers((curr) => curr.map((item) => item.id === user.id ? { ...item, is_owner: e.target.checked } : item))}
-                    />
-                    <span>Owner</span>
-                  </label>
+            <section className={styles.card}>
+              <h3 className={styles.cardTitle}>Usuarios existentes</h3>
+              {users.map((user) => (
+                <div key={user.id} className={styles.accessBlock}>
+                  <div className={styles.accessRow}>
+                    <div>
+                      <strong className={styles.helpTitle}>{user.username}</strong>
+                      <p className={styles.hint}>Ultimo login: {formatWhen(user.last_login_at)}</p>
+                    </div>
+                    <div className={styles.actionsRow}>
+                      <button className={styles.secondaryBtn} onClick={() => setEditingUserId(user.id)}>Editar</button>
+                      <button className={styles.secondaryBtn} onClick={() => setPasswordUserId(user.id)}>Senha</button>
+                      <button className={styles.dangerBtn} onClick={() => setDeleteTarget({ type: 'user', id: user.id, label: user.username })}>
+                        Remover
+                      </button>
+                    </div>
+                  </div>
                 </div>
-
-                <div className={styles.checkboxGrid}>
-                  {roles.map((role) => (
-                    <label key={`${user.id}-${role.id}`} className={styles.checkboxRow}>
-                      <input
-                        type="checkbox"
-                        checked={(userRoleDrafts[user.id] ?? roleIdsOf(user)).includes(role.id)}
-                        onChange={() => toggleUserRoleDraft(user.id, role.id)}
-                      />
-                      <span>{role.name}</span>
-                    </label>
-                  ))}
-                </div>
-
-                <div className={styles.actionsRow}>
-                  <input
-                    className={styles.input}
-                    type="password"
-                    placeholder="Nova senha"
-                    value={passwordDrafts[user.id] ?? ''}
-                    onChange={(e) => setPasswordDrafts((curr) => ({ ...curr, [user.id]: e.target.value }))}
-                  />
-                  <button className={styles.secondaryBtn} onClick={() => void handleResetPassword(user.id)}>
-                    Atualizar senha
-                  </button>
-                  <button className={styles.primaryBtn} onClick={() => void handleUpdateUser(user)}>
-                    Salvar usuario
-                  </button>
-                </div>
-              </div>
-            ))}
-          </section>
+              ))}
+            </section>
+          </div>
         </div>
+      )}
+
+      {showCreateRoleModal && (
+        <Modal
+          title="Nova role"
+          subtitle="Defina o nome e as permissoes desta role."
+          onClose={() => setShowCreateRoleModal(false)}
+          size="lg"
+          footer={(
+            <>
+              <button className={styles.secondaryBtn} onClick={() => setShowCreateRoleModal(false)}>Cancelar</button>
+              <button className={styles.primaryBtn} onClick={() => void handleCreateRole()} disabled={!newRoleName.trim()}>
+                Criar role
+              </button>
+            </>
+          )}
+        >
+          <div className={styles.twoCols}>
+            <label className={styles.field}><span>Nome</span><input className={styles.input} value={newRoleName} onChange={(e) => setNewRoleName(e.target.value)} placeholder="devops" /></label>
+            <label className={styles.field}><span>Descricao</span><input className={styles.input} value={newRoleDescription} onChange={(e) => setNewRoleDescription(e.target.value)} placeholder="Acesso para equipe DevOps" /></label>
+          </div>
+          <p className={styles.hint}>Permissoes da role:</p>
+          <div className={styles.checkboxGrid}>
+            {permissions.map((permission) => (
+              <label key={permission.id} className={styles.checkboxRow}>
+                <input
+                  type="checkbox"
+                  checked={newRolePermissionIds.includes(permission.id)}
+                  onChange={() => toggleNewRolePermission(permission.id)}
+                />
+                <span>{permission.key}</span>
+              </label>
+            ))}
+          </div>
+        </Modal>
+      )}
+
+      {editingRole && (
+        <Modal
+          title={`Editar role: ${editingRole.name}`}
+          subtitle="Atualize permissoes e salve."
+          onClose={() => setEditingRoleId(null)}
+          size="lg"
+          footer={(
+            <>
+              <button className={styles.secondaryBtn} onClick={() => setEditingRoleId(null)}>Cancelar</button>
+              <button className={styles.primaryBtn} onClick={() => void handleUpdateRolePermissions(editingRole.id)}>
+                Salvar permissoes
+              </button>
+            </>
+          )}
+        >
+          <div className={styles.checkboxGrid}>
+            {permissions.map((permission) => (
+              <label key={`${editingRole.id}-${permission.id}`} className={styles.checkboxRow}>
+                <input
+                  type="checkbox"
+                  checked={(roleDrafts[editingRole.id] ?? []).includes(permission.id)}
+                  onChange={() => toggleRolePermission(editingRole.id, permission.id)}
+                />
+                <span>{permission.key}</span>
+              </label>
+            ))}
+          </div>
+        </Modal>
+      )}
+
+      {showCreateUserModal && (
+        <Modal
+          title="Novo usuario"
+          subtitle="Crie usuario e defina suas roles."
+          onClose={() => setShowCreateUserModal(false)}
+          size="lg"
+          footer={(
+            <>
+              <button className={styles.secondaryBtn} onClick={() => setShowCreateUserModal(false)}>Cancelar</button>
+              <button className={styles.primaryBtn} onClick={() => void handleCreateUser()} disabled={!newUser.username.trim() || newUser.password.length < 8}>
+                Criar usuario
+              </button>
+            </>
+          )}
+        >
+          <div className={styles.twoCols}>
+            <label className={styles.field}><span>Username</span><input className={styles.input} value={newUser.username} onChange={(e) => setNewUser((c) => ({ ...c, username: e.target.value }))} /></label>
+            <label className={styles.field}><span>Senha</span><input className={styles.input} type="password" value={newUser.password} onChange={(e) => setNewUser((c) => ({ ...c, password: e.target.value }))} /></label>
+            <label className={styles.field}><span>Nome completo</span><input className={styles.input} value={newUser.full_name} onChange={(e) => setNewUser((c) => ({ ...c, full_name: e.target.value }))} /></label>
+            <label className={styles.field}><span>E-mail</span><input className={styles.input} value={newUser.email} onChange={(e) => setNewUser((c) => ({ ...c, email: e.target.value }))} /></label>
+          </div>
+          <label className={styles.checkboxRow}>
+            <input type="checkbox" checked={newUser.is_owner} onChange={(e) => setNewUser((c) => ({ ...c, is_owner: e.target.checked }))} />
+            <span>Marcar como owner</span>
+          </label>
+          <div className={styles.checkboxGrid}>
+            {roles.map((role) => (
+              <label key={`new-${role.id}`} className={styles.checkboxRow}>
+                <input
+                  type="checkbox"
+                  checked={newUser.role_ids.includes(role.id)}
+                  onChange={() => setNewUser((c) => ({
+                    ...c,
+                    role_ids: c.role_ids.includes(role.id)
+                      ? c.role_ids.filter((id) => id !== role.id)
+                      : [...c.role_ids, role.id],
+                  }))}
+                />
+                <span>{role.name}</span>
+              </label>
+            ))}
+          </div>
+        </Modal>
+      )}
+
+      {editingUser && (
+        <Modal
+          title={`Editar usuario: ${editingUser.username}`}
+          subtitle="Atualize status e roles deste usuario."
+          onClose={() => setEditingUserId(null)}
+          size="lg"
+          footer={(
+            <>
+              <button className={styles.secondaryBtn} onClick={() => setEditingUserId(null)}>Cancelar</button>
+              <button className={styles.primaryBtn} onClick={() => void handleUpdateUser(editingUser)}>
+                Salvar usuario
+              </button>
+            </>
+          )}
+        >
+          <div className={styles.toggleRow}>
+            <label className={styles.checkboxRow}>
+              <input
+                type="checkbox"
+                checked={editingUser.is_active}
+                onChange={(e) => setUsers((curr) => curr.map((item) => item.id === editingUser.id ? { ...item, is_active: e.target.checked } : item))}
+              />
+              <span>Ativo</span>
+            </label>
+            <label className={styles.checkboxRow}>
+              <input
+                type="checkbox"
+                checked={editingUser.is_owner}
+                onChange={(e) => setUsers((curr) => curr.map((item) => item.id === editingUser.id ? { ...item, is_owner: e.target.checked } : item))}
+              />
+              <span>Owner</span>
+            </label>
+          </div>
+          <div className={styles.checkboxGrid}>
+            {roles.map((role) => (
+              <label key={`${editingUser.id}-${role.id}`} className={styles.checkboxRow}>
+                <input
+                  type="checkbox"
+                  checked={(userRoleDrafts[editingUser.id] ?? roleIdsOf(editingUser)).includes(role.id)}
+                  onChange={() => toggleUserRoleDraft(editingUser.id, role.id)}
+                />
+                <span>{role.name}</span>
+              </label>
+            ))}
+          </div>
+        </Modal>
+      )}
+
+      {passwordUser && (
+        <Modal
+          title={`Redefinir senha: ${passwordUser.username}`}
+          subtitle="A nova senha deve ter no minimo 8 caracteres."
+          onClose={() => setPasswordUserId(null)}
+          size="sm"
+          footer={(
+            <>
+              <button className={styles.secondaryBtn} onClick={() => setPasswordUserId(null)}>Cancelar</button>
+              <button className={styles.primaryBtn} onClick={() => void handleResetPassword(passwordUser.id)}>
+                Atualizar senha
+              </button>
+            </>
+          )}
+        >
+          <input
+            className={styles.input}
+            type="password"
+            placeholder="Nova senha"
+            value={passwordDrafts[passwordUser.id] ?? ''}
+            onChange={(e) => setPasswordDrafts((curr) => ({ ...curr, [passwordUser.id]: e.target.value }))}
+          />
+        </Modal>
+      )}
+
+      {deleteTarget && (
+        <Modal
+          title="Confirmar exclusao"
+          subtitle={`Deseja remover ${deleteTarget.type === 'user' ? 'o usuario' : 'a role'} '${deleteTarget.label}'?`}
+          onClose={() => setDeleteTarget(null)}
+          size="sm"
+          footer={(
+            <>
+              <button className={styles.secondaryBtn} onClick={() => setDeleteTarget(null)}>Cancelar</button>
+              <button
+                className={styles.dangerBtn}
+                onClick={() => void (deleteTarget.type === 'user' ? handleRemoveUser(deleteTarget.id) : handleDeleteRole(deleteTarget.id))}
+              >
+                Confirmar exclusao
+              </button>
+            </>
+          )}
+        >
+          <p className={styles.infoLine}>Essa acao nao pode ser desfeita.</p>
+        </Modal>
       )}
 
       {qrCode && (

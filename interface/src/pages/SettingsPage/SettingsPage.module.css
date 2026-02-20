@@ -235,9 +235,41 @@
   gap: var(--space-3);
 }
 
+.accessSplit {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-3);
+}
+
+.helpGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.helpItem {
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  background: var(--color-surface-elevated);
+}
+
+.helpTitle {
+  margin: 0 0 var(--space-1);
+  color: var(--color-text);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semi);
+}
+
 .checkboxGrid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.entityList {
+  display: flex;
+  flex-direction: column;
   gap: var(--space-2);
 }
 
@@ -256,6 +288,12 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: var(--space-2);
+}
+
+.modalForm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
 }
 
 .toggleRow {
@@ -285,6 +323,10 @@
 }
 
 @media (max-width: 1280px) {
+  .accessSplit {
+    grid-template-columns: 1fr;
+  }
+
   .checkboxGrid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -292,6 +334,10 @@
 
 @media (max-width: 720px) {
   .checkboxGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .helpGrid {
     grid-template-columns: 1fr;
   }
 }
