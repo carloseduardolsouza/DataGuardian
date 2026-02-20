@@ -25,6 +25,30 @@ interface Props {
   canManageAccess?: boolean;
 }
 
+const FRIENDLY_PERMISSION: Record<string, { label: string; description: string }> = {
+  'access.manage': { label: 'Gerenciar usuarios e permissoes', description: 'Gerenciar usuarios, roles e permissoes de acesso' },
+  'audit.read': { label: 'Ver auditoria', description: 'Consultar quem fez o que, quando e de qual IP' },
+  'backup_jobs.read': { label: 'Ver jobs de backup', description: 'Listar e visualizar jobs de backup' },
+  'backup_jobs.run': { label: 'Executar backup manual', description: 'Iniciar backup imediatamente pelo botao executar' },
+  'backup_jobs.write': { label: 'Gerenciar jobs de backup', description: 'Criar, editar e remover jobs de backup' },
+  'backups.read': { label: 'Ver backups', description: 'Listar backups existentes e seus detalhes' },
+  'backups.restore': { label: 'Restaurar backups', description: 'Executar restore de backups para uma datasource' },
+  'dashboard.read': { label: 'Ver dashboard', description: 'Acessar indicadores e resumo geral da plataforma' },
+  'datasources.query': { label: 'Executar SQL', description: 'Executar consultas SQL e operacoes de schema' },
+  'datasources.read': { label: 'Ver bancos de dados', description: 'Listar e visualizar datasources cadastrados' },
+  'datasources.write': { label: 'Gerenciar bancos de dados', description: 'Criar, editar e remover datasources' },
+  'executions.control': { label: 'Controlar execucoes', description: 'Cancelar, remover e reprocessar execucoes' },
+  'executions.read': { label: 'Ver execucoes', description: 'Visualizar historico e logs de execucao' },
+  'health.read': { label: 'Ver saude do sistema', description: 'Visualizar status de saude de banco, storage e workers' },
+  'notifications.manage': { label: 'Gerenciar notificacoes', description: 'Marcar como lida, limpar e excluir notificacoes' },
+  'notifications.read': { label: 'Ver notificacoes', description: 'Visualizar notificacoes do sistema' },
+  'storage.download': { label: 'Baixar arquivos do storage', description: 'Permitir download de arquivos nos storages' },
+  'storage.read': { label: 'Ver storages', description: 'Listar storages e navegar na estrutura de arquivos' },
+  'storage.write': { label: 'Gerenciar storages', description: 'Criar, editar e remover storages e arquivos' },
+  'system.read': { label: 'Ver configuracoes do sistema', description: 'Visualizar parametros e integracoes' },
+  'system.write': { label: 'Editar configuracoes do sistema', description: 'Alterar parametros e integracoes do sistema' },
+};
+
 function asString(value: unknown, fallback = '') {
   return typeof value === 'string' ? value : fallback;
 }
@@ -57,6 +81,14 @@ function roleIdsOf(user: ApiAccessUser) {
 function formatWhen(value: string | null) {
   if (!value) return 'Nunca';
   return new Date(value).toLocaleString('pt-BR');
+}
+
+function getPermissionDisplay(permission: ApiAccessPermission) {
+  const friendly = FRIENDLY_PERMISSION[permission.key];
+  return {
+    label: friendly?.label || permission.label || permission.key,
+    description: friendly?.description || permission.description || 'Sem descricao',
+  };
 }
 
 export default function SettingsPage({ canManageAccess = false }: Props) {
@@ -647,16 +679,23 @@ export default function SettingsPage({ canManageAccess = false }: Props) {
           </div>
           <p className={styles.hint}>Permissoes da role:</p>
           <div className={styles.checkboxGrid}>
-            {permissions.map((permission) => (
-              <label key={permission.id} className={styles.checkboxRow}>
-                <input
-                  type="checkbox"
-                  checked={newRolePermissionIds.includes(permission.id)}
-                  onChange={() => toggleNewRolePermission(permission.id)}
-                />
-                <span>{permission.key}</span>
-              </label>
-            ))}
+            {permissions.map((permission) => {
+              const display = getPermissionDisplay(permission);
+              return (
+                <label key={permission.id} className={styles.checkboxRow}>
+                  <input
+                    type="checkbox"
+                    checked={newRolePermissionIds.includes(permission.id)}
+                    onChange={() => toggleNewRolePermission(permission.id)}
+                  />
+                  <span className={styles.permissionText}>
+                    <strong className={styles.permissionTitle}>{display.label}</strong>
+                    <small className={styles.permissionDescription}>{display.description}</small>
+                    <code className={styles.permissionKey}>{permission.key}</code>
+                  </span>
+                </label>
+              );
+            })}
           </div>
         </Modal>
       )}
@@ -677,16 +716,23 @@ export default function SettingsPage({ canManageAccess = false }: Props) {
           )}
         >
           <div className={styles.checkboxGrid}>
-            {permissions.map((permission) => (
-              <label key={`${editingRole.id}-${permission.id}`} className={styles.checkboxRow}>
-                <input
-                  type="checkbox"
-                  checked={(roleDrafts[editingRole.id] ?? []).includes(permission.id)}
-                  onChange={() => toggleRolePermission(editingRole.id, permission.id)}
-                />
-                <span>{permission.key}</span>
-              </label>
-            ))}
+            {permissions.map((permission) => {
+              const display = getPermissionDisplay(permission);
+              return (
+                <label key={`${editingRole.id}-${permission.id}`} className={styles.checkboxRow}>
+                  <input
+                    type="checkbox"
+                    checked={(roleDrafts[editingRole.id] ?? []).includes(permission.id)}
+                    onChange={() => toggleRolePermission(editingRole.id, permission.id)}
+                  />
+                  <span className={styles.permissionText}>
+                    <strong className={styles.permissionTitle}>{display.label}</strong>
+                    <small className={styles.permissionDescription}>{display.description}</small>
+                    <code className={styles.permissionKey}>{permission.key}</code>
+                  </span>
+                </label>
+              );
+            })}
           </div>
         </Modal>
       )}
