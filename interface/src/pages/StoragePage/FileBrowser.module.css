@@ -150,7 +150,7 @@
 .checkCol { width: 36px; }
 .nameCol  { cursor: pointer; user-select: none; }
 .sortable { cursor: pointer; user-select: none; }
-.actionsCol { width: 48px; text-align: center; }
+.actionsCol { width: 88px; text-align: center; }
 
 .muted { color: var(--color-text-muted); }
 
@@ -214,7 +214,30 @@
   opacity: 0;
 }
 
-.table tr:hover .deleteBtn { opacity: 1; }
+.copyBtn {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  color: var(--color-text-subtle);
+  transition: color var(--transition-fast), background var(--transition-fast), border-color var(--transition-fast);
+  opacity: 0;
+  margin-right: 4px;
+}
+
+.table tr:hover .deleteBtn,
+.table tr:hover .copyBtn { opacity: 1; }
+
+.copyBtn:hover {
+  color: var(--color-primary);
+  background: var(--color-primary-muted);
+  border-color: var(--color-primary);
+}
 
 .deleteBtn:hover {
   color: var(--color-danger);

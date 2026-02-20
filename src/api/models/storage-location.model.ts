@@ -6,6 +6,7 @@ import { prisma } from '../../lib/prisma';
 import { AppError } from '../middlewares/error-handler';
 import { createStorageAdapter } from '../../core/storage/storage-factory';
 import { normalizeLocalStoragePath } from '../../utils/runtime';
+import { config } from '../../utils/config';
 import {
   SENSITIVE_STORAGE_FIELDS,
   StorageTypeValue,
@@ -67,6 +68,14 @@ export interface UpdateStorageLocationData {
   name?: string;
   config?: Record<string, unknown>;
   is_default?: boolean;
+}
+
+export interface StorageBrowserEntry {
+  name: string;
+  path: string;
+  kind: 'file' | 'folder';
+  size_bytes: number | null;
+  modified_at: string | null;
 }
 
 type JsonMap = Record<string, unknown>;
@@ -449,6 +458,47 @@ function deriveStorageStatus(testResult: ConnectionTestResult): StorageLocationS
   return 'healthy';
 }
 
+function normalizeStorageRelativePath(input: string) {
+  const raw = (input ?? '').trim().replace(/\\/g, '/');
+  if (!raw) return '';
+
+  const segments = raw.split('/').filter(Boolean);
+  for (const segment of segments) {
+    if (segment === '.' || segment === '..') {
+      throw new AppError(
+        'INVALID_STORAGE_PATH',
+        422,
+        `Caminho invalido: '${input}'`,
+      );
+    }
+  }
+
+  return segments.join('/');
+}
+
+function getStorageRootLabel(type: StorageLocationType, cfg: JsonMap) {
+  if (type === 'local') return String(cfg.path ?? '/');
+  if (type === 'ssh') return String(cfg.remote_path ?? '/');
+  if (type === 's3') return `s3://${String(cfg.bucket ?? '')}`;
+  if (type === 'minio') return `minio://${String(cfg.bucket ?? '')}`;
+  if (type === 'backblaze') return `b2://${String(cfg.bucket_name ?? '')}`;
+  return '/';
+}
+
+function getParentPath(currentPath: string) {
+  if (!currentPath) return null;
+  const idx = currentPath.lastIndexOf('/');
+  return idx >= 0 ? currentPath.slice(0, idx) : '';
+}
+
+function withPosixJoin(...parts: string[]) {
+  return parts
+    .filter(Boolean)
+    .map((part) => part.replace(/\\/g, '/').replace(/^\/+|\/+$/g, ''))
+    .filter(Boolean)
+    .join('/');
+}
+
 // Model functions
 
 export async function listStorageLocations(
@@ -629,4 +679,189 @@ export async function testStorageConfig(type: StorageLocationType, config: Recor
   } catch (err) {
     throw mapStorageRuntimeError(err, type, 'test');
   }
+}
+
+export async function browseStorageFiles(id: string, rawPath?: string) {
+  const storage = await prisma.storageLocation.findUniqueOrThrow({
+    where: { id },
+    select: { id: true, type: true, config: true },
+  });
+
+  const cfg = normalizeConfig(storage.config);
+  const adapter = createStorageAdapter(storage.type, cfg);
+  const currentPath = normalizeStorageRelativePath(rawPath ?? '');
+  const listed = await adapter.list(currentPath);
+
+  const folders = new Map<string, StorageBrowserEntry>();
+  const files: StorageBrowserEntry[] = [];
+
+  for (const item of listed) {
+    const normalized = normalizeStorageRelativePath(item);
+    if (!normalized) continue;
+
+    if (currentPath && normalized !== currentPath && !normalized.startsWith(`${currentPath}/`)) {
+      continue;
+    }
+
+    const remainder = currentPath
+      ? normalized.slice(currentPath.length).replace(/^\/+/, '')
+      : normalized;
+    if (!remainder) continue;
+
+    const [first, ...rest] = remainder.split('/');
+    const childPath = withPosixJoin(currentPath, first);
+
+    if (rest.length > 0) {
+      if (!folders.has(childPath)) {
+        folders.set(childPath, {
+          name: first,
+          path: childPath,
+          kind: 'folder',
+          size_bytes: null,
+          modified_at: null,
+        });
+      }
+      continue;
+    }
+
+    let sizeBytes: number | null = null;
+    let modifiedAt: string | null = null;
+    if (storage.type === 'local') {
+      try {
+        const root = normalizeLocalStoragePath(String(cfg.path ?? ''));
+        const fullPath = path.join(root, ...childPath.split('/'));
+        const stat = await fs.stat(fullPath);
+        sizeBytes = stat.isFile() ? stat.size : null;
+        modifiedAt = stat.mtime.toISOString();
+      } catch {
+        // ignore metadata errors
+      }
+    }
+
+    files.push({
+      name: first,
+      path: childPath,
+      kind: 'file',
+      size_bytes: sizeBytes,
+      modified_at: modifiedAt,
+    });
+  }
+
+  const entries = [
+    ...[...folders.values()].sort((a, b) => a.name.localeCompare(b.name)),
+    ...files.sort((a, b) => a.name.localeCompare(b.name)),
+  ];
+
+  return {
+    storage_location_id: storage.id,
+    current_path: currentPath,
+    parent_path: getParentPath(currentPath),
+    root_label: getStorageRootLabel(storage.type, cfg),
+    entries,
+  };
+}
+
+export async function deleteStorageFilePath(id: string, rawPath: string) {
+  const storage = await prisma.storageLocation.findUniqueOrThrow({
+    where: { id },
+    select: { type: true, config: true },
+  });
+
+  const targetPath = normalizeStorageRelativePath(rawPath);
+  if (!targetPath) {
+    throw new AppError('INVALID_STORAGE_PATH', 422, 'Informe um caminho valido para exclusao');
+  }
+
+  const adapter = createStorageAdapter(storage.type, storage.config);
+
+  const fileExists = await adapter.exists(targetPath);
+  if (fileExists) {
+    await adapter.delete(targetPath);
+    return { message: 'Arquivo excluido com sucesso', deleted_paths: [targetPath] };
+  }
+
+  const descendants = await adapter.list(targetPath);
+  const toDelete = descendants
+    .map((item) => normalizeStorageRelativePath(item))
+    .filter((item) => item && item.startsWith(`${targetPath}/`));
+
+  if (toDelete.length === 0) {
+    throw new AppError('STORAGE_PATH_NOT_FOUND', 404, `Caminho nao encontrado: '${targetPath}'`);
+  }
+
+  for (const filePath of toDelete) {
+    await adapter.delete(filePath);
+  }
+
+  return {
+    message: 'Pasta excluida com sucesso',
+    deleted_paths: toDelete,
+  };
+}
+
+export async function copyStoragePath(id: string, params: { source_path: string; destination_path: string }) {
+  const storage = await prisma.storageLocation.findUniqueOrThrow({
+    where: { id },
+    select: { type: true, config: true },
+  });
+
+  const sourcePath = normalizeStorageRelativePath(params.source_path);
+  const destinationPath = normalizeStorageRelativePath(params.destination_path);
+
+  if (!sourcePath || !destinationPath) {
+    throw new AppError('INVALID_STORAGE_PATH', 422, 'source_path e destination_path sao obrigatorios');
+  }
+
+  if (sourcePath === destinationPath || destinationPath.startsWith(`${sourcePath}/`)) {
+    throw new AppError(
+      'INVALID_STORAGE_COPY',
+      422,
+      'Destino invalido para copia (mesmo caminho ou descendente da origem)',
+    );
+  }
+
+  const adapter = createStorageAdapter(storage.type, storage.config);
+  const tempRoot = path.join(
+    config.workers.tempDirectory,
+    'storage-copy',
+    Date.now().toString(),
+    Math.random().toString(36).slice(2, 8),
+  );
+  await fs.mkdir(tempRoot, { recursive: true });
+
+  const copied: string[] = [];
+  try {
+    if (await adapter.exists(sourcePath)) {
+      const tmpFile = path.join(tempRoot, path.basename(sourcePath));
+      await adapter.download(sourcePath, tmpFile);
+      await adapter.upload(tmpFile, destinationPath);
+      copied.push(destinationPath);
+    } else {
+      const descendants = await adapter.list(sourcePath);
+      const files = descendants
+        .map((item) => normalizeStorageRelativePath(item))
+        .filter((item) => item.startsWith(`${sourcePath}/`));
+
+      if (files.length === 0) {
+        throw new AppError('STORAGE_PATH_NOT_FOUND', 404, `Caminho nao encontrado: '${sourcePath}'`);
+      }
+
+      for (const filePath of files) {
+        const relativeSuffix = filePath.slice(sourcePath.length).replace(/^\/+/, '');
+        const destinationFilePath = withPosixJoin(destinationPath, relativeSuffix);
+        const tmpFile = path.join(tempRoot, ...relativeSuffix.split('/'));
+        await fs.mkdir(path.dirname(tmpFile), { recursive: true });
+        await adapter.download(filePath, tmpFile);
+        await adapter.upload(tmpFile, destinationFilePath);
+        copied.push(destinationFilePath);
+      }
+    }
+  } finally {
+    await fs.rm(tempRoot, { recursive: true, force: true }).catch(() => undefined);
+  }
+
+  return {
+    message: 'Copia concluida com sucesso',
+    copied_paths: copied,
+  };
 }

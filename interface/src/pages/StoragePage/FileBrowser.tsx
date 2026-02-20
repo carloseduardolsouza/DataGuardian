@@ -1,115 +1,165 @@
-import { useState } from 'react';
-import type { MockFile, MockStorageLocation } from './mockData';
-import { formatBytes, formatDate, getRootLabel } from './mockData';
-import { TrashIcon } from '../../components/Icons';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import type { ApiStorageBrowserEntry } from '../../services/api';
+import { storageApi } from '../../services/api';
+import { CopyIcon, TrashIcon } from '../../components/Icons';
 import styles from './FileBrowser.module.css';
 
-interface Crumb {
-  label: string;
-  files: MockFile[];
-}
-
 interface Props {
-  location: MockStorageLocation;
+  locationId: string;
+  locationName: string;
 }
 
-export default function FileBrowser({ location }: Props) {
-  const rootLabel = getRootLabel(location);
+function formatBytes(bytes: number | null) {
+  if (bytes === null) return '-';
+  if (bytes === 0) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(1024));
+  return `${(bytes / Math.pow(1024, i)).toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
+}
 
-  const [breadcrumbs, setBreadcrumbs] = useState<Crumb[]>([
-    { label: rootLabel, files: location.files },
-  ]);
-  const [selected, setSelected]       = useState<Set<string>>(new Set());
-  const [deleteTarget, setDeleteTarget] = useState<MockFile | null>(null);
-  const [sortBy, setSortBy]           = useState<'name' | 'size' | 'modified'>('name');
-  const [sortDir, setSortDir]         = useState<'asc' | 'desc'>('asc');
-
-  const currentFiles = breadcrumbs[breadcrumbs.length - 1].files;
-
-  // ── Sorted files ──────────────────────────────────────────────
-  const sorted = [...currentFiles].sort((a, b) => {
-    let cmp = 0;
-    if (sortBy === 'name')     cmp = a.name.localeCompare(b.name);
-    else if (sortBy === 'size') {
-      const sa = a.sizeBytes ?? 0;
-      const sb = b.sizeBytes ?? 0;
-      cmp = sa - sb;
-    } else {
-      cmp = new Date(a.modified).getTime() - new Date(b.modified).getTime();
-    }
-    // Pastas sempre primeiro
-    if (a.kind !== b.kind) return a.kind === 'folder' ? -1 : 1;
-    return sortDir === 'asc' ? cmp : -cmp;
+function formatDate(iso: string | null) {
+  if (!iso) return '-';
+  const dt = new Date(iso);
+  if (Number.isNaN(dt.getTime())) return '-';
+  return dt.toLocaleString('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
   });
+}
 
-  // ── Sort toggle ───────────────────────────────────────────────
-  const toggleSort = (col: typeof sortBy) => {
-    if (sortBy === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
-    else { setSortBy(col); setSortDir('asc'); }
-  };
+export default function FileBrowser({ locationId, locationName }: Props) {
+  const [cwd, setCwd] = useState('');
+  const [rootLabel, setRootLabel] = useState(locationName);
+  const [entries, setEntries] = useState<ApiStorageBrowserEntry[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [sortBy, setSortBy] = useState<'name' | 'size' | 'modified'>('name');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  const [refreshTick, setRefreshTick] = useState(0);
 
-  const sortIndicator = (col: typeof sortBy) =>
-    sortBy === col ? (sortDir === 'asc' ? ' ↑' : ' ↓') : '';
+  const loadEntries = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await storageApi.browseFiles(locationId, cwd);
+      setEntries(response.entries);
+      setRootLabel(response.root_label);
+      setSelected(new Set());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao carregar arquivos');
+    } finally {
+      setLoading(false);
+    }
+  }, [cwd, locationId]);
 
-  // ── Navigation ────────────────────────────────────────────────
-  const openFolder = (folder: MockFile) => {
-    if (!folder.children) return;
-    setBreadcrumbs(prev => [...prev, { label: folder.name, files: folder.children! }]);
+  useEffect(() => {
+    setCwd('');
     setSelected(new Set());
+  }, [locationId]);
+
+  useEffect(() => {
+    void loadEntries();
+  }, [loadEntries, refreshTick]);
+
+  const breadcrumbs = useMemo(() => {
+    const parts = cwd ? cwd.split('/') : [];
+    const acc: Array<{ label: string; path: string }> = [{ label: rootLabel, path: '' }];
+    let current = '';
+    for (const part of parts) {
+      current = current ? `${current}/${part}` : part;
+      acc.push({ label: part, path: current });
+    }
+    return acc;
+  }, [cwd, rootLabel]);
+
+  const sorted = useMemo(() => {
+    const list = [...entries];
+    list.sort((a, b) => {
+      if (a.kind !== b.kind) return a.kind === 'folder' ? -1 : 1;
+
+      let cmp = 0;
+      if (sortBy === 'name') cmp = a.name.localeCompare(b.name);
+      else if (sortBy === 'size') cmp = (a.size_bytes ?? 0) - (b.size_bytes ?? 0);
+      else cmp = new Date(a.modified_at ?? 0).getTime() - new Date(b.modified_at ?? 0).getTime();
+
+      return sortDir === 'asc' ? cmp : -cmp;
+    });
+    return list;
+  }, [entries, sortBy, sortDir]);
+
+  const filesOnly = sorted.filter((entry) => entry.kind === 'file');
+  const allSelected = filesOnly.length > 0 && filesOnly.every((entry) => selected.has(entry.path));
+  const someSelected = filesOnly.some((entry) => selected.has(entry.path));
+
+  const toggleSort = (col: 'name' | 'size' | 'modified') => {
+    if (sortBy === col) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    else {
+      setSortBy(col);
+      setSortDir('asc');
+    }
   };
 
-  const goToCrumb = (idx: number) => {
-    setBreadcrumbs(prev => prev.slice(0, idx + 1));
-    setSelected(new Set());
-  };
+  const sortIndicator = (col: 'name' | 'size' | 'modified') =>
+    sortBy === col ? (sortDir === 'asc' ? ' ?' : ' ?') : '';
 
-  // ── Selection ─────────────────────────────────────────────────
-  const allFiles     = sorted.filter(f => f.kind === 'file');
-  const allSelected  = allFiles.length > 0 && allFiles.every(f => selected.has(f.id));
-  const someSelected = allFiles.some(f => selected.has(f.id));
-
-  const toggleAll = () => {
-    if (allSelected) setSelected(new Set());
-    else setSelected(new Set(allFiles.map(f => f.id)));
-  };
-
-  const toggleOne = (id: string) => {
-    setSelected(prev => {
+  const toggleOne = (path: string) => {
+    setSelected((prev) => {
       const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
+      if (next.has(path)) next.delete(path);
+      else next.add(path);
       return next;
     });
   };
 
-  // ── Delete ────────────────────────────────────────────────────
-  const doDelete = (ids: string[]) => {
-    const idSet = new Set(ids);
-    setBreadcrumbs(prev => {
-      const crumbs = [...prev];
-      crumbs[crumbs.length - 1] = {
-        ...crumbs[crumbs.length - 1],
-        files: crumbs[crumbs.length - 1].files.filter(f => !idSet.has(f.id)),
-      };
-      return crumbs;
-    });
-    setSelected(prev => { const n = new Set(prev); ids.forEach(id => n.delete(id)); return n; });
-    setDeleteTarget(null);
+  const toggleAll = () => {
+    if (allSelected) {
+      setSelected(new Set());
+      return;
+    }
+    setSelected(new Set(filesOnly.map((entry) => entry.path)));
   };
 
-  const selectedCount = selected.size;
+  const deletePaths = async (paths: string[]) => {
+    if (paths.length === 0) return;
+    const confirmed = confirm(`Excluir ${paths.length} item(ns)? Esta a��o n�o pode ser desfeita.`);
+    if (!confirmed) return;
+
+    try {
+      await Promise.all(paths.map((targetPath) => storageApi.deletePath(locationId, targetPath)));
+      setSelected(new Set());
+      setRefreshTick((v) => v + 1);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Falha ao excluir itens');
+    }
+  };
+
+  const copyPath = async (sourcePath: string) => {
+    const suggestedName = sourcePath.split('/').pop() ?? 'copy';
+    const destinationInput = prompt('Novo caminho de destino (relativo ao storage):', `${cwd ? `${cwd}/` : ''}${suggestedName}_copy`);
+    if (!destinationInput) return;
+
+    try {
+      await storageApi.copyPath(locationId, sourcePath, destinationInput);
+      setRefreshTick((v) => v + 1);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Falha ao copiar arquivo');
+    }
+  };
 
   return (
     <div className={styles.browser}>
-      {/* ── Toolbar ───────────────────────────────────────────── */}
       <div className={styles.toolbar}>
-        {/* Breadcrumb */}
         <nav className={styles.breadcrumb}>
           {breadcrumbs.map((crumb, idx) => (
-            <span key={idx} className={styles.crumbPart}>
+            <span key={crumb.path || 'root'} className={styles.crumbPart}>
               {idx > 0 && <ChevronIcon />}
               <button
                 className={`${styles.crumbBtn}${idx === breadcrumbs.length - 1 ? ` ${styles.crumbActive}` : ''}`}
-                onClick={() => goToCrumb(idx)}
+                onClick={() => setCwd(crumb.path)}
               >
                 {idx === 0 ? <HomeIcon /> : null}
                 {crumb.label}
@@ -118,36 +168,30 @@ export default function FileBrowser({ location }: Props) {
           ))}
         </nav>
 
-        {/* Ações */}
         <div className={styles.toolbarRight}>
-          {selectedCount > 0 && (
-            <button
-              className={styles.deleteSelectedBtn}
-              onClick={() => setDeleteTarget({ id: '__batch__', name: `${selectedCount} arquivo(s)`, kind: 'file', sizeBytes: null, created: '', modified: '', path: '' })}
-            >
-              <TrashIcon />
-              Excluir {selectedCount} arquivo{selectedCount !== 1 ? 's' : ''}
+          {selected.size > 0 && (
+            <button className={styles.deleteSelectedBtn} onClick={() => void deletePaths([...selected])}>
+              <TrashIcon /> Excluir {selected.size}
             </button>
           )}
-          <button className={styles.refreshBtn} title="Atualizar listagem">
+          <button className={styles.refreshBtn} title="Atualizar" onClick={() => setRefreshTick((v) => v + 1)}>
             <RefreshIcon />
           </button>
         </div>
       </div>
 
-      {/* ── Tabela de arquivos ─────────────────────────────────── */}
       <div className={styles.tableWrap}>
-        {sorted.length === 0 ? (
+        {loading && <div className={styles.emptyDir}><p>Carregando arquivos...</p></div>}
+        {!loading && error && <div className={styles.emptyDir}><p>{error}</p></div>}
+
+        {!loading && !error && sorted.length === 0 && (
           <div className={styles.emptyDir}>
             <FolderEmptyIcon />
             <p>Pasta vazia</p>
-            {breadcrumbs.length > 1 && (
-              <button className={styles.backLink} onClick={() => goToCrumb(breadcrumbs.length - 2)}>
-                ← Voltar
-              </button>
-            )}
           </div>
-        ) : (
+        )}
+
+        {!loading && !error && sorted.length > 0 && (
           <table className={styles.table}>
             <thead>
               <tr>
@@ -155,76 +199,54 @@ export default function FileBrowser({ location }: Props) {
                   <input
                     type="checkbox"
                     checked={allSelected}
-                    ref={el => { if (el) el.indeterminate = someSelected && !allSelected; }}
+                    ref={(el) => {
+                      if (el) el.indeterminate = someSelected && !allSelected;
+                    }}
                     onChange={toggleAll}
                   />
                 </th>
-                <th className={styles.nameCol} onClick={() => toggleSort('name')}>
-                  Nome{sortIndicator('name')}
-                </th>
-                <th>Datasource</th>
-                <th className={styles.sortable} onClick={() => toggleSort('size')}>
-                  Tamanho{sortIndicator('size')}
-                </th>
-                <th className={styles.sortable} onClick={() => toggleSort('modified')}>
-                  Modificado{sortIndicator('modified')}
-                </th>
+                <th className={styles.nameCol} onClick={() => toggleSort('name')}>Nome{sortIndicator('name')}</th>
+                <th className={styles.sortable} onClick={() => toggleSort('size')}>Tamanho{sortIndicator('size')}</th>
+                <th className={styles.sortable} onClick={() => toggleSort('modified')}>Modificado{sortIndicator('modified')}</th>
                 <th className={styles.actionsCol} />
               </tr>
             </thead>
             <tbody>
-              {sorted.map(file => (
-                <tr
-                  key={file.id}
-                  className={`${selected.has(file.id) ? styles.selectedRow : ''}`}
-                >
+              {sorted.map((entry) => (
+                <tr key={entry.path} className={selected.has(entry.path) ? styles.selectedRow : ''}>
                   <td className={styles.checkCol}>
-                    {file.kind === 'file' && (
-                      <input
-                        type="checkbox"
-                        checked={selected.has(file.id)}
-                        onChange={() => toggleOne(file.id)}
-                      />
+                    {entry.kind === 'file' && (
+                      <input type="checkbox" checked={selected.has(entry.path)} onChange={() => toggleOne(entry.path)} />
                     )}
                   </td>
-
                   <td>
-                    <div className={styles.fileCell}>
-                      {file.kind === 'folder' ? (
-                        <button className={styles.folderBtn} onClick={() => openFolder(file)}>
-                          <FolderIcon />
-                          <span>{file.name}</span>
-                          {file.children && (
-                            <span className={styles.folderCount}>{file.children.length}</span>
-                          )}
-                        </button>
-                      ) : (
-                        <span className={styles.fileRow}>
-                          <ArchiveIcon />
-                          <span className={styles.fileName}>{file.name}</span>
-                        </span>
-                      )}
-                    </div>
+                    {entry.kind === 'folder' ? (
+                      <button className={styles.folderBtn} onClick={() => setCwd(entry.path)}>
+                        <FolderIcon />
+                        <span>{entry.name}</span>
+                      </button>
+                    ) : (
+                      <span className={styles.fileRow}>
+                        <ArchiveIcon />
+                        <span className={styles.fileName}>{entry.name}</span>
+                      </span>
+                    )}
                   </td>
-
-                  <td className={styles.muted}>{file.datasource ?? '—'}</td>
-
-                  <td className={styles.muted}>
-                    {file.kind === 'folder'
-                      ? `${file.children?.length ?? 0} item${file.children?.length !== 1 ? 's' : ''}`
-                      : formatBytes(file.sizeBytes ?? 0)
-                    }
-                  </td>
-
-                  <td className={styles.muted}>{formatDate(file.modified)}</td>
-
+                  <td className={styles.muted}>{entry.kind === 'folder' ? '-' : formatBytes(entry.size_bytes)}</td>
+                  <td className={styles.muted}>{formatDate(entry.modified_at)}</td>
                   <td className={styles.actionsCol}>
-                    {file.kind === 'file' && (
-                      <button
-                        className={styles.deleteBtn}
-                        title="Excluir backup"
-                        onClick={() => setDeleteTarget(file)}
-                      >
+                    {entry.kind === 'file' && (
+                      <>
+                        <button className={styles.copyBtn} title="Copiar" onClick={() => void copyPath(entry.path)}>
+                          <CopyIcon width={12} height={12} />
+                        </button>
+                        <button className={styles.deleteBtn} title="Excluir" onClick={() => void deletePaths([entry.path])}>
+                          <TrashIcon />
+                        </button>
+                      </>
+                    )}
+                    {entry.kind === 'folder' && (
+                      <button className={styles.deleteBtn} title="Excluir pasta" onClick={() => void deletePaths([entry.path])}>
                         <TrashIcon />
                       </button>
                     )}
@@ -236,81 +258,28 @@ export default function FileBrowser({ location }: Props) {
         )}
       </div>
 
-      {/* ── Rodapé com resumo ─────────────────────────────────── */}
       <div className={styles.statusBar}>
-        <span>
-          {sorted.filter(f => f.kind === 'folder').length} pasta(s) ·{' '}
-          {sorted.filter(f => f.kind === 'file').length} arquivo(s)
-        </span>
-        {selectedCount > 0 && (
-          <span className={styles.selectionInfo}>
-            {selectedCount} selecionado{selectedCount !== 1 ? 's' : ''}
-          </span>
-        )}
+        <span>{sorted.filter((e) => e.kind === 'folder').length} pasta(s) � {sorted.filter((e) => e.kind === 'file').length} arquivo(s)</span>
       </div>
-
-      {/* ── Modal de confirmação de exclusão ──────────────────── */}
-      {deleteTarget && (
-        <div className={styles.overlay}>
-          <div className={styles.dialog}>
-            <div className={styles.dialogIconWrap}>
-              <TrashIcon />
-            </div>
-            <h3 className={styles.dialogTitle}>Excluir permanentemente?</h3>
-            <p className={styles.dialogText}>
-              {deleteTarget.id === '__batch__' ? (
-                <>
-                  Os <strong>{selectedCount} arquivos</strong> selecionados serão excluídos do armazenamento.
-                  Esta ação não pode ser desfeita.
-                </>
-              ) : (
-                <>
-                  O arquivo <strong>{deleteTarget.name}</strong> será excluído do armazenamento.
-                  Esta ação não pode ser desfeita.
-                </>
-              )}
-            </p>
-            <div className={styles.dialogActions}>
-              <button
-                className={styles.cancelBtn}
-                onClick={() => setDeleteTarget(null)}
-              >
-                Cancelar
-              </button>
-              <button
-                className={styles.confirmDeleteBtn}
-                onClick={() =>
-                  deleteTarget.id === '__batch__'
-                    ? doDelete([...selected])
-                    : doDelete([deleteTarget.id])
-                }
-              >
-                <TrashIcon /> Excluir
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
 
-/* ── Ícones específicos do FileBrowser ──────────────────────────── */
 function FolderIcon() {
-  return <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" stroke="none" opacity="0.85"><path d="M20 6h-8l-2-2H4a2 2 0 00-2 2v12a2 2 0 002 2h16a2 2 0 002-2V8a2 2 0 00-2-2z"/></svg>;
+  return <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" stroke="none" opacity="0.85"><path d="M20 6h-8l-2-2H4a2 2 0 00-2 2v12a2 2 0 002 2h16a2 2 0 002-2V8a2 2 0 00-2-2z" /></svg>;
 }
 function ArchiveIcon() {
-  return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>;
+  return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="21 8 21 21 3 21 3 8" /><rect x="1" y="3" width="22" height="5" /><line x1="10" y1="12" x2="14" y2="12" /></svg>;
 }
 function ChevronIcon() {
-  return <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="9 18 15 12 9 6"/></svg>;
+  return <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="9 18 15 12 9 6" /></svg>;
 }
 function HomeIcon() {
-  return <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>;
+  return <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" /></svg>;
 }
 function RefreshIcon() {
-  return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>;
+  return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="23 4 23 10 17 10" /><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10" /></svg>;
 }
 function FolderEmptyIcon() {
-  return <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>;
+  return <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z" /></svg>;
 }

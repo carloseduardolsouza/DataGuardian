@@ -5,6 +5,7 @@ import type { ApiStorageLocation, ApiStorageLocationDetail } from '../../service
 import { useResizableWidth } from '../../hooks/useResizableWidth';
 import StorageList     from './StorageList';
 import AddStorageModal from './AddStorageModal';
+import FileBrowser     from './FileBrowser';
 import styles          from './StoragePage.module.css';
 import {
   DatabaseIcon, CheckCircleIcon, AlertTriangleIcon,
@@ -146,6 +147,7 @@ export default function StoragePage() {
   const [showModal, setShowModal]         = useState(false);
   const [editData, setEditData]           = useState<ApiStorageLocationDetail | null>(null);
   const [testing, setTesting]             = useState(false);
+  const [rightTab, setRightTab]           = useState<'explorer' | 'details'>('details');
   const [testResult, setTestResult]       = useState<{
     status: string; available_space_gb?: number; latency_ms: number | null;
   } | null>(null);
@@ -185,6 +187,7 @@ export default function StoragePage() {
     setSelectedLoc(loc);
     setDetail(null);
     setTestResult(null);
+    setRightTab('details');
     try {
       setLoadingDetail(true);
       const d = await storageApi.getById(loc.id);
@@ -324,16 +327,40 @@ export default function StoragePage() {
         {/* Painel direito */}
         <div className={styles.rightPanel}>
           {selectedLoc ? (
-            <StorageDetail
-              location={selectedLoc}
-              detail={detail}
-              loadingDetail={loadingDetail}
-              onEdit={() => handleEdit(selectedLoc)}
-              onDelete={() => handleDelete(selectedLoc)}
-              onTest={handleTest}
-              testing={testing}
-              testResult={testResult}
-            />
+            <>
+              <div className={styles.rightTabs}>
+                <button
+                  className={`${styles.rightTabBtn} ${rightTab === 'explorer' ? styles.rightTabBtnActive : ''}`}
+                  onClick={() => setRightTab('explorer')}
+                >
+                  Explorer
+                </button>
+                <button
+                  className={`${styles.rightTabBtn} ${rightTab === 'details' ? styles.rightTabBtnActive : ''}`}
+                  onClick={() => setRightTab('details')}
+                >
+                  Detalhes
+                </button>
+              </div>
+
+              {rightTab === 'explorer' ? (
+                <FileBrowser
+                  locationId={selectedLoc.id}
+                  locationName={selectedLoc.name}
+                />
+              ) : (
+                <StorageDetail
+                  location={selectedLoc}
+                  detail={detail}
+                  loadingDetail={loadingDetail}
+                  onEdit={() => handleEdit(selectedLoc)}
+                  onDelete={() => handleDelete(selectedLoc)}
+                  onTest={handleTest}
+                  testing={testing}
+                  testResult={testResult}
+                />
+              )}
+            </>
           ) : (
             <Placeholder onAddNew={handleAddNew} />
           )}

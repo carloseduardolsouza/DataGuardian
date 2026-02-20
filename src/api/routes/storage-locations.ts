@@ -21,6 +21,15 @@ const testConfigSchema = z.object({
   config: z.record(z.unknown()),
 });
 
+const browseFilesQuerySchema = z.object({
+  path: z.string().optional(),
+});
+
+const copyFileSchema = z.object({
+  source_path: z.string().min(1),
+  destination_path: z.string().min(1),
+});
+
 storageLocationsRouter.get(
   "/",
   validate(listQuerySchema, "query"),
@@ -46,4 +55,19 @@ storageLocationsRouter.delete("/:id", StorageLocationController.remove);
 storageLocationsRouter.post(
   "/:id/test",
   StorageLocationController.testConnection,
+);
+storageLocationsRouter.get(
+  "/:id/files",
+  validate(browseFilesQuerySchema, "query"),
+  StorageLocationController.browseFiles,
+);
+storageLocationsRouter.delete(
+  "/:id/files",
+  validate(browseFilesQuerySchema, "query"),
+  StorageLocationController.deleteFile,
+);
+storageLocationsRouter.post(
+  "/:id/files/copy",
+  validate(copyFileSchema),
+  StorageLocationController.copyFile,
 );

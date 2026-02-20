@@ -7,6 +7,9 @@ import {
   deleteStorageLocation,
   testStorageConnection,
   testStorageConfig,
+  browseStorageFiles,
+  deleteStorageFilePath,
+  copyStoragePath,
 } from '../models/storage-location.model';
 import { getPaginationParams, buildPaginatedResponse } from '../../utils/config';
 
@@ -72,6 +75,40 @@ export const StorageLocationController = {
       const type = String(req.body.type) as Parameters<typeof testStorageConfig>[0];
       const config = (req.body.config ?? {}) as Parameters<typeof testStorageConfig>[1];
       const result = await testStorageConfig(type, config);
+      res.status(200).json(result);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async browseFiles(req: Request, res: Response, next: NextFunction) {
+    try {
+      const path = typeof req.query.path === 'string' ? req.query.path : '';
+      const result = await browseStorageFiles(String(req.params.id), path);
+      res.status(200).json(result);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async deleteFile(req: Request, res: Response, next: NextFunction) {
+    try {
+      const targetPath = typeof req.query.path === 'string' ? req.query.path : '';
+      const result = await deleteStorageFilePath(String(req.params.id), targetPath);
+      res.status(200).json(result);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async copyFile(req: Request, res: Response, next: NextFunction) {
+    try {
+      const sourcePath = String(req.body.source_path ?? '');
+      const destinationPath = String(req.body.destination_path ?? '');
+      const result = await copyStoragePath(String(req.params.id), {
+        source_path: sourcePath,
+        destination_path: destinationPath,
+      });
       res.status(200).json(result);
     } catch (err) {
       next(err);
