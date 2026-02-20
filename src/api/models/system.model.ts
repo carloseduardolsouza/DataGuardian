@@ -2,6 +2,12 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { AppError } from '../middlewares/error-handler';
 import { getDefaultTempDirectory } from '../../utils/runtime';
+import {
+  ensureEvolutionInstanceAndFetchQr,
+  EvolutionApiError,
+  fetchEvolutionQrCode,
+  resetEvolutionInstanceAndFetchQr,
+} from '../../integrations/evolution-api/client';
 
 export function getDefaultSettings(): Record<string, { value: unknown; description: string }> {
   return {
@@ -298,5 +304,98 @@ export async function testSmtpConnection() {
       error: 'NOT_IMPLEMENTED',
       message: 'Envio de e-mail de teste ainda nao implementado. Sera ativado junto com o sistema de notificacoes.',
     },
+  };
+}
+
+function asObject(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+}
+
+function asString(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+export async function getWhatsappEvolutionQrCode(instanceOverride?: string) {
+  const setting = await prisma.systemSetting.findUnique({
+    where: { key: 'notifications.whatsapp_evolution_config' },
+    select: { value: true },
+  });
+
+  const cfg = asObject(setting?.value);
+  const apiUrl = asString(cfg.api_url);
+  const apiKey = asString(cfg.api_key);
+  const instance = asString(instanceOverride) || asString(cfg.instance);
+
+  if (!apiUrl || !apiKey || !instance) {
+    throw new AppError(
+      'WHATSAPP_NOT_CONFIGURED',
+      422,
+      'Configure Evolution API (URL, API key e instancia) antes de gerar QR Code.',
+    );
+  }
+
+  let qr_code: string;
+  try {
+    qr_code = await fetchEvolutionQrCode({
+      apiUrl,
+      apiKey,
+      instance,
+    });
+  } catch (err) {
+    if (err instanceof EvolutionApiError) {
+      if (err.errorCode === 'INSTANCE_NOT_FOUND') {
+        try {
+          qr_code = await ensureEvolutionInstanceAndFetchQr({
+            apiUrl,
+            apiKey,
+            instance,
+          });
+        } catch (createErr) {
+          if (createErr instanceof EvolutionApiError) {
+            throw new AppError(
+              createErr.errorCode,
+              createErr.statusCode,
+              createErr.message,
+              createErr.details,
+            );
+          }
+          throw createErr;
+        }
+      } else if (err.errorCode === 'INSTANCE_ALREADY_EXISTS' || err.errorCode === 'QR_NOT_AVAILABLE') {
+        try {
+          qr_code = await resetEvolutionInstanceAndFetchQr({
+            apiUrl,
+            apiKey,
+            instance,
+          });
+        } catch (resetErr) {
+          if (resetErr instanceof EvolutionApiError) {
+            throw new AppError(
+              resetErr.errorCode,
+              resetErr.statusCode,
+              resetErr.message,
+              resetErr.details,
+            );
+          }
+          throw resetErr;
+        }
+      } else {
+        throw new AppError(
+          err.errorCode,
+          err.statusCode,
+          err.message,
+          err.details,
+        );
+      }
+    } else {
+      throw err;
+    }
+  }
+
+  return {
+    instance,
+    qr_code,
   };
 }

@@ -16,14 +16,22 @@
   overflow: hidden;
 }
 
+.collapsed {
+  min-width: 72px;
+  max-width: 72px;
+}
+
 .resizeHandle {
   position: absolute;
-  top: 0;
+  top: 50%;
   right: 0;
   width: 8px;
-  height: 100%;
+  height: 72px;
+  transform: translateY(-50%);
+  border-radius: var(--radius-full);
   cursor: col-resize;
   background: transparent;
+  z-index: 2;
 }
 
 .resizeHandle:hover {
@@ -43,6 +51,31 @@
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   min-height: var(--topbar-height);
   flex-shrink: 0;
+}
+
+.collapseBtn {
+  margin-left: auto;
+  width: 28px;
+  height: 28px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: var(--font-weight-bold);
+  line-height: 1;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+
+.collapseBtn:hover {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: #fff;
+}
+
+.collapseBtn:active {
+  transform: translateY(1px);
 }
 
 .logoWrap {
@@ -114,6 +147,12 @@
   text-decoration: none;
 }
 
+.collapsed .navItem {
+  justify-content: center;
+  padding-left: var(--space-2);
+  padding-right: var(--space-2);
+}
+
 .navItem:hover {
   background: rgba(255, 255, 255, 0.06);
   color: #ffffff;
@@ -155,6 +194,13 @@
   padding: 0 var(--space-1);
 }
 
+.collapsed .navBadge {
+  position: absolute;
+  top: 3px;
+  right: 4px;
+  margin-left: 0;
+}
+
 /* ── Rodapé da sidebar ────────────────────────── */
 .footer {
   padding: var(--space-4) var(--space-3);
@@ -165,12 +211,23 @@
   flex-shrink: 0;
 }
 
+.collapsed .footer {
+  padding-left: var(--space-2);
+  padding-right: var(--space-2);
+}
+
 .userRow {
   display: flex;
   align-items: center;
   gap: var(--space-3);
   padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-md);
+}
+
+.collapsed .userRow {
+  justify-content: center;
+  padding-left: 0;
+  padding-right: 0;
 }
 
 .avatar {
@@ -221,6 +278,12 @@
   width: 100%;
   text-align: left;
   transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.collapsed .logoutBtn {
+  justify-content: center;
+  padding-left: 0;
+  padding-right: 0;
 }
 
 .logoutBtn:hover {

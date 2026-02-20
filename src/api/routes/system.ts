@@ -20,6 +20,9 @@ const updateSettingSchema = z.object({
 }).refine((v) => v.value !== undefined || v.description !== undefined, {
   message: 'Informe ao menos "value" ou "description".',
 });
+const whatsappQrSchema = z.object({
+  instance: z.string().min(1).optional(),
+});
 
 systemRouter.get("/settings", SystemController.getSettings);
 systemRouter.post(
@@ -33,6 +36,11 @@ systemRouter.put(
   SystemController.updateSettings,
 );
 systemRouter.post("/settings/test-smtp", SystemController.testSmtp);
+systemRouter.post(
+  "/settings/whatsapp/qr",
+  validate(whatsappQrSchema),
+  SystemController.getWhatsappQrCode,
+);
 systemRouter.get(
   "/settings/:key",
   validate(settingKeySchema, "params"),

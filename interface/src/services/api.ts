@@ -759,5 +759,11 @@ export const systemApi = {
     request<{ status?: string; message: string; error?: string }>('/system/settings/test-smtp', {
       method: 'POST',
     }),
+
+  whatsappQr: (data?: { instance?: string }) =>
+    request<{ instance: string; qr_code: string }>('/system/settings/whatsapp/qr', {
+      method: 'POST',
+      body: JSON.stringify(data ?? {}),
+    }),
 };
 
