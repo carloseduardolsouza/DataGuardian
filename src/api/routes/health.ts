@@ -1,7 +1,9 @@
 import { Router } from "express";
 import { z } from "zod";
 import { validate } from "../middlewares/validation";
+import { requirePermission } from "../middlewares/auth";
 import { HealthController } from "../controllers/health.controller";
+import { PERMISSIONS } from "../../core/auth/permissions";
 
 export const healthRouter = Router();
 
@@ -21,14 +23,16 @@ const storageHealthQuerySchema = z.object({
   to: z.string().datetime().optional(),
 });
 
-healthRouter.get("/", HealthController.getSystemStatus);
+healthRouter.get("/", requirePermission(PERMISSIONS.HEALTH_READ), HealthController.getSystemStatus);
 healthRouter.get(
   "/datasources",
+  requirePermission(PERMISSIONS.HEALTH_READ),
   validate(healthQuerySchema, "query"),
   HealthController.getDatasourceHistory,
 );
 healthRouter.get(
   "/storage",
+  requirePermission(PERMISSIONS.HEALTH_READ),
   validate(storageHealthQuerySchema, "query"),
   HealthController.getStorageHistory,
 );

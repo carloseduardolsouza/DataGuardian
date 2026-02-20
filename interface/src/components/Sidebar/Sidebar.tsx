@@ -14,6 +14,7 @@ import {
   SettingsIcon,
   LogoutIcon,
 } from '../Icons';
+import { PERMISSIONS } from '../../constants/permissions';
 
 export type NavKey =
   | 'dashboard'
@@ -42,28 +43,33 @@ interface Props {
   active: NavKey;
   onLogout: () => void;
   unreadNotifications?: number;
-  currentUsername?: string;
+  currentUser?: {
+    username: string;
+    roles: string[];
+    permissions: string[];
+  };
 }
 
 interface NavItem {
   key: NavKey;
   label: string;
   icon: React.ReactNode;
+  permission: string;
 }
 
 const mainNav: NavItem[] = [
-  { key: 'dashboard', label: 'Dashboard', icon: <DashboardIcon /> },
-  { key: 'datasources', label: 'Datasources', icon: <DatabaseIcon /> },
-  { key: 'storage', label: 'Storage', icon: <ServerIcon /> },
-  { key: 'backup-jobs', label: 'Backup Jobs', icon: <JobsIcon /> },
-  { key: 'backups', label: 'Backups', icon: <FolderIcon /> },
-  { key: 'executions', label: 'Execucoes', icon: <PlayIcon /> },
+  { key: 'dashboard', label: 'Dashboard', icon: <DashboardIcon />, permission: PERMISSIONS.DASHBOARD_READ },
+  { key: 'datasources', label: 'Datasources', icon: <DatabaseIcon />, permission: PERMISSIONS.DATASOURCES_READ },
+  { key: 'storage', label: 'Storage', icon: <ServerIcon />, permission: PERMISSIONS.STORAGE_READ },
+  { key: 'backup-jobs', label: 'Backup Jobs', icon: <JobsIcon />, permission: PERMISSIONS.BACKUP_JOBS_READ },
+  { key: 'backups', label: 'Backups', icon: <FolderIcon />, permission: PERMISSIONS.BACKUPS_READ },
+  { key: 'executions', label: 'Execucoes', icon: <PlayIcon />, permission: PERMISSIONS.EXECUTIONS_READ },
 ];
 
 const systemNav: NavItem[] = [
-  { key: 'health', label: 'Health', icon: <HealthIcon /> },
-  { key: 'notifications', label: 'Notificacoes', icon: <BellIcon /> },
-  { key: 'settings', label: 'Configuracoes', icon: <SettingsIcon /> },
+  { key: 'health', label: 'Health', icon: <HealthIcon />, permission: PERMISSIONS.HEALTH_READ },
+  { key: 'notifications', label: 'Notificacoes', icon: <BellIcon />, permission: PERMISSIONS.NOTIFICATIONS_READ },
+  { key: 'settings', label: 'Configuracoes', icon: <SettingsIcon />, permission: PERMISSIONS.SYSTEM_READ },
 ];
 
 const SIDEBAR_MIN_WIDTH = 210;
@@ -97,10 +103,15 @@ function readCollapsedState() {
   }
 }
 
-export default function Sidebar({ active, onLogout, unreadNotifications = 0, currentUsername = 'Admin' }: Props) {
+export default function Sidebar({ active, onLogout, unreadNotifications = 0, currentUser }: Props) {
   const [width, setWidth] = useState<number>(readStoredSidebarWidth);
   const [collapsed, setCollapsed] = useState<boolean>(readCollapsedState);
   const dragRef = useRef<{ pointerId: number; startX: number; startWidth: number } | null>(null);
+  const currentUsername = currentUser?.username || 'Usuario';
+  const currentRole = currentUser?.roles?.[0] || 'sem role';
+  const permissions = new Set(currentUser?.permissions ?? []);
+  const visibleMainNav = mainNav.filter((item) => permissions.has(item.permission));
+  const visibleSystemNav = systemNav.filter((item) => permissions.has(item.permission));
 
   useEffect(() => {
     document.documentElement.style.setProperty(
@@ -148,7 +159,7 @@ export default function Sidebar({ active, onLogout, unreadNotifications = 0, cur
     event.currentTarget.setPointerCapture(event.pointerId);
   };
 
-  const avatar = currentUsername.trim().charAt(0).toUpperCase() || 'A';
+  const avatar = currentUsername.trim().charAt(0).toUpperCase() || 'U';
   const sidebarWidth = collapsed ? SIDEBAR_COLLAPSED_WIDTH : width;
   return (
     <aside className={`${styles.sidebar} ${collapsed ? styles.collapsed : ''}`} style={{ width: sidebarWidth }}>
@@ -171,7 +182,7 @@ export default function Sidebar({ active, onLogout, unreadNotifications = 0, cur
       <nav className={styles.nav}>
         <div className={styles.navGroup}>
           {!collapsed && <p className={styles.navGroupLabel}>Principal</p>}
-          {mainNav.map((item) => (
+          {visibleMainNav.map((item) => (
             <Link
               key={item.key}
               to={ROUTE_PATHS[item.key]}
@@ -186,7 +197,7 @@ export default function Sidebar({ active, onLogout, unreadNotifications = 0, cur
 
         <div className={styles.navGroup}>
           {!collapsed && <p className={styles.navGroupLabel}>Sistema</p>}
-          {systemNav.map((item) => (
+          {visibleSystemNav.map((item) => (
             <Link
               key={item.key}
               to={ROUTE_PATHS[item.key]}
@@ -209,7 +220,7 @@ export default function Sidebar({ active, onLogout, unreadNotifications = 0, cur
           {!collapsed && (
             <div className={styles.userInfo}>
               <p className={styles.userName}>{currentUsername}</p>
-              <p className={styles.userRole}>Usuario unico</p>
+              <p className={styles.userRole}>{currentRole}</p>
             </div>
           )}
         </div>

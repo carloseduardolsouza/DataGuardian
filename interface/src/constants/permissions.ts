@@ -1,0 +1,14 @@
+export const PERMISSIONS = {
+  DASHBOARD_READ: 'dashboard.read',
+  DATASOURCES_READ: 'datasources.read',
+  STORAGE_READ: 'storage.read',
+  BACKUP_JOBS_READ: 'backup_jobs.read',
+  BACKUPS_READ: 'backups.read',
+  EXECUTIONS_READ: 'executions.read',
+  HEALTH_READ: 'health.read',
+  NOTIFICATIONS_READ: 'notifications.read',
+  SYSTEM_READ: 'system.read',
+  ACCESS_MANAGE: 'access.manage',
+} as const;
+
+export type PermissionKey = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];

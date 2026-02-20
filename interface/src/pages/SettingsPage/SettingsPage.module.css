@@ -199,6 +199,8 @@
   display: flex;
   align-items: center;
   justify-content: flex-start;
+  gap: var(--space-2);
+  flex-wrap: wrap;
 }
 
 .qrWrap {
@@ -223,6 +225,73 @@
   }
 
   .twoCols {
+    grid-template-columns: 1fr;
+  }
+}
+
+.accessArea {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.checkboxGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.accessBlock {
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  background: var(--color-surface-elevated);
+}
+
+.accessRow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.toggleRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.dangerBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semi);
+  padding: 8px var(--space-3);
+  cursor: pointer;
+  background: var(--color-danger-muted);
+  color: var(--color-danger);
+  border: 1px solid var(--color-danger);
+}
+
+.dangerBtn:hover:enabled {
+  filter: brightness(0.98);
+}
+
+@media (max-width: 1280px) {
+  .checkboxGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .checkboxGrid {
     grid-template-columns: 1fr;
   }
 }

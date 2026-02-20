@@ -1,7 +1,9 @@
 import { Router } from "express";
 import { z } from "zod";
 import { validate } from "../middlewares/validation";
+import { requirePermission } from "../middlewares/auth";
 import { StorageLocationController } from "../controllers/storage-location.controller";
+import { PERMISSIONS } from "../../core/auth/permissions";
 import {
   createStorageLocationSchema,
   updateStorageLocationSchema,
@@ -32,47 +34,56 @@ const copyFileSchema = z.object({
 
 storageLocationsRouter.get(
   "/",
+  requirePermission(PERMISSIONS.STORAGE_READ),
   validate(listQuerySchema, "query"),
   StorageLocationController.list,
 );
 storageLocationsRouter.post(
   "/",
+  requirePermission(PERMISSIONS.STORAGE_WRITE),
   validate(createStorageLocationSchema),
   StorageLocationController.create,
 );
 storageLocationsRouter.post(
   "/test",
+  requirePermission(PERMISSIONS.STORAGE_WRITE),
   validate(testConfigSchema),
   StorageLocationController.testConfig,
 );
-storageLocationsRouter.get("/:id", StorageLocationController.findById);
+storageLocationsRouter.get("/:id", requirePermission(PERMISSIONS.STORAGE_READ), StorageLocationController.findById);
 storageLocationsRouter.put(
   "/:id",
+  requirePermission(PERMISSIONS.STORAGE_WRITE),
   validate(updateStorageLocationSchema),
   StorageLocationController.update,
 );
-storageLocationsRouter.delete("/:id", StorageLocationController.remove);
+storageLocationsRouter.delete("/:id", requirePermission(PERMISSIONS.STORAGE_WRITE), StorageLocationController.remove);
 storageLocationsRouter.post(
   "/:id/test",
+  requirePermission(PERMISSIONS.STORAGE_WRITE),
   StorageLocationController.testConnection,
 );
 storageLocationsRouter.get(
   "/:id/files",
+  requirePermission(PERMISSIONS.STORAGE_READ),
   validate(browseFilesQuerySchema, "query"),
   StorageLocationController.browseFiles,
 );
 storageLocationsRouter.delete(
   "/:id/files",
+  requirePermission(PERMISSIONS.STORAGE_WRITE),
   validate(browseFilesQuerySchema, "query"),
   StorageLocationController.deleteFile,
 );
 storageLocationsRouter.post(
   "/:id/files/copy",
+  requirePermission(PERMISSIONS.STORAGE_WRITE),
   validate(copyFileSchema),
   StorageLocationController.copyFile,
 );
 storageLocationsRouter.get(
   "/:id/files/download",
+  requirePermission(PERMISSIONS.STORAGE_DOWNLOAD),
   validate(browseFilesQuerySchema, "query"),
   StorageLocationController.downloadFile,
 );

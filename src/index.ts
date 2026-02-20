@@ -9,6 +9,7 @@ import { startHealthWorker, stopHealthWorker } from './workers/health-worker';
 import { startCleanupWorker, stopCleanupWorker } from './workers/cleanup-worker';
 import { closeQueues } from './queue/queues';
 import { closeRedis, connectRedis, ensureRedisAvailable } from './queue/redis-client';
+import { seedAuthDefaults } from './core/auth/auth.service';
 
 async function bootstrap() {
   logger.info('Iniciando DataGuardian...');
@@ -36,6 +37,13 @@ async function bootstrap() {
     logger.info('Configurações padrão verificadas/criadas');
   } catch (err) {
     logger.warn({ err }, 'Erro ao verificar configurações padrão');
+  }
+
+  try {
+    await seedAuthDefaults();
+    logger.info('Roles e permissoes padrao verificadas/criadas');
+  } catch (err) {
+    logger.warn({ err }, 'Erro ao verificar roles/permissoes padrao');
   }
 
   const app = createApp();

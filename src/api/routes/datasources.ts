@@ -1,8 +1,10 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { validate } from '../middlewares/validation';
+import { requirePermission } from '../middlewares/auth';
 import { DatasourceController } from '../controllers/datasource.controller';
 import { createDatasourceSchema, updateDatasourceSchema } from '../../types/datasource.types';
+import { PERMISSIONS } from '../../core/auth/permissions';
 
 export const datasourcesRouter = Router();
 
@@ -31,12 +33,12 @@ const createDatasourceTableSchema = z.object({
   ).min(1),
 });
 
-datasourcesRouter.get('/',          validate(listDatasourceQuerySchema, 'query'), DatasourceController.list);
-datasourcesRouter.post('/',         validate(createDatasourceSchema),             DatasourceController.create);
-datasourcesRouter.get('/:id',                                                     DatasourceController.findById);
-datasourcesRouter.put('/:id',       validate(updateDatasourceSchema),             DatasourceController.update);
-datasourcesRouter.delete('/:id',                                                  DatasourceController.remove);
-datasourcesRouter.post('/:id/test',                                               DatasourceController.testConnection);
-datasourcesRouter.get('/:id/schema',                                              DatasourceController.getSchema);
-datasourcesRouter.post('/:id/query',                                              DatasourceController.executeQuery);
-datasourcesRouter.post('/:id/tables', validate(createDatasourceTableSchema),      DatasourceController.createTable);
+datasourcesRouter.get('/', requirePermission(PERMISSIONS.DATASOURCES_READ), validate(listDatasourceQuerySchema, 'query'), DatasourceController.list);
+datasourcesRouter.post('/', requirePermission(PERMISSIONS.DATASOURCES_WRITE), validate(createDatasourceSchema), DatasourceController.create);
+datasourcesRouter.get('/:id', requirePermission(PERMISSIONS.DATASOURCES_READ), DatasourceController.findById);
+datasourcesRouter.put('/:id', requirePermission(PERMISSIONS.DATASOURCES_WRITE), validate(updateDatasourceSchema), DatasourceController.update);
+datasourcesRouter.delete('/:id', requirePermission(PERMISSIONS.DATASOURCES_WRITE), DatasourceController.remove);
+datasourcesRouter.post('/:id/test', requirePermission(PERMISSIONS.DATASOURCES_QUERY), DatasourceController.testConnection);
+datasourcesRouter.get('/:id/schema', requirePermission(PERMISSIONS.DATASOURCES_READ), DatasourceController.getSchema);
+datasourcesRouter.post('/:id/query', requirePermission(PERMISSIONS.DATASOURCES_QUERY), DatasourceController.executeQuery);
+datasourcesRouter.post('/:id/tables', requirePermission(PERMISSIONS.DATASOURCES_QUERY), validate(createDatasourceTableSchema), DatasourceController.createTable);

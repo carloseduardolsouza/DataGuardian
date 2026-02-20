@@ -21,13 +21,19 @@ import SettingsPage from '../SettingsPage/SettingsPage';
 import NotificationsPage from '../NotificationsPage/NotificationsPage';
 import { dashboardApi, type ApiDashboardOverview } from '../../services/api';
 import styles from './DashboardPage.module.css';
+import { PERMISSIONS } from '../../constants/permissions';
 
 interface Props {
   activePage: NavKey;
   theme: 'dark' | 'light';
   onToggleTheme: () => void;
   onLogout: () => void;
-  currentUsername?: string;
+  currentUser?: {
+    username: string;
+    roles: string[];
+    permissions: string[];
+  };
+  permissions: string[];
   unreadNotifications?: number;
 }
 
@@ -85,7 +91,8 @@ export default function DashboardPage({
   theme,
   onToggleTheme,
   onLogout,
-  currentUsername,
+  currentUser,
+  permissions,
   unreadNotifications = 0,
 }: Props) {
   const { title, sub } = PAGE_TITLES[activePage];
@@ -96,7 +103,7 @@ export default function DashboardPage({
         active={activePage}
         onLogout={onLogout}
         unreadNotifications={unreadNotifications}
-        currentUsername={currentUsername}
+        currentUser={currentUser}
       />
 
       <div className={styles.main}>
@@ -138,7 +145,7 @@ export default function DashboardPage({
           {activePage === 'notifications' && (
             <NotificationsPage />
           )}
-          {activePage === 'settings' && <SettingsPage />}
+          {activePage === 'settings' && <SettingsPage canManageAccess={permissions.includes(PERMISSIONS.ACCESS_MANAGE)} />}
           {activePage !== 'dashboard' && activePage !== 'datasources' && activePage !== 'storage' && activePage !== 'backup-jobs' && activePage !== 'backups' && activePage !== 'executions' && activePage !== 'health' && activePage !== 'notifications' && activePage !== 'settings' && (
             <EmptyPage page={activePage} />
           )}

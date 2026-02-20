@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { systemApi } from '../../services/api';
+import { accessApi, systemApi, type ApiAccessPermission, type ApiAccessRole, type ApiAccessUser } from '../../services/api';
 import { AlertTriangleIcon, CheckCircleIcon, SpinnerIcon } from '../../components/Icons';
 import Modal from '../../components/Modal/Modal';
 import styles from './SettingsPage.module.css';
@@ -20,6 +20,10 @@ type WhatsappEvolutionConfig = {
   to?: string[];
   important_only?: boolean;
 };
+
+interface Props {
+  canManageAccess?: boolean;
+}
 
 function asString(value: unknown, fallback = '') {
   return typeof value === 'string' ? value : fallback;
@@ -46,7 +50,16 @@ function boolLabel(value: boolean) {
   return value ? 'Configurado' : 'Incompleto';
 }
 
-export default function SettingsPage() {
+function roleIdsOf(user: ApiAccessUser) {
+  return user.roles.map((role) => role.id);
+}
+
+function formatWhen(value: string | null) {
+  if (!value) return 'Nunca';
+  return new Date(value).toLocaleString('pt-BR');
+}
+
+export default function SettingsPage({ canManageAccess = false }: Props) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -78,6 +91,25 @@ export default function SettingsPage() {
   const [loadingQr, setLoadingQr] = useState(false);
   const [qrCode, setQrCode] = useState<string | null>(null);
   const [qrInstance, setQrInstance] = useState('');
+
+  const [accessLoading, setAccessLoading] = useState(false);
+  const [users, setUsers] = useState<ApiAccessUser[]>([]);
+  const [roles, setRoles] = useState<ApiAccessRole[]>([]);
+  const [permissions, setPermissions] = useState<ApiAccessPermission[]>([]);
+  const [newUser, setNewUser] = useState({
+    username: '',
+    password: '',
+    full_name: '',
+    email: '',
+    is_owner: false,
+    role_ids: [] as string[],
+  });
+  const [newRoleName, setNewRoleName] = useState('');
+  const [newRoleDescription, setNewRoleDescription] = useState('');
+  const [newRolePermissionIds, setNewRolePermissionIds] = useState<string[]>([]);
+  const [roleDrafts, setRoleDrafts] = useState<Record<string, string[]>>({});
+  const [userRoleDrafts, setUserRoleDrafts] = useState<Record<string, string[]>>({});
+  const [passwordDrafts, setPasswordDrafts] = useState<Record<string, string>>({});
 
   async function loadSettings() {
     try {
@@ -118,9 +150,34 @@ export default function SettingsPage() {
     }
   }
 
+  async function loadAccess() {
+    if (!canManageAccess) return;
+    try {
+      setAccessLoading(true);
+      const [userRes, roleRes, permRes] = await Promise.all([
+        accessApi.users(),
+        accessApi.roles(),
+        accessApi.permissions(),
+      ]);
+
+      setUsers(userRes.data);
+      setRoles(roleRes.data);
+      setPermissions(permRes.data);
+      setRoleDrafts(Object.fromEntries(roleRes.data.map((role) => [role.id, role.permissions.map((p) => p.id)])));
+      setUserRoleDrafts(Object.fromEntries(userRes.data.map((user) => [user.id, roleIdsOf(user)])));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Falha ao carregar controle de acesso.');
+    } finally {
+      setAccessLoading(false);
+    }
+  }
+
   useEffect(() => {
     void loadSettings();
-  }, []);
+    if (canManageAccess) {
+      void loadAccess();
+    }
+  }, [canManageAccess]);
 
   const smtpConfigured = useMemo(() => {
     return Boolean(
@@ -205,6 +262,128 @@ export default function SettingsPage() {
     }
   }
 
+  async function handleCreateRole() {
+    try {
+      setError(null);
+      await accessApi.createRole({
+        name: newRoleName,
+        description: newRoleDescription || null,
+        permission_ids: newRolePermissionIds,
+      });
+      setNewRoleName('');
+      setNewRoleDescription('');
+      setNewRolePermissionIds([]);
+      await loadAccess();
+      setSuccess('Role criada com sucesso.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Falha ao criar role.');
+    }
+  }
+
+  async function handleUpdateRolePermissions(roleId: string) {
+    try {
+      const permissionIds = roleDrafts[roleId] ?? [];
+      await accessApi.updateRole(roleId, { permission_ids: permissionIds });
+      await loadAccess();
+      setSuccess('Permissoes da role atualizadas.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Falha ao atualizar role.');
+    }
+  }
+
+  async function handleDeleteRole(roleId: string) {
+    try {
+      await accessApi.removeRole(roleId);
+      await loadAccess();
+      setSuccess('Role removida com sucesso.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Falha ao remover role.');
+    }
+  }
+
+  async function handleCreateUser() {
+    try {
+      setError(null);
+      await accessApi.createUser({
+        username: newUser.username,
+        password: newUser.password,
+        full_name: newUser.full_name || null,
+        email: newUser.email || null,
+        is_owner: newUser.is_owner,
+        role_ids: newUser.role_ids,
+      });
+      setNewUser({ username: '', password: '', full_name: '', email: '', is_owner: false, role_ids: [] });
+      await loadAccess();
+      setSuccess('Usuario criado com sucesso.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Falha ao criar usuario.');
+    }
+  }
+
+  async function handleUpdateUser(user: ApiAccessUser) {
+    try {
+      await accessApi.updateUser(user.id, {
+        is_active: user.is_active,
+        is_owner: user.is_owner,
+        role_ids: userRoleDrafts[user.id] ?? roleIdsOf(user),
+      });
+      await loadAccess();
+      setSuccess(`Usuario ${user.username} atualizado.`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Falha ao atualizar usuario.');
+    }
+  }
+
+  async function handleResetPassword(userId: string) {
+    const password = passwordDrafts[userId]?.trim();
+    if (!password || password.length < 8) {
+      setError('Informe uma nova senha com pelo menos 8 caracteres.');
+      return;
+    }
+
+    try {
+      await accessApi.updateUserPassword(userId, { password });
+      setPasswordDrafts((current) => ({ ...current, [userId]: '' }));
+      setSuccess('Senha atualizada com sucesso.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Falha ao atualizar senha.');
+    }
+  }
+
+  async function handleRemoveUser(userId: string) {
+    try {
+      await accessApi.removeUser(userId);
+      await loadAccess();
+      setSuccess('Usuario removido com sucesso.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Falha ao remover usuario.');
+    }
+  }
+
+  function toggleRolePermission(roleId: string, permissionId: string) {
+    setRoleDrafts((current) => {
+      const existing = new Set(current[roleId] ?? []);
+      if (existing.has(permissionId)) existing.delete(permissionId);
+      else existing.add(permissionId);
+      return { ...current, [roleId]: [...existing] };
+    });
+  }
+
+  function toggleNewRolePermission(permissionId: string) {
+    setNewRolePermissionIds((current) => current.includes(permissionId)
+      ? current.filter((id) => id !== permissionId)
+      : [...current, permissionId]);
+  }
+
+  function toggleUserRoleDraft(userId: string, roleId: string) {
+    setUserRoleDrafts((current) => {
+      const existing = new Set(current[userId] ?? []);
+      if (existing.has(roleId)) existing.delete(roleId);
+      else existing.add(roleId);
+      return { ...current, [userId]: [...existing] };
+    });
+  }
+
   if (loading) {
     return (
       <div className={styles.centerState}>
@@ -218,7 +397,7 @@ export default function SettingsPage() {
       <div className={styles.headerRow}>
         <div>
           <h2 className={styles.title}>Configuracoes</h2>
-          <p className={styles.subtitle}>Configure integracoes sem JSON manual e com status claro do que falta.</p>
+          <p className={styles.subtitle}>Configure integracoes, sistema e controle de acesso da plataforma.</p>
         </div>
         <button className={styles.primaryBtn} onClick={() => void handleSave()} disabled={saving}>
           {saving ? 'Salvando...' : 'Salvar tudo'}
@@ -328,6 +507,176 @@ export default function SettingsPage() {
           </div>
         </section>
       </div>
+
+      {canManageAccess && (
+        <div className={styles.accessArea}>
+          <section className={styles.card}>
+            <div className={styles.cardHeader}>
+              <h3 className={styles.cardTitle}>Controle de Acesso (RBAC)</h3>
+              <button className={styles.secondaryBtn} onClick={() => void loadAccess()} disabled={accessLoading}>
+                {accessLoading ? 'Atualizando...' : 'Atualizar'}
+              </button>
+            </div>
+            <p className={styles.subtitle}>Crie roles dinâmicas, defina permissões por role e atribua roles aos usuários.</p>
+          </section>
+
+          <section className={styles.card}>
+            <h3 className={styles.cardTitle}>Criar Role</h3>
+            <div className={styles.twoCols}>
+              <label className={styles.field}><span>Nome</span><input className={styles.input} value={newRoleName} onChange={(e) => setNewRoleName(e.target.value)} placeholder="devops" /></label>
+              <label className={styles.field}><span>Descricao</span><input className={styles.input} value={newRoleDescription} onChange={(e) => setNewRoleDescription(e.target.value)} placeholder="Acesso para equipe DevOps" /></label>
+            </div>
+            <div className={styles.checkboxGrid}>
+              {permissions.map((permission) => (
+                <label key={permission.id} className={styles.checkboxRow}>
+                  <input
+                    type="checkbox"
+                    checked={newRolePermissionIds.includes(permission.id)}
+                    onChange={() => toggleNewRolePermission(permission.id)}
+                  />
+                  <span>{permission.key}</span>
+                </label>
+              ))}
+            </div>
+            <button className={styles.primaryBtn} onClick={() => void handleCreateRole()} disabled={!newRoleName.trim()}>
+              Criar role
+            </button>
+          </section>
+
+          <section className={styles.card}>
+            <h3 className={styles.cardTitle}>Roles existentes</h3>
+            {roles.map((role) => (
+              <div key={role.id} className={styles.accessBlock}>
+                <div className={styles.accessRow}>
+                  <div>
+                    <strong>{role.name}</strong>
+                    <p className={styles.hint}>{role.description || 'Sem descricao'} · {role.users_count} usuario(s)</p>
+                  </div>
+                  {!role.is_system && (
+                    <button className={styles.dangerBtn} onClick={() => void handleDeleteRole(role.id)}>
+                      Remover
+                    </button>
+                  )}
+                </div>
+                <div className={styles.checkboxGrid}>
+                  {permissions.map((permission) => (
+                    <label key={`${role.id}-${permission.id}`} className={styles.checkboxRow}>
+                      <input
+                        type="checkbox"
+                        checked={(roleDrafts[role.id] ?? []).includes(permission.id)}
+                        onChange={() => toggleRolePermission(role.id, permission.id)}
+                      />
+                      <span>{permission.key}</span>
+                    </label>
+                  ))}
+                </div>
+                <button className={styles.secondaryBtn} onClick={() => void handleUpdateRolePermissions(role.id)}>
+                  Salvar permissoes
+                </button>
+              </div>
+            ))}
+          </section>
+
+          <section className={styles.card}>
+            <h3 className={styles.cardTitle}>Criar Usuario</h3>
+            <div className={styles.twoCols}>
+              <label className={styles.field}><span>Username</span><input className={styles.input} value={newUser.username} onChange={(e) => setNewUser((c) => ({ ...c, username: e.target.value }))} /></label>
+              <label className={styles.field}><span>Senha</span><input className={styles.input} type="password" value={newUser.password} onChange={(e) => setNewUser((c) => ({ ...c, password: e.target.value }))} /></label>
+              <label className={styles.field}><span>Nome completo</span><input className={styles.input} value={newUser.full_name} onChange={(e) => setNewUser((c) => ({ ...c, full_name: e.target.value }))} /></label>
+              <label className={styles.field}><span>E-mail</span><input className={styles.input} value={newUser.email} onChange={(e) => setNewUser((c) => ({ ...c, email: e.target.value }))} /></label>
+            </div>
+            <label className={styles.checkboxRow}>
+              <input type="checkbox" checked={newUser.is_owner} onChange={(e) => setNewUser((c) => ({ ...c, is_owner: e.target.checked }))} />
+              <span>Marcar como owner</span>
+            </label>
+            <div className={styles.checkboxGrid}>
+              {roles.map((role) => (
+                <label key={`new-${role.id}`} className={styles.checkboxRow}>
+                  <input
+                    type="checkbox"
+                    checked={newUser.role_ids.includes(role.id)}
+                    onChange={() => setNewUser((c) => ({
+                      ...c,
+                      role_ids: c.role_ids.includes(role.id)
+                        ? c.role_ids.filter((id) => id !== role.id)
+                        : [...c.role_ids, role.id],
+                    }))}
+                  />
+                  <span>{role.name}</span>
+                </label>
+              ))}
+            </div>
+            <button className={styles.primaryBtn} onClick={() => void handleCreateUser()} disabled={!newUser.username.trim() || newUser.password.length < 8}>
+              Criar usuario
+            </button>
+          </section>
+
+          <section className={styles.card}>
+            <h3 className={styles.cardTitle}>Usuarios existentes</h3>
+            {users.map((user) => (
+              <div key={user.id} className={styles.accessBlock}>
+                <div className={styles.accessRow}>
+                  <div>
+                    <strong>{user.username}</strong>
+                    <p className={styles.hint}>Ultimo login: {formatWhen(user.last_login_at)}</p>
+                  </div>
+                  <button className={styles.dangerBtn} onClick={() => void handleRemoveUser(user.id)}>
+                    Remover
+                  </button>
+                </div>
+
+                <div className={styles.toggleRow}>
+                  <label className={styles.checkboxRow}>
+                    <input
+                      type="checkbox"
+                      checked={user.is_active}
+                      onChange={(e) => setUsers((curr) => curr.map((item) => item.id === user.id ? { ...item, is_active: e.target.checked } : item))}
+                    />
+                    <span>Ativo</span>
+                  </label>
+                  <label className={styles.checkboxRow}>
+                    <input
+                      type="checkbox"
+                      checked={user.is_owner}
+                      onChange={(e) => setUsers((curr) => curr.map((item) => item.id === user.id ? { ...item, is_owner: e.target.checked } : item))}
+                    />
+                    <span>Owner</span>
+                  </label>
+                </div>
+
+                <div className={styles.checkboxGrid}>
+                  {roles.map((role) => (
+                    <label key={`${user.id}-${role.id}`} className={styles.checkboxRow}>
+                      <input
+                        type="checkbox"
+                        checked={(userRoleDrafts[user.id] ?? roleIdsOf(user)).includes(role.id)}
+                        onChange={() => toggleUserRoleDraft(user.id, role.id)}
+                      />
+                      <span>{role.name}</span>
+                    </label>
+                  ))}
+                </div>
+
+                <div className={styles.actionsRow}>
+                  <input
+                    className={styles.input}
+                    type="password"
+                    placeholder="Nova senha"
+                    value={passwordDrafts[user.id] ?? ''}
+                    onChange={(e) => setPasswordDrafts((curr) => ({ ...curr, [user.id]: e.target.value }))}
+                  />
+                  <button className={styles.secondaryBtn} onClick={() => void handleResetPassword(user.id)}>
+                    Atualizar senha
+                  </button>
+                  <button className={styles.primaryBtn} onClick={() => void handleUpdateUser(user)}>
+                    Salvar usuario
+                  </button>
+                </div>
+              </div>
+            ))}
+          </section>
+        </div>
+      )}
 
       {qrCode && (
         <Modal

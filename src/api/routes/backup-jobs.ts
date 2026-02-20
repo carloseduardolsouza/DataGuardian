@@ -1,7 +1,9 @@
 import { Router } from "express";
 import { z } from "zod";
 import { validate } from "../middlewares/validation";
+import { requirePermission } from "../middlewares/auth";
 import { BackupJobController } from "../controllers/backup-job.controller";
+import { PERMISSIONS } from "../../core/auth/permissions";
 import {
   createBackupJobSchema,
   updateBackupJobSchema,
@@ -19,19 +21,22 @@ const listQuerySchema = z.object({
 
 backupJobsRouter.get(
   "/",
+  requirePermission(PERMISSIONS.BACKUP_JOBS_READ),
   validate(listQuerySchema, "query"),
   BackupJobController.list,
 );
 backupJobsRouter.post(
   "/",
+  requirePermission(PERMISSIONS.BACKUP_JOBS_WRITE),
   validate(createBackupJobSchema),
   BackupJobController.create,
 );
-backupJobsRouter.get("/:id", BackupJobController.findById);
+backupJobsRouter.get("/:id", requirePermission(PERMISSIONS.BACKUP_JOBS_READ), BackupJobController.findById);
 backupJobsRouter.put(
   "/:id",
+  requirePermission(PERMISSIONS.BACKUP_JOBS_WRITE),
   validate(updateBackupJobSchema),
   BackupJobController.update,
 );
-backupJobsRouter.delete("/:id", BackupJobController.remove);
-backupJobsRouter.post("/:id/run", BackupJobController.run);
+backupJobsRouter.delete("/:id", requirePermission(PERMISSIONS.BACKUP_JOBS_WRITE), BackupJobController.remove);
+backupJobsRouter.post("/:id/run", requirePermission(PERMISSIONS.BACKUP_JOBS_RUN), BackupJobController.run);

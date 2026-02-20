@@ -6,7 +6,8 @@ import DashboardPage from './pages/DashboardPage/DashboardPage';
 import { ROUTE_PATHS, type NavKey } from './components/Sidebar/Sidebar';
 import { ToastProvider } from './components/Toast/ToastProvider';
 import { notify } from './components/Toast/notify';
-import { authApi, notificationsApi } from './services/api';
+import { authApi, notificationsApi, type ApiAuthUser } from './services/api';
+import { PERMISSIONS } from './constants/permissions';
 
 type Theme = 'dark' | 'light';
 
@@ -21,6 +22,18 @@ const APP_PAGES: NavKey[] = [
   'notifications',
   'settings',
 ];
+
+const PAGE_PERMISSIONS: Record<NavKey, string> = {
+  dashboard: PERMISSIONS.DASHBOARD_READ,
+  datasources: PERMISSIONS.DATASOURCES_READ,
+  storage: PERMISSIONS.STORAGE_READ,
+  'backup-jobs': PERMISSIONS.BACKUP_JOBS_READ,
+  backups: PERMISSIONS.BACKUPS_READ,
+  executions: PERMISSIONS.EXECUTIONS_READ,
+  health: PERMISSIONS.HEALTH_READ,
+  notifications: PERMISSIONS.NOTIFICATIONS_READ,
+  settings: PERMISSIONS.SYSTEM_READ,
+};
 
 function getInitialTheme(): Theme {
   try {
@@ -37,7 +50,7 @@ export default function App() {
   const [loadingAuth, setLoadingAuth] = useState(true);
   const [hasUser, setHasUser] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [currentUsername, setCurrentUsername] = useState<string | null>(null);
+  const [currentUser, setCurrentUser] = useState<ApiAuthUser | null>(null);
   const [unreadNotifications, setUnreadNotifications] = useState(0);
 
   useEffect(() => {
@@ -46,11 +59,11 @@ export default function App() {
         const status = await authApi.status();
         setHasUser(status.has_user);
         setIsAuthenticated(status.authenticated);
-        setCurrentUsername(status.user?.username ?? null);
+        setCurrentUser(status.user);
       } catch {
         setHasUser(false);
         setIsAuthenticated(false);
-        setCurrentUsername(null);
+        setCurrentUser(null);
       } finally {
         setLoadingAuth(false);
       }
@@ -62,7 +75,7 @@ export default function App() {
   useEffect(() => {
     const handler = () => {
       setIsAuthenticated(false);
-      setCurrentUsername(null);
+      setCurrentUser(null);
       setUnreadNotifications(0);
     };
     window.addEventListener('dg:unauthorized', handler);
@@ -139,14 +152,14 @@ export default function App() {
     const response = await authApi.login(payload);
     setHasUser(true);
     setIsAuthenticated(true);
-    setCurrentUsername(response.user.username);
+    setCurrentUser(response.user);
   };
 
   const handleSetup = async (payload: { username: string; password: string }) => {
     const response = await authApi.setup(payload);
     setHasUser(true);
     setIsAuthenticated(true);
-    setCurrentUsername(response.user.username);
+    setCurrentUser(response.user);
   };
 
   const handleLogout = async () => {
@@ -154,9 +167,15 @@ export default function App() {
       await authApi.logout();
     } finally {
       setIsAuthenticated(false);
-      setCurrentUsername(null);
+      setCurrentUser(null);
     }
   };
+
+  const allowedPages = APP_PAGES.filter((page) => {
+    const permission = PAGE_PERMISSIONS[page];
+    return currentUser?.permissions?.includes(permission) ?? false;
+  });
+  const defaultPage = allowedPages[0] ?? 'dashboard';
 
   if (loadingAuth) {
     return (
@@ -204,10 +223,10 @@ export default function App() {
 
           {hasUser && isAuthenticated && (
             <>
-              <Route path="/" element={<Navigate to={ROUTE_PATHS.dashboard} replace />} />
-              <Route path="/login" element={<Navigate to={ROUTE_PATHS.dashboard} replace />} />
-              <Route path="/setup" element={<Navigate to={ROUTE_PATHS.dashboard} replace />} />
-              {APP_PAGES.map((page) => (
+              <Route path="/" element={<Navigate to={ROUTE_PATHS[defaultPage]} replace />} />
+              <Route path="/login" element={<Navigate to={ROUTE_PATHS[defaultPage]} replace />} />
+              <Route path="/setup" element={<Navigate to={ROUTE_PATHS[defaultPage]} replace />} />
+              {allowedPages.map((page) => (
                 <Route
                   key={page}
                   path={ROUTE_PATHS[page]}
@@ -217,13 +236,14 @@ export default function App() {
                       theme={theme}
                       onToggleTheme={toggleTheme}
                       onLogout={handleLogout}
-                      currentUsername={currentUsername ?? undefined}
+                      currentUser={currentUser ?? undefined}
+                      permissions={currentUser?.permissions ?? []}
                       unreadNotifications={unreadNotifications}
                     />
                   }
                 />
               ))}
-              <Route path="*" element={<Navigate to={ROUTE_PATHS.dashboard} replace />} />
+              <Route path="*" element={<Navigate to={ROUTE_PATHS[defaultPage]} replace />} />
             </>
           )}
         </Routes>

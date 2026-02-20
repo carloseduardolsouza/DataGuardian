@@ -1,7 +1,9 @@
 import { Router } from "express";
 import { z } from "zod";
 import { validate } from "../middlewares/validation";
+import { requirePermission } from "../middlewares/auth";
 import { NotificationController } from "../controllers/notification.controller";
+import { PERMISSIONS } from "../../core/auth/permissions";
 
 export const notificationsRouter = Router();
 
@@ -27,9 +29,10 @@ const listQuerySchema = z.object({
 // /read-all deve ser registrado ANTES de /:id/read para não capturar "read-all" como ID
 notificationsRouter.get(
   "/",
+  requirePermission(PERMISSIONS.NOTIFICATIONS_READ),
   validate(listQuerySchema, "query"),
   NotificationController.list,
 );
-notificationsRouter.put("/read-all", NotificationController.markAllAsRead);
-notificationsRouter.put("/:id/read", NotificationController.markAsRead);
-notificationsRouter.delete("/:id", NotificationController.remove);
+notificationsRouter.put("/read-all", requirePermission(PERMISSIONS.NOTIFICATIONS_MANAGE), NotificationController.markAllAsRead);
+notificationsRouter.put("/:id/read", requirePermission(PERMISSIONS.NOTIFICATIONS_MANAGE), NotificationController.markAsRead);
+notificationsRouter.delete("/:id", requirePermission(PERMISSIONS.NOTIFICATIONS_MANAGE), NotificationController.remove);

@@ -268,7 +268,54 @@ export interface ApiNotification {
 export interface ApiAuthStatus {
   has_user: boolean;
   authenticated: boolean;
-  user: { username: string } | null;
+  user: ApiAuthUser | null;
+}
+
+export interface ApiAuthUser {
+  id: string;
+  username: string;
+  full_name: string | null;
+  is_owner: boolean;
+  roles: string[];
+  permissions: string[];
+  session_expires_at: string;
+}
+
+export interface ApiAccessPermission {
+  id: string;
+  key: string;
+  label: string;
+  description: string | null;
+}
+
+export interface ApiAccessRole {
+  id: string;
+  name: string;
+  description: string | null;
+  is_system: boolean;
+  users_count: number;
+  permissions: ApiAccessPermission[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ApiAccessUser {
+  id: string;
+  username: string;
+  full_name: string | null;
+  email: string | null;
+  is_active: boolean;
+  is_owner: boolean;
+  last_login_at: string | null;
+  created_at: string;
+  updated_at: string;
+  roles: Array<{
+    id: string;
+    name: string;
+    description: string | null;
+    is_system: boolean;
+  }>;
+  permissions: string[];
 }
 
 export interface ApiDashboardOverview {
@@ -633,13 +680,13 @@ export const authApi = {
     request<ApiAuthStatus>('/auth/status'),
 
   setup: (data: { username: string; password: string }) =>
-    request<{ message: string; user: { username: string } }>('/auth/setup', {
+    request<{ message: string; user: ApiAuthUser }>('/auth/setup', {
       method: 'POST',
       body: JSON.stringify(data),
     }),
 
   login: (data: { username: string; password: string }) =>
-    request<{ message: string; user: { username: string } }>('/auth/login', {
+    request<{ message: string; user: ApiAuthUser }>('/auth/login', {
       method: 'POST',
       body: JSON.stringify(data),
     }),
@@ -648,7 +695,68 @@ export const authApi = {
     request<{ message: string }>('/auth/logout', { method: 'POST' }),
 
   me: () =>
-    request<{ user: { username: string } }>('/auth/me'),
+    request<{ user: ApiAuthUser }>('/auth/me'),
+};
+
+export const accessApi = {
+  permissions: () =>
+    request<{ data: ApiAccessPermission[] }>('/access/permissions'),
+
+  roles: () =>
+    request<{ data: ApiAccessRole[] }>('/access/roles'),
+
+  createRole: (data: { name: string; description?: string | null; permission_ids?: string[] }) =>
+    request<ApiAccessRole>('/access/roles', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  updateRole: (id: string, data: { name?: string; description?: string | null; permission_ids?: string[] }) =>
+    request<ApiAccessRole>(`/access/roles/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  removeRole: (id: string) =>
+    request<void>(`/access/roles/${id}`, { method: 'DELETE' }),
+
+  users: () =>
+    request<{ data: ApiAccessUser[] }>('/access/users'),
+
+  createUser: (data: {
+    username: string;
+    password: string;
+    full_name?: string | null;
+    email?: string | null;
+    is_active?: boolean;
+    is_owner?: boolean;
+    role_ids?: string[];
+  }) =>
+    request<ApiAccessUser>('/access/users', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  updateUser: (id: string, data: {
+    full_name?: string | null;
+    email?: string | null;
+    is_active?: boolean;
+    is_owner?: boolean;
+    role_ids?: string[];
+  }) =>
+    request<ApiAccessUser>(`/access/users/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  updateUserPassword: (id: string, data: { password: string }) =>
+    request<{ message: string }>(`/access/users/${id}/password`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  removeUser: (id: string) =>
+    request<void>(`/access/users/${id}`, { method: 'DELETE' }),
 };
 
 // ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ Backup Jobs API ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬

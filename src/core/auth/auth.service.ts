@@ -1,7 +1,9 @@
-﻿import { createHash, randomBytes, scrypt as _scrypt, timingSafeEqual } from 'node:crypto';
+import { createHash, randomBytes, scrypt as _scrypt, timingSafeEqual } from 'node:crypto';
 import { promisify } from 'node:util';
+import { Prisma, type User } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { AppError } from '../../api/middlewares/error-handler';
+import { DEFAULT_ROLE_NAMES, DEFAULT_ROLE_SEEDS, PERMISSION_SEEDS } from './permissions';
 
 const scrypt = promisify(_scrypt);
 
@@ -11,17 +13,19 @@ const SESSION_SETTING_KEY = 'auth.session';
 export const AUTH_COOKIE_NAME = 'dg_session';
 export const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
-interface StoredUserConfig {
+export interface AuthSessionUser {
+  id: string;
   username: string;
-  password_hash: string;
-  created_at: string;
+  full_name: string | null;
+  is_owner: boolean;
+  roles: string[];
+  permissions: string[];
+  session_expires_at: string;
 }
 
-interface StoredSessionConfig {
-  token_hash: string;
+interface LegacyStoredUserConfig {
   username: string;
-  expires_at: string;
-  created_at: string;
+  password_hash: string;
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -31,30 +35,19 @@ function asRecord(value: unknown): Record<string, unknown> {
   return {};
 }
 
-function parseStoredUser(value: unknown): StoredUserConfig | null {
+function parseLegacyStoredUser(value: unknown): LegacyStoredUserConfig | null {
   const record = asRecord(value);
   const username = typeof record.username === 'string' ? record.username : '';
   const passwordHash = typeof record.password_hash === 'string' ? record.password_hash : '';
-  const createdAt = typeof record.created_at === 'string' ? record.created_at : '';
-  if (!username || !passwordHash || !createdAt) return null;
-  return { username, password_hash: passwordHash, created_at: createdAt };
-}
-
-function parseStoredSession(value: unknown): StoredSessionConfig | null {
-  const record = asRecord(value);
-  const tokenHash = typeof record.token_hash === 'string' ? record.token_hash : '';
-  const username = typeof record.username === 'string' ? record.username : '';
-  const expiresAt = typeof record.expires_at === 'string' ? record.expires_at : '';
-  const createdAt = typeof record.created_at === 'string' ? record.created_at : '';
-  if (!tokenHash || !username || !expiresAt || !createdAt) return null;
-  return { token_hash: tokenHash, username, expires_at: expiresAt, created_at: createdAt };
+  if (!username || !passwordHash) return null;
+  return { username, password_hash: passwordHash };
 }
 
 function hashToken(token: string) {
   return createHash('sha256').update(token).digest('hex');
 }
 
-async function hashPassword(password: string) {
+export async function hashPassword(password: string) {
   const salt = randomBytes(16).toString('hex');
   const derived = await scrypt(password, salt, 64) as Buffer;
   return `scrypt$${salt}$${derived.toString('hex')}`;
@@ -67,29 +60,192 @@ async function verifyPassword(password: string, storedHash: string) {
   const salt = parts[1];
   const expected = Buffer.from(parts[2], 'hex');
   const derived = await scrypt(password, salt, expected.length) as Buffer;
-
   if (derived.length !== expected.length) return false;
   return timingSafeEqual(derived, expected);
 }
 
-async function getUserConfig() {
+async function getLegacyUserConfig() {
   const setting = await prisma.systemSetting.findUnique({ where: { key: USER_SETTING_KEY } });
-  return parseStoredUser(setting?.value);
+  return parseLegacyStoredUser(setting?.value);
 }
 
-async function getSessionConfig() {
-  const setting = await prisma.systemSetting.findUnique({ where: { key: SESSION_SETTING_KEY } });
-  return parseStoredSession(setting?.value);
+async function ensureDefaultPermissionsAndRolesTx(tx: Prisma.TransactionClient) {
+  for (const permission of PERMISSION_SEEDS) {
+    await tx.permission.upsert({
+      where: { key: permission.key },
+      create: {
+        key: permission.key,
+        label: permission.label,
+        description: permission.description,
+      },
+      update: {
+        label: permission.label,
+        description: permission.description,
+      },
+    });
+  }
+
+  const permissions = await tx.permission.findMany({
+    select: { id: true, key: true },
+  });
+  const permissionByKey = new Map(permissions.map((p) => [p.key, p.id]));
+
+  for (const roleSeed of DEFAULT_ROLE_SEEDS) {
+    const role = await tx.role.upsert({
+      where: { name: roleSeed.name },
+      create: {
+        name: roleSeed.name,
+        description: roleSeed.description,
+        isSystem: roleSeed.isSystem,
+      },
+      update: {
+        description: roleSeed.description,
+        isSystem: roleSeed.isSystem,
+      },
+    });
+
+    if (!role.isSystem) continue;
+    await tx.rolePermission.deleteMany({ where: { roleId: role.id } });
+    for (const permissionKey of roleSeed.permissions) {
+      const permissionId = permissionByKey.get(permissionKey);
+      if (!permissionId) continue;
+      await tx.rolePermission.create({
+        data: { roleId: role.id, permissionId },
+      });
+    }
+  }
+}
+
+export async function seedAuthDefaults() {
+  await prisma.$transaction(async (tx) => {
+    await ensureDefaultPermissionsAndRolesTx(tx);
+  });
+}
+
+async function migrateLegacySingleUserIfNeeded() {
+  const usersCount = await prisma.user.count();
+  if (usersCount > 0) return;
+
+  const legacy = await getLegacyUserConfig();
+  if (!legacy) return;
+
+  await prisma.$transaction(async (tx) => {
+    await ensureDefaultPermissionsAndRolesTx(tx);
+
+    const adminRole = await tx.role.findUnique({
+      where: { name: DEFAULT_ROLE_NAMES.ADMIN },
+      select: { id: true },
+    });
+
+    if (!adminRole) {
+      throw new AppError('AUTH_BOOTSTRAP_FAILED', 500, 'Role admin nao encontrada para migracao');
+    }
+
+    const user = await tx.user.create({
+      data: {
+        username: legacy.username.trim(),
+        passwordHash: legacy.password_hash,
+        isOwner: true,
+      },
+    });
+
+    await tx.userRole.create({
+      data: {
+        userId: user.id,
+        roleId: adminRole.id,
+      },
+    });
+
+    await tx.systemSetting.deleteMany({
+      where: { key: { in: [USER_SETTING_KEY, SESSION_SETTING_KEY] } },
+    });
+  });
+}
+
+async function getUserWithAccessById(userId: string) {
+  return prisma.user.findUnique({
+    where: { id: userId },
+    include: {
+      roles: {
+        include: {
+          role: {
+            include: {
+              permissions: {
+                include: { permission: true },
+              },
+            },
+          },
+        },
+      },
+    },
+  });
+}
+
+function normalizeUserAccess(user: Awaited<ReturnType<typeof getUserWithAccessById>>): Omit<AuthSessionUser, 'session_expires_at'> | null {
+  if (!user) return null;
+  const roles = user.roles.map((ur) => ur.role.name);
+  const permissions = [...new Set(user.roles.flatMap((ur) => ur.role.permissions.map((rp) => rp.permission.key)))];
+
+  return {
+    id: user.id,
+    username: user.username,
+    full_name: user.fullName ?? null,
+    is_owner: user.isOwner,
+    roles,
+    permissions,
+  };
 }
 
 export async function hasConfiguredUser() {
-  const user = await getUserConfig();
-  return user !== null;
+  await migrateLegacySingleUserIfNeeded();
+  const count = await prisma.user.count();
+  return count > 0;
 }
 
-export async function setupInitialUser(params: { username: string; password: string }) {
-  const existing = await getUserConfig();
-  if (existing) {
+async function createSession(user: User, meta?: { ip?: string | null; userAgent?: string | null }) {
+  const token = randomBytes(32).toString('hex');
+  const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
+
+  await prisma.authSession.create({
+    data: {
+      tokenHash: hashToken(token),
+      userId: user.id,
+      expiresAt,
+      ip: meta?.ip ?? null,
+      userAgent: meta?.userAgent ?? null,
+    },
+  });
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { lastLoginAt: new Date() },
+  });
+
+  return { token, expiresAt: expiresAt.toISOString() };
+}
+
+async function ensureAnyRoleForUserTx(tx: Prisma.TransactionClient, userId: string) {
+  const hasRole = await tx.userRole.count({ where: { userId } });
+  if (hasRole > 0) return;
+
+  const role = await tx.role.findUnique({
+    where: { name: DEFAULT_ROLE_NAMES.ADMIN },
+    select: { id: true },
+  });
+  if (!role) {
+    throw new AppError('ROLE_NOT_FOUND', 500, 'Role admin nao encontrada');
+  }
+
+  await tx.userRole.create({
+    data: { userId, roleId: role.id },
+  });
+}
+
+export async function setupInitialUser(params: { username: string; password: string }, meta?: { ip?: string | null; userAgent?: string | null }) {
+  await migrateLegacySingleUserIfNeeded();
+
+  const existingCount = await prisma.user.count();
+  if (existingCount > 0) {
     throw new AppError('USER_ALREADY_CONFIGURED', 409, 'Usuario ja configurado');
   }
 
@@ -99,105 +255,117 @@ export async function setupInitialUser(params: { username: string; password: str
   }
 
   const passwordHash = await hashPassword(params.password);
+  const createdUser = await prisma.$transaction(async (tx) => {
+    await ensureDefaultPermissionsAndRolesTx(tx);
 
-  await prisma.systemSetting.upsert({
-    where: { key: USER_SETTING_KEY },
-    create: {
-      key: USER_SETTING_KEY,
-      value: {
+    const user = await tx.user.create({
+      data: {
         username,
-        password_hash: passwordHash,
-        created_at: new Date().toISOString(),
+        passwordHash,
+        isOwner: true,
       },
-      description: 'Single-user authentication config',
-    },
-    update: {
-      value: {
-        username,
-        password_hash: passwordHash,
-        created_at: new Date().toISOString(),
-      },
-      description: 'Single-user authentication config',
-    },
+    });
+
+    await ensureAnyRoleForUserTx(tx, user.id);
+    return user;
   });
 
-  return createSession(username);
-}
-
-async function createSession(username: string) {
-  const token = randomBytes(32).toString('hex');
-  const expiresAt = new Date(Date.now() + SESSION_TTL_MS).toISOString();
-
-  await prisma.systemSetting.upsert({
-    where: { key: SESSION_SETTING_KEY },
-    create: {
-      key: SESSION_SETTING_KEY,
-      value: {
-        token_hash: hashToken(token),
-        username,
-        expires_at: expiresAt,
-        created_at: new Date().toISOString(),
-      },
-      description: 'Current active auth session',
-    },
-    update: {
-      value: {
-        token_hash: hashToken(token),
-        username,
-        expires_at: expiresAt,
-        created_at: new Date().toISOString(),
-      },
-      description: 'Current active auth session',
-    },
-  });
-
-  return { token, expiresAt, username };
-}
-
-export async function loginWithPassword(params: { username: string; password: string }) {
-  const user = await getUserConfig();
-  if (!user) {
-    throw new AppError('USER_NOT_CONFIGURED', 404, 'Nenhum usuario configurado');
+  const session = await createSession(createdUser, meta);
+  const accessUser = await getUserWithAccessById(createdUser.id);
+  const normalized = normalizeUserAccess(accessUser);
+  if (!normalized) {
+    throw new AppError('USER_NOT_FOUND', 404, 'Usuario nao encontrado');
   }
 
-  if (user.username !== params.username.trim()) {
+  return {
+    ...session,
+    user: {
+      ...normalized,
+      session_expires_at: session.expiresAt,
+    },
+  };
+}
+
+export async function loginWithPassword(
+  params: { username: string; password: string },
+  meta?: { ip?: string | null; userAgent?: string | null },
+) {
+  await migrateLegacySingleUserIfNeeded();
+
+  const user = await prisma.user.findUnique({
+    where: { username: params.username.trim() },
+  });
+
+  if (!user || !user.isActive) {
     throw new AppError('INVALID_CREDENTIALS', 401, 'Usuario ou senha invalidos');
   }
 
-  const valid = await verifyPassword(params.password, user.password_hash);
+  const valid = await verifyPassword(params.password, user.passwordHash);
   if (!valid) {
     throw new AppError('INVALID_CREDENTIALS', 401, 'Usuario ou senha invalidos');
   }
 
-  return createSession(user.username);
+  await prisma.$transaction(async (tx) => {
+    await ensureAnyRoleForUserTx(tx, user.id);
+  });
+
+  const session = await createSession(user, meta);
+  const accessUser = await getUserWithAccessById(user.id);
+  const normalized = normalizeUserAccess(accessUser);
+  if (!normalized) {
+    throw new AppError('USER_NOT_FOUND', 404, 'Usuario nao encontrado');
+  }
+
+  return {
+    ...session,
+    user: {
+      ...normalized,
+      session_expires_at: session.expiresAt,
+    },
+  };
 }
 
-export async function clearAuthSession() {
-  await prisma.systemSetting.deleteMany({ where: { key: SESSION_SETTING_KEY } });
+export async function clearAuthSession(token: string | null | undefined) {
+  if (!token) return;
+  await prisma.authSession.deleteMany({
+    where: { tokenHash: hashToken(token) },
+  });
+}
+
+export async function clearExpiredAuthSessions() {
+  await prisma.authSession.deleteMany({
+    where: { expiresAt: { lt: new Date() } },
+  });
 }
 
 export async function getSessionUserByToken(token: string | null | undefined) {
   if (!token) return null;
 
-  const [session, user] = await Promise.all([getSessionConfig(), getUserConfig()]);
-  if (!session || !user) return null;
+  await migrateLegacySingleUserIfNeeded();
 
-  const expiresAt = new Date(session.expires_at).getTime();
-  if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
-    await clearAuthSession();
+  const tokenHash = hashToken(token);
+  const session = await prisma.authSession.findUnique({
+    where: { tokenHash },
+    select: {
+      userId: true,
+      expiresAt: true,
+    },
+  });
+
+  if (!session) return null;
+  if (session.expiresAt.getTime() <= Date.now()) {
+    await prisma.authSession.deleteMany({ where: { tokenHash } });
     return null;
   }
 
-  const incomingHash = hashToken(token);
-  const expectedHash = session.token_hash;
+  const user = await getUserWithAccessById(session.userId);
+  if (!user || !user.isActive) return null;
 
-  const incomingBuffer = Buffer.from(incomingHash, 'hex');
-  const expectedBuffer = Buffer.from(expectedHash, 'hex');
+  const normalized = normalizeUserAccess(user);
+  if (!normalized) return null;
 
-  if (incomingBuffer.length !== expectedBuffer.length) return null;
-  if (!timingSafeEqual(incomingBuffer, expectedBuffer)) return null;
-
-  if (session.username !== user.username) return null;
-
-  return { username: user.username, sessionExpiresAt: session.expires_at };
+  return {
+    ...normalized,
+    session_expires_at: session.expiresAt.toISOString(),
+  } satisfies AuthSessionUser;
 }

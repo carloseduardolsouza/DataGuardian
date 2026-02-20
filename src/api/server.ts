@@ -17,7 +17,9 @@ import { systemRouter }           from './routes/system';
 import { authRouter }             from './routes/auth';
 import { dashboardRouter }        from './routes/dashboard';
 import { backupsRouter }          from './routes/backups';
-import { requireAuth }            from './middlewares/auth';
+import { accessRouter }           from './routes/access';
+import { requireAuth, requirePermission } from './middlewares/auth';
+import { PERMISSIONS }            from '../core/auth/permissions';
 
 // ──────────────────────────────────────────
 // Criação e configuração do app Express
@@ -58,6 +60,7 @@ export function createApp() {
   app.use('/api/system',            systemRouter);
   app.use('/api/dashboard',         dashboardRouter);
   app.use('/api/backups',           backupsRouter);
+  app.use('/api/access',            requirePermission(PERMISSIONS.ACCESS_MANAGE), accessRouter);
 
   // ── Rota 404 ──
   app.use((_req: Request, res: Response) => {
