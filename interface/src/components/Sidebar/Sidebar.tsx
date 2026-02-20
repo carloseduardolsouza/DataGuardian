@@ -1,4 +1,5 @@
-﻿import styles from './Sidebar.module.css';
+import { useEffect, useRef, useState } from 'react';
+import styles from './Sidebar.module.css';
 import { Link } from 'react-router-dom';
 import {
   LogoIcon,
@@ -65,10 +66,76 @@ const systemNav: NavItem[] = [
   { key: 'settings', label: 'Configuracoes', icon: <SettingsIcon /> },
 ];
 
+const SIDEBAR_MIN_WIDTH = 210;
+const SIDEBAR_MAX_WIDTH = 420;
+const SIDEBAR_DEFAULT_WIDTH = 240;
+const SIDEBAR_STORAGE_KEY = 'dg-sidebar-width';
+
+function clampSidebarWidth(value: number) {
+  return Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, value));
+}
+
+function readStoredSidebarWidth() {
+  try {
+    const raw = localStorage.getItem(SIDEBAR_STORAGE_KEY);
+    if (!raw) return SIDEBAR_DEFAULT_WIDTH;
+    const parsed = Number(raw);
+    if (!Number.isFinite(parsed)) return SIDEBAR_DEFAULT_WIDTH;
+    return clampSidebarWidth(parsed);
+  } catch {
+    return SIDEBAR_DEFAULT_WIDTH;
+  }
+}
+
 export default function Sidebar({ active, onLogout, unreadNotifications = 0, currentUsername = 'Admin' }: Props) {
+  const [width, setWidth] = useState<number>(readStoredSidebarWidth);
+  const dragRef = useRef<{ pointerId: number; startX: number; startWidth: number } | null>(null);
+
+  useEffect(() => {
+    document.documentElement.style.setProperty('--sidebar-width', `${width}px`);
+    try {
+      localStorage.setItem(SIDEBAR_STORAGE_KEY, String(width));
+    } catch {
+      // noop
+    }
+  }, [width]);
+
+  useEffect(() => {
+    const onPointerMove = (event: PointerEvent) => {
+      const dragState = dragRef.current;
+      if (!dragState || dragState.pointerId !== event.pointerId) return;
+      const deltaX = event.clientX - dragState.startX;
+      setWidth(clampSidebarWidth(dragState.startWidth + deltaX));
+    };
+
+    const onPointerUp = (event: PointerEvent) => {
+      const dragState = dragRef.current;
+      if (!dragState || dragState.pointerId !== event.pointerId) return;
+      dragRef.current = null;
+    };
+
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', onPointerUp);
+    window.addEventListener('pointercancel', onPointerUp);
+    return () => {
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', onPointerUp);
+      window.removeEventListener('pointercancel', onPointerUp);
+    };
+  }, []);
+
+  const startResize = (event: React.PointerEvent<HTMLDivElement>) => {
+    dragRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startWidth: width,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+
   const avatar = currentUsername.trim().charAt(0).toUpperCase() || 'A';
   return (
-    <aside className={styles.sidebar}>
+    <aside className={styles.sidebar} style={{ width }}>
       <div className={styles.header}>
         <div className={styles.logoWrap}>
           <LogoIcon />
@@ -122,6 +189,15 @@ export default function Sidebar({ active, onLogout, unreadNotifications = 0, cur
           Sair
         </button>
       </div>
+
+      <div
+        className={styles.resizeHandle}
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="Redimensionar menu lateral"
+        onPointerDown={startResize}
+        onDoubleClick={() => setWidth(SIDEBAR_DEFAULT_WIDTH)}
+      />
     </aside>
   );
 }

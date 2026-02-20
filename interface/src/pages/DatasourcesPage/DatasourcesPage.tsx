@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { datasourceApi } from '../../services/api';
 import type { ApiDatasource, ApiDatasourceDetail, ApiSchema, ApiSchemaTable } from '../../services/api';
+import { useResizableWidth } from '../../hooks/useResizableWidth';
 import DatasourceList from './DatasourceList';
 import AddDatasourceModal from './AddDatasourceModal';
 import ObjectExplorer from './ObjectExplorer';
@@ -245,6 +246,7 @@ function DatasourceDetail({
 }
 
 export default function DatasourcesPage() {
+  const [isDesktop, setIsDesktop] = useState(() => window.innerWidth > 1200);
   const [datasources, setDatasources] = useState<ApiDatasource[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -263,6 +265,24 @@ export default function DatasourcesPage() {
   const [loadingSchema, setLoadingSchema] = useState(false);
   const [schemaError, setSchemaError] = useState<string | null>(null);
   const [selectedTable, setSelectedTable] = useState<ApiSchemaTable | null>(null);
+  const listPane = useResizableWidth({
+    storageKey: 'dg-ds-left-width',
+    defaultWidth: 260,
+    minWidth: 220,
+    maxWidth: 420,
+  });
+  const detailPane = useResizableWidth({
+    storageKey: 'dg-ds-middle-width',
+    defaultWidth: 360,
+    minWidth: 300,
+    maxWidth: 560,
+  });
+  const explorerPane = useResizableWidth({
+    storageKey: 'dg-ds-explorer-width',
+    defaultWidth: 300,
+    minWidth: 240,
+    maxWidth: 440,
+  });
 
   const loadDatasources = useCallback(async () => {
     try {
@@ -280,6 +300,12 @@ export default function DatasourcesPage() {
   useEffect(() => {
     void loadDatasources();
   }, [loadDatasources]);
+
+  useEffect(() => {
+    const onResize = () => setIsDesktop(window.innerWidth > 1200);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
 
   const loadSchema = useCallback(async (
     ds: ApiDatasource,
@@ -423,7 +449,7 @@ export default function DatasourcesPage() {
 
   return (
     <div className={styles.layout}>
-      <div className={styles.leftPanel}>
+      <div className={styles.leftPanel} style={isDesktop ? { width: listPane.width } : undefined}>
         <DatasourceList
           datasources={datasources}
           selectedId={selectedDs?.id ?? null}
@@ -435,8 +461,18 @@ export default function DatasourcesPage() {
           error={error}
         />
       </div>
+      {isDesktop && (
+        <div
+          className={styles.resizeHandle}
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Redimensionar painel de lista"
+          onPointerDown={listPane.startResize}
+          onDoubleClick={listPane.resetWidth}
+        />
+      )}
 
-      <div className={styles.middlePanel}>
+      <div className={styles.middlePanel} style={isDesktop ? { width: detailPane.width } : undefined}>
         {selectedDs ? (
           <DatasourceDetail
             datasource={selectedDs}
@@ -459,11 +495,21 @@ export default function DatasourcesPage() {
           </div>
         )}
       </div>
+      {isDesktop && (
+        <div
+          className={styles.resizeHandle}
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Redimensionar painel de detalhes"
+          onPointerDown={detailPane.startResize}
+          onDoubleClick={detailPane.resetWidth}
+        />
+      )}
 
       <div className={styles.rightPanel}>
         {selectedDs ? (
           <div className={styles.rightWorkspace}>
-            <div className={styles.explorerPane}>
+            <div className={styles.explorerPane} style={isDesktop ? { width: explorerPane.width } : undefined}>
               <ObjectExplorer
                 datasource={selectedDs}
                 schemas={schemas}
@@ -474,6 +520,16 @@ export default function DatasourcesPage() {
                 onRefresh={() => void loadSchema(selectedDs, detail, true)}
               />
             </div>
+            {isDesktop && (
+              <div
+                className={styles.resizeHandle}
+                role="separator"
+                aria-orientation="vertical"
+                aria-label="Redimensionar explorador"
+                onPointerDown={explorerPane.startResize}
+                onDoubleClick={explorerPane.resetWidth}
+              />
+            )}
             <div className={styles.queryPane}>
               <MainPanel datasource={selectedDs} selectedTable={selectedTable} />
             </div>

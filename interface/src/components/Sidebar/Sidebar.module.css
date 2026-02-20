@@ -2,6 +2,8 @@
 
 .sidebar {
   width: var(--sidebar-width);
+  min-width: 210px;
+  max-width: 420px;
   height: 100vh;
   background: var(--color-sidebar-bg);
   border-right: 1px solid var(--color-border);
@@ -12,6 +14,24 @@
   top: 0;
   z-index: 100;
   overflow: hidden;
+}
+
+.resizeHandle {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 8px;
+  height: 100%;
+  cursor: col-resize;
+  background: transparent;
+}
+
+.resizeHandle:hover {
+  background: var(--color-primary-muted);
+}
+
+.resizeHandle:active {
+  background: var(--color-primary);
 }
 
 /* ── Cabeçalho da sidebar ─────────────────────── */

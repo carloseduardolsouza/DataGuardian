@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { backupsApi } from '../../services/api';
+import { useResizableWidth } from '../../hooks/useResizableWidth';
 import type {
   ApiBackupDatasourceSummary,
   ApiBackupEntry,
@@ -55,6 +56,7 @@ function storageStatusClass(status: ApiBackupStorageLocation['status']) {
 }
 
 export default function BackupsPage() {
+  const [isDesktop, setIsDesktop] = useState(() => window.innerWidth > 980);
   const navigate = useNavigate();
   const [datasources, setDatasources] = useState<ApiBackupDatasourceSummary[]>([]);
   const [loadingDatasources, setLoadingDatasources] = useState(true);
@@ -68,6 +70,12 @@ export default function BackupsPage() {
 
   const [restoreRunning, setRestoreRunning] = useState<Record<string, boolean>>({});
   const [storageSelection, setStorageSelection] = useState<Record<string, string>>({});
+  const listPane = useResizableWidth({
+    storageKey: 'dg-backups-left-width',
+    defaultWidth: 320,
+    minWidth: 250,
+    maxWidth: 480,
+  });
 
   const filteredDatasources = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -131,6 +139,12 @@ export default function BackupsPage() {
   }, []);
 
   useEffect(() => {
+    const onResize = () => setIsDesktop(window.innerWidth > 980);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
+  useEffect(() => {
     if (!selectedDatasourceId) {
       setBackups([]);
       return;
@@ -163,7 +177,7 @@ export default function BackupsPage() {
 
   return (
     <div className={styles.page}>
-      <div className={styles.leftPanel}>
+      <div className={styles.leftPanel} style={isDesktop ? { width: listPane.width } : undefined}>
         <div className={styles.leftHeader}>
           <div className={styles.searchWrap}>
             <SearchIcon />
@@ -203,6 +217,16 @@ export default function BackupsPage() {
           )}
         </div>
       </div>
+      {isDesktop && (
+        <div
+          className={styles.resizeHandle}
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Redimensionar painel de bancos"
+          onPointerDown={listPane.startResize}
+          onDoubleClick={listPane.resetWidth}
+        />
+      )}
 
       <div className={styles.rightPanel}>
         {selectedDatasource ? (

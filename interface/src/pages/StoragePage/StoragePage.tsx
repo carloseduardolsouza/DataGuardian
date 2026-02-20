@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import type { ReactNode } from 'react';
 import { storageApi } from '../../services/api';
 import type { ApiStorageLocation, ApiStorageLocationDetail } from '../../services/api';
+import { useResizableWidth } from '../../hooks/useResizableWidth';
 import StorageList     from './StorageList';
 import AddStorageModal from './AddStorageModal';
 import styles          from './StoragePage.module.css';
@@ -135,6 +136,7 @@ function StorageDetail({
 // ── Main Page ─────────────────────────────────────────────────────
 
 export default function StoragePage() {
+  const [isDesktop, setIsDesktop] = useState(() => window.innerWidth > 980);
   const [locations, setLocations]         = useState<ApiStorageLocation[]>([]);
   const [loading, setLoading]             = useState(true);
   const [error, setError]                 = useState<string | null>(null);
@@ -147,6 +149,12 @@ export default function StoragePage() {
   const [testResult, setTestResult]       = useState<{
     status: string; available_space_gb?: number; latency_ms: number | null;
   } | null>(null);
+  const listPane = useResizableWidth({
+    storageKey: 'dg-storage-left-width',
+    defaultWidth: 280,
+    minWidth: 230,
+    maxWidth: 460,
+  });
 
   // ── Load list ───────────────────────────────────────────────────
 
@@ -164,6 +172,12 @@ export default function StoragePage() {
   }, []);
 
   useEffect(() => { loadLocations(); }, [loadLocations]);
+
+  useEffect(() => {
+    const onResize = () => setIsDesktop(window.innerWidth > 980);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
 
   // ── Select → fetch detail ────────────────────────────────────────
 
@@ -284,7 +298,7 @@ export default function StoragePage() {
       {/* ── Layout 2 painéis ─────────────────────────────────────── */}
       <div className={styles.layout}>
         {/* Painel esquerdo */}
-        <div className={styles.leftPanel}>
+        <div className={styles.leftPanel} style={isDesktop ? { width: listPane.width } : undefined}>
           <StorageList
             locations={locations}
             selectedId={selectedLoc?.id ?? null}
@@ -296,6 +310,16 @@ export default function StoragePage() {
             error={error}
           />
         </div>
+        {isDesktop && (
+          <div
+            className={styles.resizeHandle}
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Redimensionar painel de storages"
+            onPointerDown={listPane.startResize}
+            onDoubleClick={listPane.resetWidth}
+          />
+        )}
 
         {/* Painel direito */}
         <div className={styles.rightPanel}>

@@ -4,8 +4,25 @@
   overflow: hidden;
 }
 
+.resizeHandle {
+  width: 8px;
+  flex-shrink: 0;
+  cursor: col-resize;
+  background: transparent;
+}
+
+.resizeHandle:hover {
+  background: var(--color-primary-muted);
+}
+
+.resizeHandle:active {
+  background: var(--color-primary);
+}
+
 .leftPanel {
   width: 320px;
+  min-width: 250px;
+  max-width: 480px;
   flex-shrink: 0;
   border-right: 1px solid var(--color-border);
   background: var(--color-surface);
@@ -318,6 +335,10 @@
 }
 
 @media (max-width: 980px) {
+  .resizeHandle {
+    display: none;
+  }
+
   .page {
     flex-direction: column;
   }
