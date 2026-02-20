@@ -7,6 +7,7 @@ import {
   updateSystemSettingByKey,
   deleteSystemSettingByKey,
   testSmtpConnection,
+  getWhatsappEvolutionStatus,
   getWhatsappEvolutionQrCode,
 } from '../models/system.model';
 import {
@@ -119,6 +120,16 @@ export const SystemController = {
     try {
       const instance = typeof req.body?.instance === 'string' ? req.body.instance : undefined;
       const result = await getWhatsappEvolutionQrCode(instance);
+      res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async getWhatsappStatus(req: Request, res: Response, next: NextFunction) {
+    try {
+      const instance = typeof req.query?.instance === 'string' ? req.query.instance : undefined;
+      const result = await getWhatsappEvolutionStatus(instance);
       res.json(result);
     } catch (err) {
       next(err);

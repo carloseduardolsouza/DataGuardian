@@ -266,6 +266,13 @@ export interface ApiNotificationTemplate {
   updated_at: string;
 }
 
+export interface ApiWhatsappEvolutionStatus {
+  instance: string;
+  status: 'connected' | 'disconnected' | 'not_found' | 'unknown';
+  connected: boolean;
+  raw?: unknown;
+}
+
 export interface ApiNotification {
   id: string;
   type: 'backup_success' | 'backup_failed' | 'connection_lost' | 'connection_restored' | 'storage_full' | 'storage_unreachable' | 'health_degraded' | 'cleanup_completed';
@@ -1022,6 +1029,13 @@ export const systemApi = {
       method: 'POST',
       body: JSON.stringify(data ?? {}),
     }),
+
+  whatsappStatus: (params?: { instance?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.instance) qs.set('instance', params.instance);
+    const query = qs.toString();
+    return request<ApiWhatsappEvolutionStatus>(`/system/settings/whatsapp/status${query ? `?${query}` : ''}`);
+  },
 
   listNotificationTemplates: (params?: { channel?: 'smtp' | 'webhook' | 'whatsapp'; type?: ApiNotification['type'] }) => {
     const qs = new URLSearchParams();

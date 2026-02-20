@@ -14,6 +14,8 @@ type EvolutionQrParams = {
   instance: string;
 };
 
+export type EvolutionConnectionStatus = 'connected' | 'disconnected' | 'not_found' | 'unknown';
+
 export class EvolutionApiError extends Error {
   constructor(
     message: string,
@@ -29,6 +31,10 @@ export class EvolutionApiError extends Error {
     this.name = 'EvolutionApiError';
     Object.setPrototypeOf(this, EvolutionApiError.prototype);
   }
+}
+
+function stringifyPayload(value: unknown) {
+  return typeof value === 'string' ? value : JSON.stringify(value);
 }
 
 function normalizePhone(value: string) {
@@ -171,18 +177,67 @@ function parseJsonSafe(raw: string): unknown {
 }
 
 function payloadMentionsNameAlreadyInUse(payload: unknown) {
-  const text = typeof payload === 'string' ? payload : JSON.stringify(payload);
+  const text = stringifyPayload(payload);
   return /already in use|ja esta em uso|name.+in use/i.test(text);
 }
 
 function payloadMentionsConnected(payload: unknown) {
-  const text = typeof payload === 'string' ? payload : JSON.stringify(payload);
+  const text = stringifyPayload(payload);
   return /open|connected|conectado|online/i.test(text);
 }
 
 function payloadMentionsInstanceDoesNotExist(payload: unknown) {
-  const text = typeof payload === 'string' ? payload : JSON.stringify(payload);
+  const text = stringifyPayload(payload);
   return /does not exist|nao existe|not exist/i.test(text);
+}
+
+function payloadMentionsDisconnected(payload: unknown) {
+  const text = stringifyPayload(payload);
+  return /close|closed|disconnected|desconectado|offline|connecting|pairing|qrcode|qr/i.test(text);
+}
+
+export async function getEvolutionConnectionStatus(params: EvolutionQrParams): Promise<{
+  instance: string;
+  status: EvolutionConnectionStatus;
+  connected: boolean;
+  raw: unknown;
+}> {
+  const instance = encodeURIComponent(params.instance);
+  const attempts: Array<{ method: 'GET'; path: string }> = [
+    { method: 'GET', path: `/instance/connectionState/${instance}` },
+    { method: 'GET', path: `/instance/connect/${instance}` },
+  ];
+
+  let lastPayload: unknown = null;
+  for (const attempt of attempts) {
+    const response = await tryEvolutionAction({
+      apiUrl: params.apiUrl,
+      apiKey: params.apiKey,
+      method: attempt.method,
+      path: attempt.path,
+    });
+    lastPayload = response.payload;
+
+    if (!response.ok) {
+      if (payloadMentionsInstanceDoesNotExist(response.payload)) {
+        return { instance: params.instance, status: 'not_found', connected: false, raw: response.payload };
+      }
+      continue;
+    }
+
+    if (payloadMentionsConnected(response.payload)) {
+      return { instance: params.instance, status: 'connected', connected: true, raw: response.payload };
+    }
+    if (payloadMentionsDisconnected(response.payload)) {
+      return { instance: params.instance, status: 'disconnected', connected: false, raw: response.payload };
+    }
+  }
+
+  if (payloadMentionsInstanceDoesNotExist(lastPayload)) {
+    return { instance: params.instance, status: 'not_found', connected: false, raw: lastPayload };
+  }
+
+  return { instance: params.instance, status: 'unknown', connected: false, raw: lastPayload };
 }
 
 export async function sendEvolutionText(params: EvolutionSendParams): Promise<void> {
@@ -220,9 +275,6 @@ export async function fetchEvolutionQrCode(params: EvolutionQrParams): Promise<s
     { method: 'GET', path: `/instance/connect/${instance}` },
     { method: 'GET', path: `/instance/qr/${instance}` },
     { method: 'GET', path: `/instance/connectionState/${instance}` },
-    { method: 'POST', path: `/instance/create`, body: { instanceName: params.instance, qrcode: true } },
-    { method: 'POST', path: `/instance/connect/${instance}`, body: {} },
-    { method: 'GET', path: `/instance/connect/${instance}` },
   ];
 
   let lastError = '';

@@ -6,6 +6,7 @@ import {
   type ApiAccessRole,
   type ApiAccessUser,
   type ApiNotificationTemplate,
+  type ApiWhatsappEvolutionStatus,
 } from '../../services/api';
 import { AlertTriangleIcon, CheckCircleIcon, SpinnerIcon } from '../../components/Icons';
 import Modal from '../../components/Modal/Modal';
@@ -130,9 +131,9 @@ export default function SettingsPage({ canManageAccess = false }: Props) {
   const [waInstance, setWaInstance] = useState('');
   const [waRecipients, setWaRecipients] = useState('');
   const [waImportantOnly, setWaImportantOnly] = useState(true);
-  const [loadingQr, setLoadingQr] = useState(false);
-  const [qrCode, setQrCode] = useState<string | null>(null);
-  const [qrInstance, setQrInstance] = useState('');
+  const [waStatusLoading, setWaStatusLoading] = useState(false);
+  const [waConnectionStatus, setWaConnectionStatus] = useState<ApiWhatsappEvolutionStatus['status'] | null>(null);
+  const [waConnected, setWaConnected] = useState<boolean | null>(null);
 
   const [accessLoading, setAccessLoading] = useState(false);
   const [users, setUsers] = useState<ApiAccessUser[]>([]);
@@ -293,6 +294,15 @@ export default function SettingsPage({ canManageAccess = false }: Props) {
     );
   }, [waApiKey, waApiUrl, waHasApiKey, waInstance, waRecipients]);
 
+  useEffect(() => {
+    if (!waConfigured) {
+      setWaConnectionStatus(null);
+      setWaConnected(null);
+      return;
+    }
+    void handleCheckWhatsappStatus(true);
+  }, [waConfigured, waInstance]);
+
   const editingRole = useMemo(
     () => roles.find((role) => role.id === editingRoleId) ?? null,
     [roles, editingRoleId],
@@ -359,21 +369,30 @@ export default function SettingsPage({ canManageAccess = false }: Props) {
     }
   }
 
-  async function handleGetWhatsappQr() {
+  async function handleCheckWhatsappStatus(silent = false) {
     try {
-      setLoadingQr(true);
-      setError(null);
-      const response = await systemApi.whatsappQr({
+      setWaStatusLoading(true);
+      if (!silent) setError(null);
+      const response = await systemApi.whatsappStatus({
         instance: waInstance.trim() ? waInstance.trim() : undefined,
       });
-      setQrCode(response.qr_code);
-      setQrInstance(response.instance);
+      setWaConnectionStatus(response.status);
+      setWaConnected(response.connected);
+      if (!silent) {
+        setSuccess(
+          response.connected
+            ? `Instancia '${response.instance}' conectada.`
+            : `Instancia '${response.instance}' com status '${response.status}'.`,
+        );
+      }
     } catch (err) {
-      setQrCode(null);
-      setQrInstance('');
-      setError(err instanceof Error ? err.message : 'Falha ao obter QR Code.');
+      setWaConnectionStatus(null);
+      setWaConnected(null);
+      if (!silent) {
+        setError(err instanceof Error ? err.message : 'Falha ao consultar status da instancia.');
+      }
     } finally {
-      setLoadingQr(false);
+      setWaStatusLoading(false);
     }
   }
 
@@ -727,9 +746,21 @@ export default function SettingsPage({ canManageAccess = false }: Props) {
             <span>Enviar somente alertas importantes (warning/critical)</span>
           </label>
 
+          <p className={styles.infoLine}>
+            Status da instancia: {
+              waConnected === true
+                ? 'Conectada'
+                : waConnectionStatus === 'not_found'
+                  ? 'Instancia nao encontrada'
+                  : waConnectionStatus
+                    ? `Desconectada (${waConnectionStatus})`
+                    : 'Nao verificado'
+            }
+          </p>
+
           <div className={styles.actionsRow}>
-            <button className={styles.secondaryBtn} onClick={() => void handleGetWhatsappQr()} disabled={loadingQr}>
-              {loadingQr ? 'Gerando QR...' : 'Obter QR Code'}
+            <button className={styles.secondaryBtn} onClick={() => void handleCheckWhatsappStatus()} disabled={waStatusLoading || !waConfigured}>
+              {waStatusLoading ? 'Consultando status...' : 'Verificar status da instancia'}
             </button>
           </div>
         </section>
@@ -1052,26 +1083,6 @@ export default function SettingsPage({ canManageAccess = false }: Props) {
         </Modal>
       )}
 
-      {qrCode && (
-        <Modal
-          title="Conectar WhatsApp"
-          subtitle={`Instancia: ${qrInstance}`}
-          onClose={() => setQrCode(null)}
-          size="sm"
-          footer={(
-            <button className={styles.primaryBtn} onClick={() => setQrCode(null)}>
-              Fechar
-            </button>
-          )}
-        >
-          <div className={styles.qrWrap}>
-            <img src={qrCode} alt="QR Code da Evolution API" className={styles.qrImage} />
-            <p className={styles.hint}>
-              Abra o WhatsApp no celular, toque em Dispositivos conectados e escaneie este QR Code.
-            </p>
-          </div>
-        </Modal>
-      )}
     </div>
   );
 }

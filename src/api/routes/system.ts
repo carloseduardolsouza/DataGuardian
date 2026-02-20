@@ -25,6 +25,9 @@ const updateSettingSchema = z.object({
 const whatsappQrSchema = z.object({
   instance: z.string().min(1).optional(),
 });
+const whatsappStatusQuerySchema = z.object({
+  instance: z.string().min(1).optional(),
+});
 const notificationTemplateQuerySchema = z.object({
   channel: z.enum(['smtp', 'webhook', 'whatsapp']).optional(),
   type: z.enum([
@@ -85,6 +88,12 @@ systemRouter.post(
   requirePermission(PERMISSIONS.SYSTEM_WRITE),
   validate(whatsappQrSchema),
   SystemController.getWhatsappQrCode,
+);
+systemRouter.get(
+  "/settings/whatsapp/status",
+  requirePermission(PERMISSIONS.SYSTEM_READ),
+  validate(whatsappStatusQuerySchema, "query"),
+  SystemController.getWhatsappStatus,
 );
 systemRouter.get(
   "/settings/:key",
