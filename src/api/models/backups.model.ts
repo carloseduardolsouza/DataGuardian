@@ -3,6 +3,8 @@ import { createReadStream, promises as fs } from 'node:fs';
 import * as path from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import { DatasourceType, Prisma, StorageLocationType } from '@prisma/client';
+import { Client as PostgresClient } from 'pg';
+import { createConnection as createMysqlConnection } from 'mysql2/promise';
 import { prisma } from '../../lib/prisma';
 import { bigIntToSafe } from '../../utils/config';
 import { AppError } from '../middlewares/error-handler';
@@ -237,12 +239,13 @@ async function restorePostgres(
   connectionConfig: unknown,
   dumpFile: string,
   dropExisting: boolean,
+  targetDatabase?: string,
   onLog?: (line: string) => void,
 ) {
   const cfg = asObject(connectionConfig);
   const host = requireConnectionString(cfg, 'host');
   const port = requireConnectionNumber(cfg, 'port', 5432);
-  const database = requireConnectionString(cfg, 'database');
+  const database = targetDatabase || requireConnectionString(cfg, 'database');
   const username = requireConnectionString(cfg, 'username');
   const password = requireConnectionString(cfg, 'password');
 
@@ -270,11 +273,16 @@ async function restorePostgres(
   });
 }
 
-async function restoreMysql(connectionConfig: unknown, sqlFile: string, onLog?: (line: string) => void) {
+async function restoreMysql(
+  connectionConfig: unknown,
+  sqlFile: string,
+  targetDatabase?: string,
+  onLog?: (line: string) => void,
+) {
   const cfg = asObject(connectionConfig);
   const host = requireConnectionString(cfg, 'host');
   const port = requireConnectionNumber(cfg, 'port', 3306);
-  const database = requireConnectionString(cfg, 'database');
+  const database = targetDatabase || requireConnectionString(cfg, 'database');
   const username = requireConnectionString(cfg, 'username');
   const password = requireConnectionString(cfg, 'password');
 
@@ -301,6 +309,147 @@ async function restoreMysql(connectionConfig: unknown, sqlFile: string, onLog?: 
       inputFile: sqlFile,
       onLog,
     });
+  }
+}
+
+function sanitizeIdentifier(value: string, fallback: string) {
+  const normalized = value.toLowerCase().replace(/[^a-z0-9_]/g, '_').replace(/^_+|_+$/g, '');
+  return normalized || fallback;
+}
+
+function quotePgIdentifier(value: string) {
+  return `"${value.replace(/"/g, '""')}"`;
+}
+
+function buildVerificationDatabaseName(baseName: string) {
+  const timestamp = new Date().toISOString().replace(/[-:TZ.]/g, '').slice(0, 14);
+  const seed = sanitizeIdentifier(baseName, 'database');
+  const maxBaseLen = 48;
+  const shortSeed = seed.slice(0, maxBaseLen);
+  return `dg_verify_${shortSeed}_${timestamp}`;
+}
+
+async function createPostgresVerificationDatabase(connectionConfig: unknown, onLog?: (line: string) => void) {
+  const cfg = asObject(connectionConfig);
+  const host = requireConnectionString(cfg, 'host');
+  const port = requireConnectionNumber(cfg, 'port', 5432);
+  const username = requireConnectionString(cfg, 'username');
+  const password = requireConnectionString(cfg, 'password');
+  const sourceDatabase = requireConnectionString(cfg, 'database');
+  const maintenanceDatabase = asString(cfg.maintenance_database) || 'postgres';
+  const tempDatabaseName = buildVerificationDatabaseName(sourceDatabase);
+
+  const client = new PostgresClient({
+    host,
+    port,
+    user: username,
+    password,
+    database: maintenanceDatabase,
+  });
+
+  await client.connect();
+  try {
+    onLog?.(`Criando banco temporario '${tempDatabaseName}' para validacao`);
+    await client.query(`CREATE DATABASE ${quotePgIdentifier(tempDatabaseName)}`);
+    return {
+      tempDatabaseName,
+      async dropDatabase() {
+        await client.query(
+          'SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1 AND pid <> pg_backend_pid()',
+          [tempDatabaseName],
+        );
+        await client.query(`DROP DATABASE IF EXISTS ${quotePgIdentifier(tempDatabaseName)}`);
+      },
+      async close() {
+        await client.end().catch(() => undefined);
+      },
+    };
+  } catch (err) {
+    await client.end().catch(() => undefined);
+    throw err;
+  }
+}
+
+async function validatePostgresVerificationDatabase(connectionConfig: unknown, databaseName: string, onLog?: (line: string) => void) {
+  const cfg = asObject(connectionConfig);
+  const host = requireConnectionString(cfg, 'host');
+  const port = requireConnectionNumber(cfg, 'port', 5432);
+  const username = requireConnectionString(cfg, 'username');
+  const password = requireConnectionString(cfg, 'password');
+  const client = new PostgresClient({
+    host,
+    port,
+    user: username,
+    password,
+    database: databaseName,
+  });
+
+  await client.connect();
+  try {
+    const tableCountResult = await client.query<{ count: string }>(
+      "SELECT COUNT(*)::text AS count FROM information_schema.tables WHERE table_schema NOT IN ('pg_catalog', 'information_schema')",
+    );
+    const tableCount = Number(tableCountResult.rows[0]?.count || 0);
+    onLog?.(`Validacao concluida no banco temporario: ${tableCount} tabela(s) encontradas`);
+  } finally {
+    await client.end().catch(() => undefined);
+  }
+}
+
+async function createMysqlVerificationDatabase(connectionConfig: unknown, onLog?: (line: string) => void) {
+  const cfg = asObject(connectionConfig);
+  const host = requireConnectionString(cfg, 'host');
+  const port = requireConnectionNumber(cfg, 'port', 3306);
+  const username = requireConnectionString(cfg, 'username');
+  const password = requireConnectionString(cfg, 'password');
+  const sourceDatabase = requireConnectionString(cfg, 'database');
+  const tempDatabaseName = buildVerificationDatabaseName(sourceDatabase);
+  const connection = await createMysqlConnection({
+    host,
+    port,
+    user: username,
+    password,
+  });
+
+  try {
+    onLog?.(`Criando banco temporario '${tempDatabaseName}' para validacao`);
+    await connection.query(`CREATE DATABASE \`${tempDatabaseName.replace(/`/g, '``')}\``);
+    return {
+      tempDatabaseName,
+      async dropDatabase() {
+        await connection.query(`DROP DATABASE IF EXISTS \`${tempDatabaseName.replace(/`/g, '``')}\``);
+      },
+      async close() {
+        await connection.end().catch(() => undefined);
+      },
+    };
+  } catch (err) {
+    await connection.end().catch(() => undefined);
+    throw err;
+  }
+}
+
+async function validateMysqlVerificationDatabase(connectionConfig: unknown, databaseName: string, onLog?: (line: string) => void) {
+  const cfg = asObject(connectionConfig);
+  const host = requireConnectionString(cfg, 'host');
+  const port = requireConnectionNumber(cfg, 'port', 3306);
+  const username = requireConnectionString(cfg, 'username');
+  const password = requireConnectionString(cfg, 'password');
+  const connection = await createMysqlConnection({
+    host,
+    port,
+    user: username,
+    password,
+    database: databaseName,
+  });
+
+  try {
+    const [rows] = await connection.query('SELECT COUNT(*) AS count FROM information_schema.tables WHERE table_schema = ?', [databaseName]);
+    const first = Array.isArray(rows) ? (rows[0] as { count?: number | string } | undefined) : undefined;
+    const count = Number(first?.count || 0);
+    onLog?.(`Validacao concluida no banco temporario: ${count} tabela(s) encontradas`);
+  } finally {
+    await connection.end().catch(() => undefined);
   }
 }
 
@@ -407,12 +556,15 @@ async function runRestoreExecutionInBackground(params: {
   };
   candidates: StorageSnapshotEntry[];
   dropExisting: boolean;
+  verificationMode: boolean;
+  keepVerificationDatabase: boolean;
 }) {
   const startedAtMs = Date.now();
   const executionLogs: ExecutionLogEntry[] = [];
   const runtimeMetadata: Record<string, unknown> = {
     operation: 'restore',
     source_execution_id: params.sourceExecutionId,
+    verification_mode: params.verificationMode,
     execution_logs: executionLogs,
   };
   let lastPersistAt = 0;
@@ -450,6 +602,9 @@ async function runRestoreExecutionInBackground(params: {
   );
   let chosenStorage: StorageSnapshotEntry | null = null;
   let restoreInputFile = '';
+  let verificationDbDropper: (() => Promise<void>) | null = null;
+  let verificationDbCloser: (() => Promise<void>) | null = null;
+  let verificationDatabaseName: string | null = null;
 
   try {
     await fs.mkdir(restoreRoot, { recursive: true });
@@ -481,13 +636,60 @@ async function runRestoreExecutionInBackground(params: {
     }
 
     const datasourceType = String(params.datasource.type);
-    pushLog('info', `Executando restore ${datasourceType}`, true);
+    pushLog(
+      'info',
+      params.verificationMode
+        ? `Executando restore verification mode (${datasourceType})`
+        : `Executando restore ${datasourceType}`,
+      true,
+    );
     currentPhase = `restaurando ${datasourceType}`;
     const engineLogger = (line: string) => pushLog('debug', `[engine] ${line}`, true);
-    if (datasourceType === 'postgres') {
-      await restorePostgres(params.datasource.connectionConfig, restoreInputFile, params.dropExisting, engineLogger);
+    if (params.verificationMode) {
+      if (datasourceType === 'postgres') {
+        const verificationDb = await createPostgresVerificationDatabase(params.datasource.connectionConfig, (line) => pushLog('info', line, true));
+        verificationDbDropper = verificationDb.dropDatabase;
+        verificationDbCloser = verificationDb.close;
+        verificationDatabaseName = verificationDb.tempDatabaseName;
+        runtimeMetadata.verification_database = verificationDatabaseName;
+        pushLog('info', `Banco temporario criado: ${verificationDatabaseName}`, true);
+        await restorePostgres(
+          params.datasource.connectionConfig,
+          restoreInputFile,
+          false,
+          verificationDatabaseName,
+          engineLogger,
+        );
+        await validatePostgresVerificationDatabase(
+          params.datasource.connectionConfig,
+          verificationDatabaseName,
+          (line) => pushLog('info', line, true),
+        );
+      } else if (datasourceType === 'mysql' || datasourceType === 'mariadb') {
+        const verificationDb = await createMysqlVerificationDatabase(params.datasource.connectionConfig, (line) => pushLog('info', line, true));
+        verificationDbDropper = verificationDb.dropDatabase;
+        verificationDbCloser = verificationDb.close;
+        verificationDatabaseName = verificationDb.tempDatabaseName;
+        runtimeMetadata.verification_database = verificationDatabaseName;
+        pushLog('info', `Banco temporario criado: ${verificationDatabaseName}`, true);
+        await restoreMysql(
+          params.datasource.connectionConfig,
+          restoreInputFile,
+          verificationDatabaseName,
+          engineLogger,
+        );
+        await validateMysqlVerificationDatabase(
+          params.datasource.connectionConfig,
+          verificationDatabaseName,
+          (line) => pushLog('info', line, true),
+        );
+      } else {
+        throw new AppError('RESTORE_NOT_SUPPORTED', 422, `Restore nao suportado para datasource '${datasourceType}'`);
+      }
+    } else if (datasourceType === 'postgres') {
+      await restorePostgres(params.datasource.connectionConfig, restoreInputFile, params.dropExisting, undefined, engineLogger);
     } else if (datasourceType === 'mysql' || datasourceType === 'mariadb') {
-      await restoreMysql(params.datasource.connectionConfig, restoreInputFile, engineLogger);
+      await restoreMysql(params.datasource.connectionConfig, restoreInputFile, undefined, engineLogger);
     } else {
       throw new AppError('RESTORE_NOT_SUPPORTED', 422, `Restore nao suportado para datasource '${datasourceType}'`);
     }
@@ -503,7 +705,22 @@ async function runRestoreExecutionInBackground(params: {
       type: resolvedStorage.storage_type,
     };
     runtimeMetadata.drop_existing = params.dropExisting;
-    pushLog('success', `Restore concluido em ${durationSeconds}s`, true);
+    runtimeMetadata.keep_verification_database = params.keepVerificationDatabase;
+    if (params.verificationMode && verificationDatabaseName) {
+      if (!params.keepVerificationDatabase && verificationDbDropper) {
+        await verificationDbDropper();
+        pushLog('info', `Banco temporario removido: ${verificationDatabaseName}`, true);
+      } else {
+        pushLog('warn', `Banco temporario mantido: ${verificationDatabaseName}`, true);
+      }
+    }
+    pushLog(
+      'success',
+      params.verificationMode
+        ? `Restore verification concluido em ${durationSeconds}s`
+        : `Restore concluido em ${durationSeconds}s`,
+      true,
+    );
     await persistLogs(true);
 
     await prisma.backupExecution.update({
@@ -531,6 +748,12 @@ async function runRestoreExecutionInBackground(params: {
       },
     });
   } finally {
+    if (params.verificationMode && !params.keepVerificationDatabase && verificationDbDropper) {
+      await verificationDbDropper().catch(() => undefined);
+    }
+    if (verificationDbCloser) {
+      await verificationDbCloser().catch(() => undefined);
+    }
     if (heartbeat) clearInterval(heartbeat);
     await fs.rm(restoreRoot, { recursive: true, force: true }).catch(() => undefined);
   }
@@ -642,6 +865,8 @@ export async function restoreBackupExecution(params: {
   executionId: string;
   storageLocationId?: string;
   dropExisting?: boolean;
+  verificationMode?: boolean;
+  keepVerificationDatabase?: boolean;
 }) {
   const execution = await prisma.backupExecution.findUniqueOrThrow({
     where: { id: params.executionId },
@@ -709,7 +934,9 @@ export async function restoreBackupExecution(params: {
   }
 
   const startedAt = new Date();
-  const dropExisting = params.dropExisting ?? true;
+  const verificationMode = params.verificationMode ?? false;
+  const keepVerificationDatabase = params.keepVerificationDatabase ?? false;
+  const dropExisting = verificationMode ? false : (params.dropExisting ?? true);
 
   const restoreExecution = await prisma.backupExecution.create({
     data: {
@@ -726,9 +953,13 @@ export async function restoreBackupExecution(params: {
           {
             ts: startedAt.toISOString(),
             level: 'info',
-            message: 'Restore enfileirado e iniciado',
+            message: verificationMode
+              ? 'Restore verification enfileirado e iniciado'
+              : 'Restore enfileirado e iniciado',
           },
         ],
+        verification_mode: verificationMode,
+        keep_verification_database: keepVerificationDatabase,
       } as unknown as Prisma.InputJsonValue,
     },
   });
@@ -744,15 +975,18 @@ export async function restoreBackupExecution(params: {
     },
     candidates: orderedCandidates,
     dropExisting,
+    verificationMode,
+    keepVerificationDatabase,
   });
 
   return {
-    message: 'Restore iniciado com sucesso',
+    message: verificationMode ? 'Restore verification iniciado com sucesso' : 'Restore iniciado com sucesso',
     execution_id: restoreExecution.id,
     source_execution_id: execution.id,
     datasource_id: execution.datasource.id,
     datasource_name: execution.datasource.name,
     datasource_type: execution.datasource.type as DatasourceType,
+    verification_mode: verificationMode,
     status: 'running',
     started_at: startedAt.toISOString(),
   };

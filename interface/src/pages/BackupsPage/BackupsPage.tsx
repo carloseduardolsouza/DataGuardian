@@ -18,6 +18,8 @@ import {
   ErrorIcon,
 } from '../../components/Icons';
 import { ROUTE_PATHS } from '../../components/Sidebar/Sidebar';
+import Modal from '../../components/Modal/Modal';
+import { PERMISSIONS } from '../../constants/permissions';
 import styles from './BackupsPage.module.css';
 
 function formatBytes(value: number | string | null) {
@@ -55,7 +57,11 @@ function storageStatusClass(status: ApiBackupStorageLocation['status']) {
   return styles.storageStatusMuted;
 }
 
-export default function BackupsPage() {
+interface Props {
+  permissions?: string[];
+}
+
+export default function BackupsPage({ permissions = [] }: Props) {
   const [isDesktop, setIsDesktop] = useState(() => window.innerWidth > 980);
   const navigate = useNavigate();
   const [datasources, setDatasources] = useState<ApiBackupDatasourceSummary[]>([]);
@@ -70,6 +76,11 @@ export default function BackupsPage() {
 
   const [restoreRunning, setRestoreRunning] = useState<Record<string, boolean>>({});
   const [storageSelection, setStorageSelection] = useState<Record<string, string>>({});
+  const [restoreTarget, setRestoreTarget] = useState<ApiBackupEntry | null>(null);
+  const [verificationMode, setVerificationMode] = useState(false);
+  const [keepVerificationDatabase, setKeepVerificationDatabase] = useState(false);
+  const [dropExisting, setDropExisting] = useState(true);
+  const [confirmationPhrase, setConfirmationPhrase] = useState('');
   const listPane = useResizableWidth({
     storageKey: 'dg-backups-left-width',
     defaultWidth: 320,
@@ -97,6 +108,9 @@ export default function BackupsPage() {
       return acc + (hasAvailable ? 1 : 0);
     }, 0);
   }, [backups]);
+
+  const canRunRestoreVerification = permissions.includes(PERMISSIONS.BACKUPS_RESTORE_VERIFY);
+  const requiredPhrase = verificationMode ? 'VERIFICAR RESTORE' : 'RESTAURAR';
 
   const loadDatasources = async () => {
     try {
@@ -152,19 +166,39 @@ export default function BackupsPage() {
     void loadBackups(selectedDatasourceId);
   }, [selectedDatasourceId]);
 
-  const handleRestore = async (backup: ApiBackupEntry) => {
+  const openRestoreModal = (backup: ApiBackupEntry) => {
+    setRestoreTarget(backup);
+    setVerificationMode(false);
+    setKeepVerificationDatabase(false);
+    setDropExisting(true);
+    setConfirmationPhrase('');
+  };
+
+  const handleRestore = async () => {
+    if (!restoreTarget) return;
+    if (confirmationPhrase.trim() !== requiredPhrase) {
+      setError(`Confirmacao invalida. Digite '${requiredPhrase}' para continuar.`);
+      return;
+    }
+
+    if (verificationMode && !canRunRestoreVerification) {
+      setError('Voce nao possui permissao para usar o modo de verificacao.');
+      return;
+    }
+
+    const backup = restoreTarget;
     const storageLocationId = storageSelection[backup.execution_id] || undefined;
-    const confirmed = window.confirm(
-      `Restaurar o backup de ${formatDate(backup.created_at)} no banco '${backup.datasource.name}'?`,
-    );
-    if (!confirmed) return;
 
     try {
       setRestoreRunning((prev) => ({ ...prev, [backup.execution_id]: true }));
       const response = await backupsApi.restore(backup.execution_id, {
         storage_location_id: storageLocationId,
-        drop_existing: true,
+        drop_existing: dropExisting,
+        verification_mode: verificationMode,
+        keep_verification_database: keepVerificationDatabase,
+        confirmation_phrase: confirmationPhrase.trim(),
       });
+      setRestoreTarget(null);
       navigate(ROUTE_PATHS.executions, {
         state: { openExecutionId: response.execution_id },
       });
@@ -319,7 +353,7 @@ export default function BackupsPage() {
                             <button
                               className={styles.restoreBtn}
                               disabled={running}
-                              onClick={() => void handleRestore(backup)}
+                              onClick={() => openRestoreModal(backup)}
                             >
                               {running ? <SpinnerIcon /> : <PlayFilledIcon />}
                               {running ? 'Restaurando...' : 'Restore'}
@@ -340,6 +374,93 @@ export default function BackupsPage() {
           </div>
         )}
       </div>
+
+      {restoreTarget && (
+        <Modal
+          title="Confirmar restore"
+          subtitle={`Backup de ${formatDate(restoreTarget.created_at)} para '${restoreTarget.datasource.name}'`}
+          onClose={() => setRestoreTarget(null)}
+          size="md"
+          footer={(
+            <>
+              <button className={styles.secondaryBtn} onClick={() => setRestoreTarget(null)}>Cancelar</button>
+              <button
+                className={styles.restoreBtn}
+                onClick={() => void handleRestore()}
+                disabled={confirmationPhrase.trim() !== requiredPhrase || restoreRunning[restoreTarget.execution_id]}
+              >
+                {restoreRunning[restoreTarget.execution_id] ? <SpinnerIcon /> : <PlayFilledIcon />}
+                {verificationMode ? 'Validar backup' : 'Iniciar restore'}
+              </button>
+            </>
+          )}
+        >
+          <div className={styles.modalContent}>
+            <p className={styles.modalHint}>
+              Escolha o tipo de operacao. O modo de verificacao restaura em banco temporario para validar o backup sem afetar o banco principal.
+            </p>
+
+            <label className={styles.checkboxRow}>
+              <input
+                type="radio"
+                name="restore-mode"
+                checked={!verificationMode}
+                onChange={() => setVerificationMode(false)}
+              />
+              <span>Restore real no banco de destino</span>
+            </label>
+
+            <label className={styles.checkboxRow}>
+              <input
+                type="radio"
+                name="restore-mode"
+                checked={verificationMode}
+                onChange={() => setVerificationMode(true)}
+                disabled={!canRunRestoreVerification}
+              />
+              <span>Restore verification mode (banco temporario)</span>
+            </label>
+
+            {!canRunRestoreVerification && (
+              <p className={styles.warningText}>
+                Seu usuario nao possui permissao para restore verification mode.
+              </p>
+            )}
+
+            {!verificationMode && (
+              <label className={styles.checkboxRow}>
+                <input
+                  type="checkbox"
+                  checked={dropExisting}
+                  onChange={(event) => setDropExisting(event.target.checked)}
+                />
+                <span>Limpar objetos existentes antes do restore (clean)</span>
+              </label>
+            )}
+
+            {verificationMode && (
+              <label className={styles.checkboxRow}>
+                <input
+                  type="checkbox"
+                  checked={keepVerificationDatabase}
+                  onChange={(event) => setKeepVerificationDatabase(event.target.checked)}
+                />
+                <span>Manter banco temporario apos validacao</span>
+              </label>
+            )}
+
+            <label className={styles.field}>
+              <span>Digite <code>{requiredPhrase}</code> para confirmar</span>
+              <input
+                className={styles.confirmInput}
+                value={confirmationPhrase}
+                onChange={(event) => setConfirmationPhrase(event.target.value)}
+                placeholder={requiredPhrase}
+              />
+            </label>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }

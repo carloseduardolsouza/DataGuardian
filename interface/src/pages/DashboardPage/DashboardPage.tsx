@@ -142,7 +142,7 @@ export default function DashboardPage({
           {activePage === 'datasources' && <DatasourcesPage />}
           {activePage === 'storage' && <StoragePage />}
           {activePage === 'backup-jobs' && <BackupJobsPage />}
-          {activePage === 'backups' && <BackupsPage />}
+          {activePage === 'backups' && <BackupsPage permissions={permissions} />}
           {activePage === 'executions' && <ExecutionsPage />}
           {activePage === 'health' && <HealthPage />}
           {activePage === 'notifications' && (

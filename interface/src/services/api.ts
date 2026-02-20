@@ -674,7 +674,16 @@ export const backupsApi = {
   listByDatasource: (datasourceId: string) =>
     request<ApiBackupsByDatasourceResponse>(`/backups/datasources/${datasourceId}`),
 
-  restore: (executionId: string, data?: { storage_location_id?: string; drop_existing?: boolean }) =>
+  restore: (
+    executionId: string,
+    data?: {
+      storage_location_id?: string;
+      drop_existing?: boolean;
+      verification_mode?: boolean;
+      keep_verification_database?: boolean;
+      confirmation_phrase?: string;
+    },
+  ) =>
     request<{
       message: string;
       execution_id: string;
@@ -682,6 +691,7 @@ export const backupsApi = {
       datasource_id: string;
       datasource_name: string;
       datasource_type: DatasourceType;
+      verification_mode: boolean;
       status: 'running';
       started_at: string;
     }>(`/backups/${executionId}/restore`, {

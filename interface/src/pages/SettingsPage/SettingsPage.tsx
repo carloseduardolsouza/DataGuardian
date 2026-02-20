@@ -33,6 +33,7 @@ const FRIENDLY_PERMISSION: Record<string, { label: string; description: string }
   'backup_jobs.write': { label: 'Gerenciar jobs de backup', description: 'Criar, editar e remover jobs de backup' },
   'backups.read': { label: 'Ver backups', description: 'Listar backups existentes e seus detalhes' },
   'backups.restore': { label: 'Restaurar backups', description: 'Executar restore de backups para uma datasource' },
+  'backups.restore_verify': { label: 'Validar restore em banco temporario', description: 'Executar restore verification mode sem afetar banco principal' },
   'dashboard.read': { label: 'Ver dashboard', description: 'Acessar indicadores e resumo geral da plataforma' },
   'datasources.query': { label: 'Executar SQL', description: 'Executar consultas SQL e operacoes de schema' },
   'datasources.read': { label: 'Ver bancos de dados', description: 'Listar e visualizar datasources cadastrados' },
