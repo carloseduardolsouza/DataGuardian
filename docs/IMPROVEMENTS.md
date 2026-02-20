@@ -1,74 +1,45 @@
-# Sugestoes de Melhorias - DataGuardian
+ï»¿# Sugestoes de Melhorias - DataGuardian
 
-Este documento consolida melhorias recomendadas para evoluir o DataGuardian em robustez, observabilidade e capacidade operacional.
+Este documento lista melhorias futuras. Itens ja implementados foram removidos do backlog principal.
 
-## Prioridade alta
+## Ja implementado recentemente
 
-1. Restore em fila (BullMQ)
-- Colocar restore no mesmo modelo assíncrono de backup.
-- Benefícios: retry controlado, concorrência previsível, melhor resiliência.
+- restore em fila BullMQ com retry/control de concorrencia
+- endpoint Prometheus nativo (`/metrics`)
+- persistencia de health de storage em tabela (`storage_health_checks`)
+- alertas externos robustos (SMTP, webhook, WhatsApp) com templates/versionamento
+- RBAC dinamico + auditoria
+- restore verification mode com confirmacao explicita e permissao dedicada
 
-2. Logs em tempo real na tela de Execuções
-- Implementar SSE/WebSocket para streaming de logs por execução.
-- Benefícios: feedback imediato para operador, melhor UX em backup/restore longos.
+## Backlog recomendado (proximas evolucoes)
 
-3. Persistir health de storage no banco
-- Hoje o histórico de storage health está em memória.
-- Persistir em tabela dedicada para histórico durável e auditoria.
+1. Streaming de logs em tempo real (SSE/WebSocket)
+- Exibir logs sem polling para execucoes longas.
 
-4. Testes E2E dos fluxos críticos
-- Cobrir: backup manual, retry-upload, restore, cleanup.
-- Benefícios: menos regressão e maior confiança em releases.
+2. Criptografia de artefatos em repouso
+- AES por job/storage, com rotacao de chave.
 
-## Prioridade média
+3. Politicas de retencao avancadas
+- Regras por janela (diario/semanal/mensal) alem de `max_backups`.
 
-5. Métricas Prometheus nativas
-- Expor `/metrics` com contadores e latências por worker/job/storage.
-- Benefícios: observabilidade operacional e integração com Grafana.
+4. Restore drill automatizado
+- Rotina periodica que executa verification mode e gera relatorio.
 
-6. Sistema de auditoria
-- Registrar ações sensíveis: login, criação/edição de jobs, execuções manuais, restores.
-- Benefícios: rastreabilidade e compliance.
+5. SLA/SLO operacionais
+- Meta de sucesso de backup/restore por datasource e alertas por violacao.
 
-7. Alertas externos mais robustos
-- Melhorar SMTP/webhook/WhatsApp com templates e padronização.
-- Benefícios: alertas mais claros e acionáveis.
+6. E2E ampliado para cenarios de falha
+- Falha de Redis, storage parcial, credenciais expiradas, retry exaustivo.
 
-8. RBAC simples evolutivo
-- Evoluir de single-user para perfis: `admin`, `operator`, `readonly`.
-- Benefícios: segurança e segregação de funções.
+7. IntegraÃ§Ãµes de observabilidade
+- Exportar traces (OpenTelemetry) e correlacionar com logs/metricas.
 
-## Prioridade estratégica
+8. Multi-tenant (opcional)
+- Isolamento por organizacao/equipe para ambientes compartilhados.
 
-9. Verificação de restore (restore validation mode)
-- Restaurar em ambiente temporário e validar integridade antes de aprovar backup.
-- Benefícios: aumenta confiabilidade de recuperação real.
+## Criterios de sucesso sugeridos
 
-10. Criptografia de backup em repouso
-- Criptografia opcional dos artefatos (ex: AES) e gestão de chaves.
-- Benefícios: segurança para compliance e ambientes sensíveis.
-
-## Proposta de roadmap
-
-## Fase 1 (curto prazo)
-- Restore em fila
-- Logs em tempo real
-- Health de storage persistente
-- Testes E2E básicos
-
-## Fase 2 (médio prazo)
-- Métricas Prometheus
-- Auditoria
-- Alertas externos aprimorados
-
-## Fase 3 (longo prazo)
-- RBAC
-- Verificação de restore
-- Criptografia em repouso
-
-## Critérios de sucesso sugeridos
-
-- Redução de falhas operacionais não detectadas.
-- Tempo de diagnóstico menor em incidentes.
-- Maior taxa de sucesso de backup/restore.
-- Menor regressão entre versões.
+- reduzir tempo medio de diagnostico (MTTD)
+- reduzir tempo medio de recuperacao (MTTR)
+- aumentar taxa de sucesso de backup/restore
+- diminuir regressao funcional por release

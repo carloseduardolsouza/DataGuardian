@@ -1,15 +1,15 @@
-# Deployment - DataGuardian
+﻿# Deployment - DataGuardian
 
-Guia alinhado ao compose atual em `docker/docker-compose.yml`.
+Guia alinhado ao compose em `docker/docker-compose.yml`.
 
-## Servicos do compose
+## Servicos
 
 - `postgres` (metadados)
-- `redis` (fila)
+- `redis` (fila BullMQ)
 - `app` (API + workers)
-- `evolution-postgres` (integracao WhatsApp)
-- `evolution-redis` (integracao WhatsApp)
-- `evolution-api` (integracao WhatsApp)
+- `evolution-postgres`
+- `evolution-redis`
+- `evolution-api`
 
 ## Subir stack
 
@@ -19,7 +19,6 @@ docker compose -f docker/docker-compose.yml up -d
 
 ## Variaveis importantes (`.env`)
 
-- `DB_PASSWORD`
 - `DATABASE_URL`
 - `REDIS_URL`
 - `REDIS_PASSWORD`
@@ -32,20 +31,22 @@ docker compose -f docker/docker-compose.yml up -d
 - `CLEANUP_CRON`
 - `TEMP_DIRECTORY`
 - `EVOLUTION_API_GLOBAL_KEY`
-- `EVOLUTION_DB_PASSWORD`
 
-## Healthchecks
+## Health e metricas
 
-- simples: `GET /health`
-- detalhado: `GET /api/health`
+- `GET /health` (liveness simples)
+- `GET /api/health` (detalhado, protegido)
+- `GET /metrics` (Prometheus)
 
 ## Redis indisponivel em producao
 
-Com Redis fora:
+Com Redis offline:
 
-- scheduler/backup param automaticamente
-- health/cleanup continuam
+- `scheduler`, `backup` e `restore` ficam desativados
+- `health` e `cleanup` continuam
 - endpoints dependentes de fila podem retornar `503`
+
+Quando Redis volta, os workers de fila sao religados automaticamente.
 
 ## Upgrade
 
@@ -53,6 +54,15 @@ Com Redis fora:
 git pull
 docker compose -f docker/docker-compose.yml build app
 docker compose -f docker/docker-compose.yml up -d app
+```
+
+## Migrations
+
+Em deploy, garantir migrations aplicadas:
+
+```bash
+npm run db:deploy
+npm run db:generate
 ```
 
 ## Logs
@@ -63,15 +73,16 @@ docker compose -f docker/docker-compose.yml logs -f app
 
 ## Persistencia
 
-Volumes importantes:
+Volumes principais:
 
 - `postgres-data`
 - `redis-data`
 - `backup-storage`
-- `evolution-*` (quando integracao WhatsApp estiver habilitada)
+- `evolution-*`
 
 ## Recomendacoes
 
 - nao expor `5432` e `6379` publicamente
-- colocar `app` atras de reverse proxy HTTPS
+- usar reverse proxy HTTPS para o `app`
 - proteger `.env` e credenciais de storage
+- coletar `/metrics` em Prometheus/Grafana

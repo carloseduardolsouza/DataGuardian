@@ -7,13 +7,13 @@ DataGuardian e um monolito Node.js com:
 - API Express
 - Workers em background
 - PostgreSQL para metadados
-- Redis/BullMQ para fila de backups
+- Redis/BullMQ para filas de backup e restore
 
 ## Componentes
 
 - `src/api/*`: rotas, controllers, middlewares
-- `src/core/*`: logica de backup, storage, health, retention, auth
-- `src/workers/*`: scheduler, backup, health, cleanup
+- `src/core/*`: logica de backup, restore, storage, health, retention, auth
+- `src/workers/*`: scheduler, backup, restore, health, cleanup
 - `src/queue/*`: configuracao BullMQ/Redis
 - `src/lib/prisma.ts`: acesso ao banco
 
@@ -25,14 +25,14 @@ DataGuardian e um monolito Node.js com:
 2. tenta conectar no Redis
 3. inicia API
 4. inicia `health` e `cleanup`
-5. ativa `scheduler` e `backup` somente se Redis estiver disponivel
+5. ativa `scheduler`, `backup` e `restore` somente se Redis estiver disponivel
 6. monitora Redis periodicamente para ligar/desligar servicos de fila
 
 ## Degradacao sem Redis
 
 Com Redis offline:
 
-- `scheduler` e `backup` param
+- `scheduler`, `backup` e `restore` param
 - `health` e `cleanup` continuam
 - endpoints dependentes de fila retornam erro de indisponibilidade
 
@@ -74,15 +74,17 @@ A retencao roda:
 ## Restore
 
 Implementado em `src/api/models/backups.model.ts`.
+Processado pelo `restore-worker` em `src/workers/restore-worker.ts`.
 
 Fluxo:
 
-1. cria nova execucao `running` com metadata `operation=restore`
-2. materializa arquivo de backup a partir dos storages
-3. descompacta quando necessario
-4. restaura no banco alvo
-5. grava logs da execucao
-6. finaliza `completed` ou `failed`
+1. API cria execucao `queued` com metadata `operation=restore`
+2. execucao e enfileirada na `restore-queue`
+3. worker faz lock `queued -> running`
+4. materializa backup dos storages
+5. restaura no banco alvo (ou banco temporario no verification mode)
+6. grava logs da execucao em metadata
+7. finaliza `completed` ou `failed`
 
 Tipos suportados hoje:
 
@@ -94,11 +96,20 @@ Tipos suportados hoje:
 
 - `scheduler-worker`: identifica jobs vencidos e enfileira execucoes
 - `backup-worker`: processa `backup-queue`
+- `restore-worker`: processa `restore-queue`
 - `health-worker`: verifica datasources e storages
 - `cleanup-worker`: aplica retencao
 
 ## Seguranca de acesso
 
-- auth single-user
 - sessao em cookie HTTP-only (`dg_session`)
 - middleware `requireAuth` protege `/api/*` (exceto `/api/auth/*`)
+- RBAC dinamico: usuarios, roles e permissoes no banco
+- auditoria de operacoes sensiveis em `audit_logs`
+
+## Observabilidade
+
+- health endpoint simples: `GET /health`
+- health detalhado: `GET /api/health`
+- metricas Prometheus: `GET /metrics`
+- logs por execucao em `backup_executions.metadata.execution_logs`

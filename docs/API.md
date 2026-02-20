@@ -4,9 +4,12 @@ Base URL:
 
 - `http://localhost:3000/api`
 
-Observacao:
+Publico (sem auth):
 
-- Todas as rotas em `/api/*` exigem sessao autenticada, exceto `/api/auth/*`.
+- `GET /health`
+- `GET /metrics` (formato Prometheus)
+
+Observacao: todas as rotas em `/api/*` exigem sessao autenticada, exceto `/api/auth/*`.
 
 ## Auth
 
@@ -100,7 +103,8 @@ Campos usados hoje:
 - `GET /api/backups/datasources/:datasourceId`
 - `POST /api/backups/:executionId/restore`
 
-`POST /restore` retorna `202` e cria uma nova execucao com `operation=restore` em metadata.
+`POST /restore` retorna `202` e cria execucao `queued` com `operation=restore` em metadata.
+O processamento e feito pelo `restore-worker` na `restore-queue`.
 
 Restore suportado:
 
@@ -108,9 +112,25 @@ Restore suportado:
 - `mysql`
 - `mariadb`
 
+Campos de body no restore:
+
+```json
+{
+  "storage_location_id": "uuid-opcional",
+  "drop_existing": true,
+  "verification_mode": false,
+  "keep_verification_database": false,
+  "confirmation_phrase": "RESTAURAR"
+}
+```
+
+Confirmacao obrigatoria:
+
+- restore normal: `confirmation_phrase = "RESTAURAR"`
+- restore verification mode: `confirmation_phrase = "VERIFICAR RESTORE"`
+
 ## Health
 
-- `GET /health` (simples)
 - `GET /api/health`
 - `GET /api/health/datasources`
 - `GET /api/health/storage`
@@ -126,6 +146,23 @@ Restore suportado:
 - `PUT /api/notifications/:id/read`
 - `DELETE /api/notifications/:id`
 
+## Audit Logs
+
+- `GET /api/audit-logs`
+
+## Access (RBAC)
+
+- `GET /api/access/permissions`
+- `GET /api/access/roles`
+- `POST /api/access/roles`
+- `PUT /api/access/roles/:id`
+- `DELETE /api/access/roles/:id`
+- `GET /api/access/users`
+- `POST /api/access/users`
+- `PUT /api/access/users/:id`
+- `PUT /api/access/users/:id/password`
+- `DELETE /api/access/users/:id`
+
 ## System
 
 - `GET /api/system/settings`
@@ -136,6 +173,21 @@ Restore suportado:
 - `GET /api/system/settings/:key`
 - `PUT /api/system/settings/:key`
 - `DELETE /api/system/settings/:key`
+- `GET /api/system/notification-templates`
+- `POST /api/system/notification-templates`
+- `PUT /api/system/notification-templates/:id`
+- `POST /api/system/notification-templates/:id/new-version`
+
+## Permissoes (resumo)
+
+As rotas protegidas exigem permissao RBAC. Exemplos:
+
+- `backup_jobs.run` para `POST /api/backup-jobs/:id/run`
+- `backups.restore` para `POST /api/backups/:executionId/restore`
+- `backups.restore_verify` para `verification_mode=true`
+- `storage.download` para download no explorer
+- `audit.read` para auditoria
+- `access.manage` para gerenciamento de usuarios/roles
 
 ## Status codes usados
 

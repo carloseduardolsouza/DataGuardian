@@ -1,4 +1,4 @@
-# Storage - DataGuardian
+﻿# Storage - DataGuardian
 
 ## Tipos suportados
 
@@ -25,42 +25,39 @@
 - `POST /api/storage-locations/:id/files/copy`
 - `GET /api/storage-locations/:id/files/download?path=`
 
-## Estrategias de gravacao em backup job
+## Estrategias de gravacao no backup job
 
 - `fallback`: salva no primeiro storage disponivel
 - `replicate`: tenta salvar em todos os storages selecionados
 
-Configuracao no job:
+Exemplo de `backup_options`:
 
 ```json
 {
-  "backup_options": {
-    "storage_strategy": "fallback",
-    "storage_targets": [
-      { "storage_location_id": "uuid-1", "order": 1 },
-      { "storage_location_id": "uuid-2", "order": 2 }
-    ]
-  }
+  "storage_strategy": "fallback",
+  "storage_targets": [
+    { "storage_location_id": "uuid-1", "order": 1 },
+    { "storage_location_id": "uuid-2", "order": 2 }
+  ]
 }
 ```
 
 ## Organizacao de arquivos de backup
 
-O backup e salvo em pasta do banco, com subpasta de execucao.
+Padrao de organizacao por banco e execucao:
 
-Padrao:
+`{database_name}/{YYYY-MM-DD_HHMMSS}/...`
 
-`{database_name}/{YYYY-MM-DD_HHMMSS}/backup.*`
+O manifest de artefatos tambem e salvo junto para suportar restore/retry-upload.
 
-Tambem e gerado `manifest.json` na mesma pasta.
+## Download no explorer
 
-## Download de arquivo pelo explorer
-
-- somente arquivo (download de pasta nao suportado)
-- erro esperado ao baixar pasta: `STORAGE_FOLDER_DOWNLOAD_NOT_SUPPORTED`
+- download de arquivo suportado
+- download de pasta nao suportado (`STORAGE_FOLDER_DOWNLOAD_NOT_SUPPORTED`)
 
 ## Boas praticas
 
-- usar pelo menos 2 storages para redundancia
-- preferir `replicate` quando disponibilidade for prioritaria
-- testar conexao do storage antes de habilitar em job
+- usar pelo menos 2 storages em jobs criticos
+- usar `replicate` para maior resiliencia
+- testar conexao antes de habilitar storage em producao
+- monitorar health de storage em `/api/health/storage`

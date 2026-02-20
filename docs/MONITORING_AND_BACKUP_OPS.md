@@ -1,28 +1,28 @@
-# Monitoring and Backup Ops - DataGuardian
+﻿# Monitoring and Backup Ops - DataGuardian
 
-## Monitoramento
+## Endpoints de monitoramento
 
-### Endpoints
+- `GET /health` (publico)
+- `GET /metrics` (publico, Prometheus)
+- `GET /api/health` (protegido)
+- `GET /api/health/datasources` (protegido)
+- `GET /api/health/storage` (protegido)
+- `GET /api/dashboard/overview` (protegido)
 
-- `GET /api/health`
-- `GET /api/health/datasources`
-- `GET /api/health/storage`
-- `GET /api/dashboard/overview`
+## Workers
 
-### Workers
-
-- `health-worker`: checa datasources e storages periodicamente
 - `scheduler-worker`: agenda backups vencidos (depende de Redis)
-- `backup-worker`: executa backups enfileirados
+- `backup-worker`: processa `backup-queue`
+- `restore-worker`: processa `restore-queue`
+- `health-worker`: checa datasources/storages periodicamente
 - `cleanup-worker`: aplica retencao
 
 ## Observabilidade de execucao
 
 - logs por execucao em `backup_executions.metadata.execution_logs`
-- endpoint de logs:
-  - `GET /api/executions/:id/logs`
+- endpoint de logs: `GET /api/executions/:id/logs`
 
-No terminal, backups e restores publicam progresso com prefixos:
+No terminal, progresso relevante:
 
 - `[BACKUP] ...`
 - `[RESTORE] ...`
@@ -31,59 +31,70 @@ No terminal, backups e restores publicam progresso com prefixos:
 
 1. `POST /api/backup-jobs/:id/run`
 2. cria execucao `queued`
-3. worker marca `running`
+3. `backup-worker` muda para `running`
 4. dump -> compressao -> upload
 5. status final `completed` ou `failed`
-6. retencao aplicada apos conclusao
+6. cleanup de retencao apos sucesso
 
 ## Fluxo de restore
 
 1. `POST /api/backups/:executionId/restore`
-2. cria nova execucao (`operation=restore`)
-3. baixa artefato do storage
-4. restaura no banco alvo
-5. logs aparecem em `GET /api/executions/:id/logs`
+2. exige `confirmation_phrase`
+3. cria nova execucao `queued` (`operation=restore`)
+4. `restore-worker` executa restore e grava logs
+5. status final `completed` ou `failed`
 
-Suporte atual:
+### Confirmation phrase
 
-- `postgres`
-- `mysql`
-- `mariadb`
+- restore normal: `RESTAURAR`
+- verification mode: `VERIFICAR RESTORE`
+
+## Verification mode
+
+Quando `verification_mode=true`:
+
+- requer permissao `backups.restore_verify`
+- restore ocorre em banco temporario
+- opcionalmente mantem banco de verificacao (`keep_verification_database=true`)
 
 ## Retencao operacional
 
-Preferencial:
+Padrao recomendado:
 
 ```json
 { "max_backups": 3, "auto_delete": true }
 ```
 
-Regra: ao concluir o 4o backup do job, remove o mais antigo.
+Regra: ao concluir o 4o backup do mesmo job, remove o mais antigo.
 
 ## Recuperacao de falha de upload
 
-Endpoint:
-
-- `POST /api/executions/:id/retry-upload`
-
-Uso: quando dump foi gerado mas upload falhou.
+- endpoint: `POST /api/executions/:id/retry-upload`
+- uso: quando dump existe, mas upload falhou
 
 ## Notificacoes
 
 - `GET /api/notifications`
 - `PUT /api/notifications/:id/read`
 - `PUT /api/notifications/read-all`
+- `DELETE /api/notifications/:id`
 
-Tipos comuns:
+Notificacoes externas configuraveis em `system_settings`:
 
-- `backup_failed`
-- `connection_lost`
-- `storage_unreachable`
-- `cleanup_completed`
+- SMTP
+- webhook
+- WhatsApp (Evolution)
+
+Templates/versionamento:
+
+- `GET /api/system/notification-templates`
+- `POST /api/system/notification-templates`
+- `PUT /api/system/notification-templates/:id`
+- `POST /api/system/notification-templates/:id/new-version`
 
 ## Troubleshooting rapido
 
-- backup nao inicia: verificar Redis (`/api/health` -> `services.redis`)
-- schema/query falhando: validar credenciais e `connection_config`
-- restore nao roda: checar se execucao origem esta `completed` e storage `available`
-- fila parada: Redis fora do ar desativa scheduler/backup automaticamente
+- backup/restore nao inicia: verificar Redis em `/api/health` (`services.redis`)
+- restore nao roda: validar execucao origem `completed` e storage com arquivo disponivel
+- query/schema falhando: revisar credenciais da datasource
+- falta de logs: consultar `GET /api/executions/:id/logs` e logs do worker no terminal
