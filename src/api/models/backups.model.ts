@@ -280,13 +280,28 @@ async function restoreMysql(connectionConfig: unknown, sqlFile: string, onLog?: 
 
   const args = ['-h', host, '-P', String(port), '-u', username, database];
 
-  await runSpawnCommand({
-    command: 'mysql',
-    args,
-    env: { ...process.env, MYSQL_PWD: password },
-    inputFile: sqlFile,
-    onLog,
-  });
+  try {
+    await runSpawnCommand({
+      command: 'mysql',
+      args,
+      env: { ...process.env, MYSQL_PWD: password },
+      inputFile: sqlFile,
+      onLog,
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    if (!/Binario 'mysql' nao encontrado no PATH/i.test(message)) {
+      throw err;
+    }
+
+    await runSpawnCommand({
+      command: 'mariadb',
+      args,
+      env: { ...process.env, MYSQL_PWD: password },
+      inputFile: sqlFile,
+      onLog,
+    });
+  }
 }
 
 async function getStorageSnapshot(execution: {
@@ -501,15 +516,16 @@ async function runRestoreExecutionInBackground(params: {
       restoreInputFile = downloadedFile;
     }
 
-    pushLog('info', `Executando restore ${params.datasource.type}`, true);
-    currentPhase = `restaurando ${params.datasource.type}`;
+    const datasourceType = String(params.datasource.type);
+    pushLog('info', `Executando restore ${datasourceType}`, true);
+    currentPhase = `restaurando ${datasourceType}`;
     const engineLogger = (line: string) => pushLog('debug', `[engine] ${line}`, true);
-    if (params.datasource.type === 'postgres') {
+    if (datasourceType === 'postgres') {
       await restorePostgres(params.datasource.connectionConfig, restoreInputFile, params.dropExisting, engineLogger);
-    } else if (params.datasource.type === 'mysql') {
+    } else if (datasourceType === 'mysql' || datasourceType === 'mariadb') {
       await restoreMysql(params.datasource.connectionConfig, restoreInputFile, engineLogger);
     } else {
-      throw new AppError('RESTORE_NOT_SUPPORTED', 422, `Restore nao suportado para datasource '${params.datasource.type}'`);
+      throw new AppError('RESTORE_NOT_SUPPORTED', 422, `Restore nao suportado para datasource '${datasourceType}'`);
     }
 
     const durationSeconds = Math.max(1, Math.floor((Date.now() - startedAtMs) / 1000));
@@ -688,11 +704,12 @@ export async function restoreBackupExecution(params: {
     );
   }
 
-  if (execution.datasource.type !== 'postgres' && execution.datasource.type !== 'mysql') {
+  const datasourceType = String(execution.datasource.type);
+  if (datasourceType !== 'postgres' && datasourceType !== 'mysql' && datasourceType !== 'mariadb') {
     throw new AppError(
       'RESTORE_NOT_SUPPORTED',
       422,
-      `Restore nao suportado para datasource '${execution.datasource.type}'`,
+      `Restore nao suportado para datasource '${datasourceType}'`,
     );
   }
 

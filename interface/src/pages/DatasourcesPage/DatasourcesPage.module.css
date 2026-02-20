@@ -208,6 +208,7 @@
 
 .detailTypeIcon.postgres  { background: #336791; color: white; }
 .detailTypeIcon.mysql     { background: #4479A1; color: white; }
+.detailTypeIcon.mariadb   { background: #0B6E4F; color: white; }
 .detailTypeIcon.mongodb   { background: #47A248; color: white; }
 .detailTypeIcon.sqlserver { background: #CC2927; color: white; }
 .detailTypeIcon.sqlite    { background: #044a64; color: white; }

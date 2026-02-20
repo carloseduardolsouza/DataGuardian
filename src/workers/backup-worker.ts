@@ -67,6 +67,10 @@ function extractMissingBinary(message: string) {
 
 function buildMissingBinaryGuide(binary: string) {
   const normalizedBinary = binary.toLowerCase();
+  const isMysqlFamilyBinary = normalizedBinary === 'mysqldump'
+    || normalizedBinary === 'mysql'
+    || normalizedBinary === 'mariadb-dump'
+    || normalizedBinary === 'mariadb';
   if (process.platform === 'win32') {
     if (normalizedBinary === 'docker') {
       return [
@@ -75,6 +79,17 @@ function buildMissingBinaryGuide(binary: string) {
         `3. Reinicie o processo da API.`,
         `4. Valide com: docker --version`,
         `5. Tente novamente o backup.`,
+      ].join('\n');
+    }
+
+    if (isMysqlFamilyBinary) {
+      return [
+        `1. Abra o PowerShell como Administrador.`,
+        `2. Execute: winget install -e --id Oracle.MySQL --accept-package-agreements --accept-source-agreements`,
+        `3. Se preferir MariaDB: winget install -e --id MariaDB.Server --accept-package-agreements --accept-source-agreements`,
+        `4. Feche e abra novamente o terminal/servico da API.`,
+        `5. Valide com: mysqldump --version (ou mariadb-dump --version)`,
+        `6. Tente novamente o backup (ou Retry Upload).`,
       ].join('\n');
     }
 
@@ -88,6 +103,15 @@ function buildMissingBinaryGuide(binary: string) {
   }
 
   if (process.platform === 'linux') {
+    if (isMysqlFamilyBinary) {
+      return [
+        `1. Instale o client MySQL/MariaDB no host da API (ex: apt-get install -y default-mysql-client).`,
+        `2. Reinicie o processo da API.`,
+        `3. Valide com: mysqldump --version (ou mariadb-dump --version)`,
+        `4. Tente novamente o backup.`,
+      ].join('\n');
+    }
+
     return [
       `1. Instale o client do banco no host da API (ex: apt-get install -y postgresql-client).`,
       `2. Reinicie o processo da API.`,
@@ -97,6 +121,16 @@ function buildMissingBinaryGuide(binary: string) {
   }
 
   if (process.platform === 'darwin') {
+    if (isMysqlFamilyBinary) {
+      return [
+        `1. Instale via Homebrew: brew install mysql-client`,
+        `2. Garanta os binarios no PATH (ou use mariadb-client).`,
+        `3. Reinicie o processo da API.`,
+        `4. Valide com: mysqldump --version`,
+        `5. Tente novamente o backup.`,
+      ].join('\n');
+    }
+
     return [
       `1. Instale com Homebrew: brew install libpq`,
       `2. Faça link do binario: brew link --force libpq`,
@@ -370,8 +404,8 @@ async function processExecution(executionId: string) {
 
     pushLog('info', `Job '${execution.job.name}' iniciado para datasource '${execution.datasource.name}'`, true);
 
-    const dsType = execution.datasource.type as DatasourceType;
-    const dsTest = dsType === 'postgres' || dsType === 'mysql'
+    const dsType = String(execution.datasource.type) as DatasourceType | string;
+    const dsTest = dsType === 'postgres' || dsType === 'mysql' || dsType === 'mariadb'
       ? await testDatasourceConnection(execution.datasourceId)
       : { status: 'ok', latency_ms: null as number | null };
 

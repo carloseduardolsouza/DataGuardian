@@ -76,7 +76,7 @@ function isPlainObject(value: unknown): value is JsonMap {
 function asStringField(
   cfg: JsonMap,
   key: string,
-  datasourceType: DatasourceType,
+  datasourceType: string,
   { required = true, trim = true }: { required?: boolean; trim?: boolean } = {},
 ) {
   const value = cfg[key];
@@ -113,7 +113,7 @@ function asStringField(
   return normalized;
 }
 
-function asPortField(cfg: JsonMap, datasourceType: DatasourceType, fallback: number) {
+function asPortField(cfg: JsonMap, datasourceType: string, fallback: number) {
   const raw = cfg.port;
   if (raw === undefined || raw === null || raw === '') return fallback;
 
@@ -145,19 +145,19 @@ function buildPostgresConfig(cfg: JsonMap) {
   };
 }
 
-function buildMysqlConfig(cfg: JsonMap) {
+function buildMysqlLikeConfig(cfg: JsonMap, datasourceType: string) {
   return {
-    host:     asStringField(cfg, 'host', 'mysql'),
-    port:     asPortField(cfg, 'mysql', 3306),
-    database: asStringField(cfg, 'database', 'mysql'),
-    username: asStringField(cfg, 'username', 'mysql'),
-    password: asStringField(cfg, 'password', 'mysql', { trim: false }),
+    host:     asStringField(cfg, 'host', datasourceType),
+    port:     asPortField(cfg, datasourceType, 3306),
+    database: asStringField(cfg, 'database', datasourceType),
+    username: asStringField(cfg, 'username', datasourceType),
+    password: asStringField(cfg, 'password', datasourceType, { trim: false }),
   };
 }
 
 function mapDatasourceRuntimeError(
   err: unknown,
-  datasourceType: DatasourceType,
+  datasourceType: string,
   operation: 'test' | 'schema' | 'query',
 ): AppError {
   if (err instanceof AppError) return err;
@@ -359,71 +359,71 @@ export async function deleteDatasource(id: string) {
 export async function testDatasourceConnection(id: string) {
   const datasource = await prisma.datasource.findUniqueOrThrow({ where: { id } });
   const cfg = normalizeConnectionConfig(datasource.connectionConfig);
+  const datasourceType = String(datasource.type);
 
   try {
-    switch (datasource.type) {
-      case 'postgres':
-        return testPostgresConnection(buildPostgresConfig(cfg));
-
-      case 'mysql':
-        return testMysqlConnection(buildMysqlConfig(cfg));
-
-      default:
-        throw new AppError(
-          'TEST_NOT_SUPPORTED',
-          422,
-          `Teste de conexao nao suportado para datasources do tipo '${datasource.type}'.`,
-        );
+    if (datasourceType === 'postgres') {
+      return testPostgresConnection(buildPostgresConfig(cfg));
     }
+
+    if (datasourceType === 'mysql' || datasourceType === 'mariadb') {
+      return testMysqlConnection(buildMysqlLikeConfig(cfg, datasourceType));
+    }
+
+    throw new AppError(
+      'TEST_NOT_SUPPORTED',
+      422,
+      `Teste de conexao nao suportado para datasources do tipo '${datasourceType}'.`,
+    );
   } catch (err) {
-    throw mapDatasourceRuntimeError(err, datasource.type, 'test');
+    throw mapDatasourceRuntimeError(err, datasourceType, 'test');
   }
 }
 
 export async function executeDatasourceQuery(id: string, sql: string) {
   const datasource = await prisma.datasource.findUniqueOrThrow({ where: { id } });
   const cfg = normalizeConnectionConfig(datasource.connectionConfig);
+  const datasourceType = String(datasource.type);
 
   try {
-    switch (datasource.type) {
-      case 'postgres':
-        return executePostgresQuery(buildPostgresConfig(cfg), sql);
-
-      case 'mysql':
-        return executeMysqlQuery(buildMysqlConfig(cfg), sql);
-
-      default:
-        throw new AppError(
-          'QUERY_NOT_SUPPORTED',
-          422,
-          `Execucao de queries nao suportada para datasources do tipo '${datasource.type}'.`,
-        );
+    if (datasourceType === 'postgres') {
+      return executePostgresQuery(buildPostgresConfig(cfg), sql);
     }
+
+    if (datasourceType === 'mysql' || datasourceType === 'mariadb') {
+      return executeMysqlQuery(buildMysqlLikeConfig(cfg, datasourceType), sql);
+    }
+
+    throw new AppError(
+      'QUERY_NOT_SUPPORTED',
+      422,
+      `Execucao de queries nao suportada para datasources do tipo '${datasourceType}'.`,
+    );
   } catch (err) {
-    throw mapDatasourceRuntimeError(err, datasource.type, 'query');
+    throw mapDatasourceRuntimeError(err, datasourceType, 'query');
   }
 }
 
 export async function getDatasourceSchema(id: string) {
   const datasource = await prisma.datasource.findUniqueOrThrow({ where: { id } });
   const cfg = normalizeConnectionConfig(datasource.connectionConfig);
+  const datasourceType = String(datasource.type);
 
   try {
-    switch (datasource.type) {
-      case 'postgres':
-        return introspectPostgres(buildPostgresConfig(cfg));
-
-      case 'mysql':
-        return introspectMysql(buildMysqlConfig(cfg));
-
-      default:
-        throw new AppError(
-          'SCHEMA_NOT_SUPPORTED',
-          422,
-          `Introspeccao de schema nao suportada para datasources do tipo '${datasource.type}'.`,
-        );
+    if (datasourceType === 'postgres') {
+      return introspectPostgres(buildPostgresConfig(cfg));
     }
+
+    if (datasourceType === 'mysql' || datasourceType === 'mariadb') {
+      return introspectMysql(buildMysqlLikeConfig(cfg, datasourceType));
+    }
+
+    throw new AppError(
+      'SCHEMA_NOT_SUPPORTED',
+      422,
+      `Introspeccao de schema nao suportada para datasources do tipo '${datasourceType}'.`,
+    );
   } catch (err) {
-    throw mapDatasourceRuntimeError(err, datasource.type, 'schema');
+    throw mapDatasourceRuntimeError(err, datasourceType, 'schema');
   }
 }

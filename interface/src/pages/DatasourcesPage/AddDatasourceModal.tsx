@@ -10,6 +10,7 @@ import {
   CloseIcon,
   PostgresIcon,
   MysqlIcon,
+  MariadbIcon,
   MongodbIcon,
   SqlserverIcon,
   SqliteIcon,
@@ -87,6 +88,7 @@ function initFormFromEdit(ds: ApiDatasourceDetail): FormState {
 const DS_TYPE_ICON: Record<DatasourceType, React.ReactNode> = {
   postgres: <PostgresIcon />,
   mysql: <MysqlIcon />,
+  mariadb: <MariadbIcon />,
   mongodb: <MongodbIcon />,
   sqlserver: <SqlserverIcon />,
   sqlite: <SqliteIcon />,
@@ -224,9 +226,10 @@ export default function AddDatasourceModal({ onClose, onSave, editData }: Props)
           : {}),
       };
     } else if (isRelational) {
+      const defaultPort = selectedType === 'postgres' ? 5432 : 3306;
       connectionConfig = {
         host: form.host,
-        port: parseInt(form.port, 10) || 5432,
+        port: parseInt(form.port, 10) || defaultPort,
         database: form.database,
         username: form.username,
         ssl_enabled: form.sslEnabled,

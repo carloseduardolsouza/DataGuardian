@@ -80,7 +80,15 @@ async function resolveWindowsBinaryPath(command: string) {
   if (command === 'mysqldump') {
     directCandidates.push('C:\\xampp\\mysql\\bin\\mysqldump.exe');
   }
+  if (command === 'mariadb-dump') {
+    directCandidates.push('C:\\xampp\\mysql\\bin\\mariadb-dump.exe');
+    directCandidates.push('C:\\xampp\\mysql\\bin\\mysqldump.exe');
+  }
   if (command === 'mysql') {
+    directCandidates.push('C:\\xampp\\mysql\\bin\\mysql.exe');
+  }
+  if (command === 'mariadb') {
+    directCandidates.push('C:\\xampp\\mysql\\bin\\mariadb.exe');
     directCandidates.push('C:\\xampp\\mysql\\bin\\mysql.exe');
   }
 
@@ -117,17 +125,39 @@ async function resolveWindowsBinaryPath(command: string) {
       }
     }
 
-    if (command === 'mysqldump' || command === 'mysql') {
-      const mysqlRoot = path.join(base, 'MySQL');
-      try {
-        const installs = await fs.readdir(mysqlRoot, { withFileTypes: true });
-        for (const dir of installs) {
-          if (!dir.isDirectory()) continue;
-          const candidate = path.join(mysqlRoot, dir.name, 'bin', exe);
-          if (await existsFile(candidate)) return candidate;
+    if (
+      command === 'mysqldump'
+      || command === 'mysql'
+      || command === 'mariadb-dump'
+      || command === 'mariadb'
+    ) {
+      for (const product of ['MySQL', 'MariaDB']) {
+        const mysqlRoot = path.join(base, product);
+        try {
+          const installs = await fs.readdir(mysqlRoot, { withFileTypes: true });
+          for (const dir of installs) {
+            if (!dir.isDirectory()) continue;
+            const binDir = path.join(mysqlRoot, dir.name, 'bin');
+            const preferred = path.join(binDir, exe);
+            if (await existsFile(preferred)) return preferred;
+
+            // Cross-compat fallback between MySQL and MariaDB client binaries.
+            if (command === 'mysqldump' && await existsFile(path.join(binDir, 'mariadb-dump.exe'))) {
+              return path.join(binDir, 'mariadb-dump.exe');
+            }
+            if (command === 'mariadb-dump' && await existsFile(path.join(binDir, 'mysqldump.exe'))) {
+              return path.join(binDir, 'mysqldump.exe');
+            }
+            if (command === 'mysql' && await existsFile(path.join(binDir, 'mariadb.exe'))) {
+              return path.join(binDir, 'mariadb.exe');
+            }
+            if (command === 'mariadb' && await existsFile(path.join(binDir, 'mysql.exe'))) {
+              return path.join(binDir, 'mysql.exe');
+            }
+          }
+        } catch {
+          // ignore
         }
-      } catch {
-        // ignore
       }
     }
   }

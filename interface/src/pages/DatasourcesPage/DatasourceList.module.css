@@ -150,6 +150,7 @@
 
 .typeIcon.postgres  { background: #336791; color: white; }
 .typeIcon.mysql     { background: #4479A1; color: white; }
+.typeIcon.mariadb   { background: #0B6E4F; color: white; }
 .typeIcon.mongodb   { background: #47A248; color: white; }
 .typeIcon.sqlserver { background: #CC2927; color: white; }
 .typeIcon.sqlite    { background: #044a64; color: white; }

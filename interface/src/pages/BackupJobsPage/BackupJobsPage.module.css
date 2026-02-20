@@ -204,6 +204,7 @@
 }
 .dsIcon.postgres  { background: #336791; color: white; }
 .dsIcon.mysql     { background: #4479A1; color: white; }
+.dsIcon.mariadb   { background: #0B6E4F; color: white; }
 .dsIcon.mongodb   { background: #47A248; color: white; }
 .dsIcon.sqlite    { background: #044a64; color: white; }
 .dsIcon.sqlserver { background: #CC2927; color: white; }

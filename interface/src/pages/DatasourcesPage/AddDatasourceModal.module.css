@@ -93,6 +93,7 @@
 
 .typeCardIcon.postgres  { background: #336791; }
 .typeCardIcon.mysql     { background: #00758F; }
+.typeCardIcon.mariadb   { background: #0B6E4F; }
 .typeCardIcon.mongodb   { background: #4DB33D; }
 .typeCardIcon.sqlserver  { background: #CC2927; }
 .typeCardIcon.sqlite    { background: #003B57; }

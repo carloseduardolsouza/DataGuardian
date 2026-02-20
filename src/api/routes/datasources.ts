@@ -9,7 +9,7 @@ export const datasourcesRouter = Router();
 export const listDatasourceQuerySchema = z.object({
   page:    z.coerce.number().int().min(1).default(1),
   limit:   z.coerce.number().int().min(1).max(100).default(20),
-  type:    z.enum(['postgres', 'mysql', 'mongodb', 'sqlserver', 'sqlite', 'files']).optional(),
+  type:    z.enum(['postgres', 'mysql', 'mariadb', 'mongodb', 'sqlserver', 'sqlite', 'files']).optional(),
   status:  z.enum(['healthy', 'warning', 'critical', 'unknown']).optional(),
   enabled: z.enum(['true', 'false']).optional(),
   tag:     z.string().optional(),

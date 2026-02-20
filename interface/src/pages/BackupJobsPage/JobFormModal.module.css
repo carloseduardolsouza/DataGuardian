@@ -241,6 +241,7 @@
 }
 .dsCardIcon.postgres  { background: #336791; color: white; }
 .dsCardIcon.mysql     { background: #4479A1; color: white; }
+.dsCardIcon.mariadb   { background: #0B6E4F; color: white; }
 .dsCardIcon.mongodb   { background: #47A248; color: white; }
 .dsCardIcon.sqlite    { background: #044a64; color: white; }
 .dsCardIcon.sqlserver { background: #CC2927; color: white; }

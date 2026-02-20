@@ -547,6 +547,17 @@ export function MysqlIcon(props: IconProps = {}) {
   );
 }
 
+export function MariadbIcon(props: IconProps = {}) {
+  return (
+    <svg {...p(props, { width: 22, height: 22 })} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 15c3.2-3.2 6.6-4.8 10.2-4.8 2.8 0 5.4.9 7.8 2.6" />
+      <path d="M3 15c2.8 2.3 5.7 3.5 8.7 3.5 3.3 0 6.6-1.4 9.8-4.2" />
+      <circle cx="18.4" cy="10.2" r="0.9" fill="currentColor" stroke="none" />
+      <path d="M10 12.6l1.8 1.4" />
+    </svg>
+  );
+}
+
 export function MongodbIcon(props: IconProps = {}) {
   return (
     <svg {...p(props, { width: 22, height: 22 })} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">

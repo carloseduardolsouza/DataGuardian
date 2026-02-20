@@ -1,6 +1,6 @@
 // ── Tipos ─────────────────────────────────────────────────────────
 
-export type DatasourceType   = 'postgres' | 'mysql' | 'mongodb' | 'sqlserver' | 'sqlite';
+export type DatasourceType   = 'postgres' | 'mysql' | 'mariadb' | 'mongodb' | 'sqlserver' | 'sqlite';
 export type DatasourceStatus = 'healthy' | 'warning' | 'critical' | 'unknown';
 export type IndexType        = 'btree' | 'hash' | 'gin' | 'gist' | 'brin';
 

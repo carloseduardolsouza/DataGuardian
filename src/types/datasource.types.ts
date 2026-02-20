@@ -72,6 +72,7 @@ export type ConnectionConfig =
 export const datasourceTypeValues = [
   'postgres',
   'mysql',
+  'mariadb',
   'mongodb',
   'sqlserver',
   'sqlite',
@@ -87,6 +88,7 @@ export type DatasourceTypeValue = (typeof datasourceTypeValues)[number];
 const connectionSchemaByType: Record<DatasourceTypeValue, z.ZodTypeAny> = {
   postgres:  postgresConfigSchema,
   mysql:     mysqlConfigSchema,
+  mariadb:   mysqlConfigSchema,
   mongodb:   mongodbConfigSchema,
   sqlserver: sqlserverConfigSchema,
   sqlite:    sqliteConfigSchema,

@@ -24,13 +24,29 @@ export class MysqlBackupEngine implements BackupEngine {
       database,
     ];
 
-    await spawnCommandToFile({
-      command: 'mysqldump',
-      args,
-      env: { ...process.env, MYSQL_PWD: password },
-      outputFile,
-      callbacks,
-    });
+    try {
+      await spawnCommandToFile({
+        command: 'mysqldump',
+        args,
+        env: { ...process.env, MYSQL_PWD: password },
+        outputFile,
+        callbacks,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      if (!/Binario 'mysqldump' nao encontrado no PATH/i.test(message)) {
+        throw err;
+      }
+
+      // MariaDB installs often provide mariadb-dump instead of mysqldump.
+      await spawnCommandToFile({
+        command: 'mariadb-dump',
+        args,
+        env: { ...process.env, MYSQL_PWD: password },
+        outputFile,
+        callbacks,
+      });
+    }
 
     return { extension: '.sql' };
   }

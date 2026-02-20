@@ -1,5 +1,5 @@
 -- CreateEnum
-CREATE TYPE "DatasourceType" AS ENUM ('postgres', 'mysql', 'mongodb', 'sqlserver', 'sqlite', 'files');
+CREATE TYPE "DatasourceType" AS ENUM ('postgres', 'mysql', 'mariadb', 'mongodb', 'sqlserver', 'sqlite', 'files');
 
 -- CreateEnum
 CREATE TYPE "DatasourceStatus" AS ENUM ('healthy', 'warning', 'critical', 'unknown');

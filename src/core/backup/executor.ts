@@ -7,9 +7,10 @@ import { SqlserverBackupEngine } from './engines/sqlserver-engine';
 import { SqliteBackupEngine } from './engines/sqlite-engine';
 import { FilesBackupEngine } from './engines/files-engine';
 
-const engines: Record<DatasourceType, BackupEngine> = {
+const engines: Record<string, BackupEngine> = {
   postgres: new PostgresBackupEngine(),
   mysql: new MysqlBackupEngine(),
+  mariadb: new MysqlBackupEngine(),
   mongodb: new MongodbBackupEngine(),
   sqlserver: new SqlserverBackupEngine(),
   sqlite: new SqliteBackupEngine(),
@@ -17,7 +18,7 @@ const engines: Record<DatasourceType, BackupEngine> = {
 };
 
 export async function executeBackupDump(params: {
-  datasourceType: DatasourceType;
+  datasourceType: DatasourceType | string;
   connectionConfig: unknown;
   outputFile: string;
   callbacks?: EngineRunCallbacks;

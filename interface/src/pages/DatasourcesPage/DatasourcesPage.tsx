@@ -46,7 +46,11 @@ function getSchemaPrerequisiteError(
   detail: ApiDatasourceDetail | null,
 ): string | null {
   if (!detail) return null;
-  if (datasource.type !== 'postgres' && datasource.type !== 'mysql') return null;
+  if (
+    datasource.type !== 'postgres'
+    && datasource.type !== 'mysql'
+    && datasource.type !== 'mariadb'
+  ) return null;
 
   const cfg = detail.connection_config;
   if (!isFilledString(cfg.host)) return 'Host da conexao nao configurado.';
@@ -125,7 +129,11 @@ function DatasourceDetail({
   const canRunQuery =
     !loadingDetail
     && !schemaError
-    && (datasource.type === 'postgres' || datasource.type === 'mysql');
+    && (
+      datasource.type === 'postgres'
+      || datasource.type === 'mysql'
+      || datasource.type === 'mariadb'
+    );
 
   return (
     <div className={styles.detailPanel}>

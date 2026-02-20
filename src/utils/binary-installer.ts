@@ -133,7 +133,10 @@ export async function tryAutoInstallBinary(command: string, onLog?: InstallerLog
 
   const normalized = command.toLowerCase();
   const isPostgresTool = normalized === 'pg_dump' || normalized === 'pg_restore';
-  const isMySqlTool = normalized === 'mysqldump' || normalized === 'mysql';
+  const isMySqlTool = normalized === 'mysqldump'
+    || normalized === 'mysql'
+    || normalized === 'mariadb-dump'
+    || normalized === 'mariadb';
 
   if (!isPostgresTool && !isMySqlTool) {
     onLog?.(`Auto-instalacao nao suportada para o binario '${command}'`);
