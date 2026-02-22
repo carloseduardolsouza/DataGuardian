@@ -46,9 +46,10 @@ npm run dev
 - `npm run start`
 - `npm run typecheck`
 - `npm run lint`
-- `npm run test`
-- `npm run test:unit`
-- `npm run test:e2e`
+- `npm run test` (atalho para unit)
+- `npm run test:unit` (Jest)
+- `npm run test:e2e` (Jest)
+- `npm run test:coverage` (Jest)
 - `npm run db:generate`
 - `npm run db:migrate`
 - `npm run db:deploy`
@@ -68,10 +69,11 @@ npm run dev
 ## Fluxo recomendado
 
 1. implementar alteracao
-2. `npm run typecheck`
-3. `npm run build`
-4. testar manualmente UI/API
-5. validar logs de backup/restore quando aplicavel
+2. `npm run test:unit`
+3. `npm run typecheck`
+4. `npm run build`
+5. testar manualmente UI/API
+6. validar logs de backup/restore quando aplicavel
 
 ## Observacoes
 

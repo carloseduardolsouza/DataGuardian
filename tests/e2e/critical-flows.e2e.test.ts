@@ -1,4 +1,3 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AddressInfo } from 'node:net';
 import type { Server } from 'node:http';
 import { PERMISSIONS } from '../../src/core/auth/permissions';
@@ -7,13 +6,13 @@ const authState = {
   permissions: [] as string[],
 };
 
-const runBackupJobMock = vi.fn();
-const retryExecutionUploadMock = vi.fn();
-const restoreBackupExecutionMock = vi.fn();
+const mockRunBackupJob = jest.fn();
+const mockRetryExecutionUpload = jest.fn();
+const mockRestoreBackupExecution = jest.fn();
 
-vi.mock('../../src/core/auth/auth.service', () => ({
+jest.mock('../../src/core/auth/auth.service', () => ({
   AUTH_COOKIE_NAME: 'dg_session',
-  getSessionUserByToken: vi.fn(async () => ({
+  getSessionUserByToken: jest.fn(async () => ({
     id: 'user-e2e',
     username: 'e2e-user',
     full_name: 'E2E User',
@@ -24,18 +23,22 @@ vi.mock('../../src/core/auth/auth.service', () => ({
   })),
 }));
 
-vi.mock('../../src/api/models/backup-job.model', () => ({
-  runBackupJob: runBackupJobMock,
+jest.mock('../../src/api/models/backup-job.model', () => ({
+  runBackupJob: mockRunBackupJob,
 }));
 
-vi.mock('../../src/api/models/execution.model', () => ({
-  retryExecutionUpload: retryExecutionUploadMock,
+jest.mock('../../src/api/models/execution.model', () => ({
+  retryExecutionUpload: mockRetryExecutionUpload,
 }));
 
-vi.mock('../../src/api/models/backups.model', () => ({
-  restoreBackupExecution: restoreBackupExecutionMock,
-  listBackupDatasources: vi.fn(),
-  listBackupsByDatasource: vi.fn(),
+jest.mock('../../src/api/models/backups.model', () => ({
+  restoreBackupExecution: mockRestoreBackupExecution,
+  listBackupDatasources: jest.fn(),
+  listBackupsByDatasource: jest.fn(),
+}));
+
+jest.mock('../../src/api/middlewares/audit-trail', () => ({
+  auditTrailMiddleware: (_req: unknown, _res: unknown, next: () => void) => next(),
 }));
 
 describe('E2E Critical API Flows', () => {
@@ -59,7 +62,7 @@ describe('E2E Critical API Flows', () => {
   });
 
   beforeEach(() => {
-    vi.clearAllMocks();
+    jest.clearAllMocks();
     authState.permissions = [
       PERMISSIONS.BACKUP_JOBS_RUN,
       PERMISSIONS.EXECUTIONS_CONTROL,
@@ -68,11 +71,11 @@ describe('E2E Critical API Flows', () => {
     ];
   });
 
-  it('run manual should enqueue backup immediately', async () => {
-    runBackupJobMock.mockResolvedValueOnce({
+  it('run manual should start backup immediately', async () => {
+    mockRunBackupJob.mockResolvedValueOnce({
       execution_id: 'exec-manual-1',
-      message: 'Backup enfileirado para execucao imediata',
-      status: 'queued',
+      message: 'Backup manual iniciado para execucao imediata',
+      status: 'running',
     });
 
     const response = await fetch(`${baseUrl}/api/backup-jobs/job-123/run`, {
@@ -81,17 +84,17 @@ describe('E2E Critical API Flows', () => {
     });
 
     expect(response.status).toBe(202);
-    const body = await response.json();
+    const body = await response.json() as Record<string, unknown>;
     expect(body).toMatchObject({
       execution_id: 'exec-manual-1',
-      status: 'queued',
+      status: 'running',
     });
-    expect(runBackupJobMock).toHaveBeenCalledTimes(1);
-    expect(runBackupJobMock).toHaveBeenCalledWith('job-123');
+    expect(mockRunBackupJob).toHaveBeenCalledTimes(1);
+    expect(mockRunBackupJob).toHaveBeenCalledWith('job-123');
   });
 
   it('retry-upload should retry a failed execution upload', async () => {
-    retryExecutionUploadMock.mockResolvedValueOnce({
+    mockRetryExecutionUpload.mockResolvedValueOnce({
       execution_id: 'exec-failed-7',
       status: 'running',
       message: 'Retry de upload iniciado',
@@ -103,13 +106,13 @@ describe('E2E Critical API Flows', () => {
     });
 
     expect(response.status).toBe(200);
-    const body = await response.json();
+    const body = await response.json() as Record<string, unknown>;
     expect(body).toMatchObject({
       execution_id: 'exec-failed-7',
       status: 'running',
     });
-    expect(retryExecutionUploadMock).toHaveBeenCalledTimes(1);
-    expect(retryExecutionUploadMock).toHaveBeenCalledWith('exec-failed-7');
+    expect(mockRetryExecutionUpload).toHaveBeenCalledTimes(1);
+    expect(mockRetryExecutionUpload).toHaveBeenCalledWith('exec-failed-7');
   });
 
   it('restore should require explicit confirmation phrase', async () => {
@@ -126,9 +129,9 @@ describe('E2E Critical API Flows', () => {
     });
 
     expect(response.status).toBe(422);
-    const body = await response.json();
+    const body = await response.json() as Record<string, unknown>;
     expect(body.error).toBe('RESTORE_CONFIRMATION_REQUIRED');
-    expect(restoreBackupExecutionMock).not.toHaveBeenCalled();
+    expect(mockRestoreBackupExecution).not.toHaveBeenCalled();
   });
 
   it('restore verification mode should enforce dedicated permission', async () => {
@@ -148,13 +151,13 @@ describe('E2E Critical API Flows', () => {
     });
 
     expect(response.status).toBe(403);
-    const body = await response.json();
+    const body = await response.json() as Record<string, unknown>;
     expect(body.error).toBe('FORBIDDEN');
-    expect(restoreBackupExecutionMock).not.toHaveBeenCalled();
+    expect(mockRestoreBackupExecution).not.toHaveBeenCalled();
   });
 
   it('restore verification mode should start when user has permission', async () => {
-    restoreBackupExecutionMock.mockResolvedValueOnce({
+    mockRestoreBackupExecution.mockResolvedValueOnce({
       message: 'Restore verification iniciado com sucesso',
       execution_id: 'exec-restore-verify-1',
       source_execution_id: 'exec-backup-12',
@@ -181,14 +184,14 @@ describe('E2E Critical API Flows', () => {
     });
 
     expect(response.status).toBe(202);
-    const body = await response.json();
+    const body = await response.json() as Record<string, unknown>;
     expect(body).toMatchObject({
       execution_id: 'exec-restore-verify-1',
       verification_mode: true,
       status: 'running',
     });
-    expect(restoreBackupExecutionMock).toHaveBeenCalledTimes(1);
-    expect(restoreBackupExecutionMock).toHaveBeenCalledWith({
+    expect(mockRestoreBackupExecution).toHaveBeenCalledTimes(1);
+    expect(mockRestoreBackupExecution).toHaveBeenCalledWith({
       executionId: 'exec-backup-12',
       storageLocationId: '11111111-1111-4111-8111-111111111111',
       dropExisting: undefined,
@@ -197,4 +200,3 @@ describe('E2E Critical API Flows', () => {
     });
   });
 });
-
