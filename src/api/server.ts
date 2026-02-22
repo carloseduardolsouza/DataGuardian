@@ -2,6 +2,8 @@ import express, { Request, Response } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
+import { existsSync } from 'node:fs';
+import path from 'node:path';
 
 import { config } from '../utils/config';
 import { requestLogger } from './middlewares/logger';
@@ -68,6 +70,21 @@ export function createApp() {
   app.use('/api/backups', backupsRouter);
   app.use('/api/audit-logs', auditLogsRouter);
   app.use('/api/access', requirePermission(PERMISSIONS.ACCESS_MANAGE), accessRouter);
+
+  const frontendDistPath = path.join(process.cwd(), 'public');
+  const frontendIndexPath = path.join(frontendDistPath, 'index.html');
+  const hasFrontendBuild = existsSync(frontendIndexPath);
+
+  if (hasFrontendBuild) {
+    app.use(express.static(frontendDistPath));
+
+    app.get('*', (req: Request, res: Response, next) => {
+      if (req.path.startsWith('/api/')) return next();
+      if (req.path === '/api') return next();
+      if (req.path === '/health' || req.path === '/metrics') return next();
+      res.sendFile(frontendIndexPath);
+    });
+  }
 
   app.use((_req: Request, res: Response) => {
     res.status(404).json({
