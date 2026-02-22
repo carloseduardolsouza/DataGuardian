@@ -1,0 +1,46 @@
+.message {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  line-height: 1.45;
+}
+
+.cancelBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semi);
+  padding: var(--space-2) var(--space-3);
+  cursor: pointer;
+  background: transparent;
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+}
+
+.cancelBtn:hover:enabled {
+  background: var(--color-surface-elevated);
+}
+
+.confirmBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semi);
+  padding: var(--space-2) var(--space-3);
+  cursor: pointer;
+  border: 1px solid var(--color-danger);
+  background: var(--color-danger-muted);
+  color: var(--color-danger);
+}
+
+.confirmBtn:disabled,
+.cancelBtn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}

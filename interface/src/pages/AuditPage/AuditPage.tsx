@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
-import { SpinnerIcon, SearchIcon, LogIcon } from '../../components/Icons';
+import { SpinnerIcon, SearchIcon, LogIcon } from '../../ui/icons/Icons';
 import { auditApi, type ApiAuditLog } from '../../services/api';
 import styles from './AuditPage.module.css';
 
@@ -275,3 +275,5 @@ export default function AuditPage() {
     </div>
   );
 }
+
+

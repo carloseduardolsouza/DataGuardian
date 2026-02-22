@@ -7,37 +7,9 @@ import {
   fetchEvolutionQrCode,
   getEvolutionConnectionStatus,
 } from '../../integrations/evolution-api/client';
-import nodemailer from 'nodemailer';
 
 export function getDefaultSettings(): Record<string, { value: unknown; description: string }> {
   return {
-    'notifications.email_enabled': {
-      value: false,
-      description: 'Habilitar envio de alertas por e-mail',
-    },
-    'notifications.email_smtp_config': {
-      value: {
-        host: '',
-        port: 587,
-        user: '',
-        password: '',
-        from: '',
-        to: [],
-      },
-      description: 'Configuracao do servidor SMTP para envio de e-mails',
-    },
-    'notifications.webhook_url': {
-      value: null,
-      description: 'URL de webhook para notificacoes (Slack, Discord, etc.)',
-    },
-    'notifications.webhook_headers': {
-      value: {},
-      description: 'Headers adicionais para envio de webhook de notificacoes',
-    },
-    'notifications.webhook_timeout_ms': {
-      value: 10000,
-      description: 'Timeout em milissegundos para chamadas de webhook',
-    },
     'notifications.whatsapp_enabled': {
       value: false,
       description: 'Habilitar envio de notificacoes importantes via WhatsApp',
@@ -94,13 +66,6 @@ export interface SystemSettingItem {
 function maskSensitiveSettings(settings: SettingsMap): SettingsMap {
   const result = { ...settings };
 
-  const smtpKey = 'notifications.email_smtp_config';
-  if (result[smtpKey]) {
-    const value = { ...(result[smtpKey].value as Record<string, unknown>) };
-    if (value.password) value.password = '**********';
-    result[smtpKey] = { ...result[smtpKey], value };
-  }
-
   const waKey = 'notifications.whatsapp_evolution_config';
   if (result[waKey]) {
     const value = { ...(result[waKey].value as Record<string, unknown>) };
@@ -112,12 +77,6 @@ function maskSensitiveSettings(settings: SettingsMap): SettingsMap {
 }
 
 function maskSensitiveSettingItem(item: SystemSettingItem): SystemSettingItem {
-  if (item.key === 'notifications.email_smtp_config') {
-    const value = { ...(item.value as Record<string, unknown>) };
-    if (value.password) value.password = '**********';
-    return { ...item, value };
-  }
-
   if (item.key === 'notifications.whatsapp_evolution_config') {
     const value = { ...(item.value as Record<string, unknown>) };
     if (value.api_key) value.api_key = '**********';
@@ -125,22 +84,6 @@ function maskSensitiveSettingItem(item: SystemSettingItem): SystemSettingItem {
   }
 
   return item;
-}
-
-async function normalizeSmtpConfigValueForPersist(value: unknown): Promise<Prisma.InputJsonValue> {
-  const key = 'notifications.email_smtp_config';
-  const incoming = (value ?? {}) as Record<string, unknown>;
-  const current = await prisma.systemSetting.findUnique({ where: { key } });
-  const currentValue = (current?.value ?? {}) as Record<string, unknown>;
-
-  const merged = { ...incoming };
-  const incomingPassword = merged.password;
-  if (incomingPassword === '**********' || incomingPassword === '' || incomingPassword === undefined) {
-    if (currentValue.password) merged.password = currentValue.password;
-    else delete merged.password;
-  }
-
-  return merged as Prisma.InputJsonValue;
 }
 
 async function normalizeWhatsappConfigValueForPersist(value: unknown): Promise<Prisma.InputJsonValue> {
@@ -160,9 +103,6 @@ async function normalizeWhatsappConfigValueForPersist(value: unknown): Promise<P
 }
 
 async function normalizeSettingValueForPersist(key: string, value: unknown): Promise<Prisma.InputJsonValue> {
-  if (key === 'notifications.email_smtp_config') {
-    return normalizeSmtpConfigValueForPersist(value);
-  }
   if (key === 'notifications.whatsapp_evolution_config') {
     return normalizeWhatsappConfigValueForPersist(value);
   }
@@ -289,68 +229,6 @@ export async function deleteSystemSettingByKey(key: string): Promise<void> {
   }
 
   await prisma.systemSetting.delete({ where: { key } });
-}
-
-export async function testSmtpConnection() {
-  const [emailEnabled, smtpSetting] = await Promise.all([
-    prisma.systemSetting.findUnique({ where: { key: 'notifications.email_enabled' } }),
-    prisma.systemSetting.findUnique({ where: { key: 'notifications.email_smtp_config' } }),
-  ]);
-
-  if (!Boolean(emailEnabled?.value)) {
-    return {
-      status: 400,
-      body: {
-        error: 'EMAIL_NOT_CONFIGURED',
-        message: 'E-mail nao esta habilitado. Configure notifications.email_enabled = true e o SMTP antes de testar.',
-      },
-    };
-  }
-
-  const smtp = asObject(smtpSetting?.value);
-  const host = asString(smtp.host);
-  const user = asString(smtp.user);
-  const password = asString(smtp.password);
-  const port = Number(smtp.port) > 0 ? Number(smtp.port) : 587;
-
-  if (!host || !user || !password) {
-    return {
-      status: 422,
-      body: {
-        error: 'SMTP_CONFIG_INVALID',
-        message: 'Configuracao SMTP incompleta: informe host, user e password.',
-      },
-    };
-  }
-
-  try {
-    const transport = nodemailer.createTransport({
-      host,
-      port,
-      secure: port === 465,
-      auth: { user, pass: password },
-      connectionTimeout: 10_000,
-      greetingTimeout: 10_000,
-      socketTimeout: 15_000,
-    });
-    await transport.verify();
-  } catch (err) {
-    return {
-      status: 502,
-      body: {
-        error: 'SMTP_CONNECTION_FAILED',
-        message: err instanceof Error ? err.message : 'Falha ao conectar no SMTP',
-      },
-    };
-  }
-
-  return {
-    status: 200,
-    body: {
-      status: 'ok',
-      message: 'Conexao SMTP validada com sucesso.',
-    },
-  };
 }
 
 function asObject(value: unknown): Record<string, unknown> {

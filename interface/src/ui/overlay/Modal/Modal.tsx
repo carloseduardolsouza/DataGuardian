@@ -1,4 +1,4 @@
-import { CloseIcon } from '../Icons';
+import { CloseIcon } from '../../icons/Icons';
 import styles from './Modal.module.css';
 
 interface Props {

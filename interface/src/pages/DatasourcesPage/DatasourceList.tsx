@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { ApiDatasource } from '../../services/api';
-import { PlusIcon, SearchIcon, EditIcon, TrashIcon, SpinnerIcon } from '../../components/Icons';
+import { PlusIcon, SearchIcon, EditIcon, TrashIcon, SpinnerIcon } from '../../ui/icons/Icons';
 import { DS_ABBR } from '../../constants';
 import styles from './DatasourceList.module.css';
 
@@ -147,3 +147,5 @@ export default function DatasourceList({
     </div>
   );
 }
+
+

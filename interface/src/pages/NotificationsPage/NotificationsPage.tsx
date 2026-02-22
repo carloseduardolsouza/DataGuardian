@@ -1,7 +1,8 @@
-﻿import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { notificationsApi } from '../../services/api';
 import type { ApiNotification } from '../../services/api';
-import { CheckIcon, TrashIcon, SpinnerIcon } from '../../components/Icons';
+import { CheckIcon, TrashIcon, SpinnerIcon } from '../../ui/icons/Icons';
+import ConfirmDialog from '../../ui/dialogs/ConfirmDialog/ConfirmDialog';
 import styles from './NotificationsPage.module.css';
 
 type ReadFilter = 'all' | 'read' | 'unread';
@@ -38,6 +39,8 @@ export default function NotificationsPage({ onUnreadCountChange }: Props) {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const readParam = readFilter === 'all' ? undefined : readFilter === 'read' ? 'true' : 'false';
   const severityParam = severityFilter === 'all' ? undefined : severityFilter;
@@ -80,8 +83,21 @@ export default function NotificationsPage({ onUnreadCountChange }: Props) {
   }
 
   async function remove(id: string) {
-    await notificationsApi.remove(id);
-    await load();
+    setDeleteTargetId(id);
+  }
+
+  async function confirmRemove() {
+    if (!deleteTargetId) return;
+    try {
+      setDeleting(true);
+      await notificationsApi.remove(deleteTargetId);
+      await load();
+      setDeleteTargetId(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao remover notificacao');
+    } finally {
+      setDeleting(false);
+    }
   }
 
   const emptyText = useMemo(() => {
@@ -164,6 +180,20 @@ export default function NotificationsPage({ onUnreadCountChange }: Props) {
           <button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page >= totalPages}>Proxima</button>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={Boolean(deleteTargetId)}
+        title="Confirmar exclusao de notificacao"
+        message="Deseja excluir esta notificacao?"
+        confirmLabel="Excluir notificacao"
+        loading={deleting}
+        onClose={() => {
+          if (!deleting) setDeleteTargetId(null);
+        }}
+        onConfirm={() => void confirmRemove()}
+      />
     </div>
   );
 }
+
+

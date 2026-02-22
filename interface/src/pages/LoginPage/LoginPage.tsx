@@ -1,5 +1,5 @@
-ï»¿import { useState } from 'react';
-import { LogoIcon, SunIcon, MoonIcon, AlertIcon } from '../../components/Icons';
+import { useState } from 'react';
+import { LogoIcon, SunIcon, MoonIcon, AlertIcon } from '../../ui/icons/Icons';
 import styles from './LoginPage.module.css';
 
 interface Props {
@@ -79,7 +79,7 @@ export default function LoginPage({ onLogin, theme, onToggleTheme }: Props) {
               type="password"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
-              placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢"
+              placeholder="••••••••"
               autoComplete="current-password"
               disabled={loading}
             />
@@ -101,3 +101,5 @@ export default function LoginPage({ onLogin, theme, onToggleTheme }: Props) {
     </div>
   );
 }
+
+

@@ -6,12 +6,13 @@ import { useResizableWidth } from '../../hooks/useResizableWidth';
 import StorageList     from './StorageList';
 import AddStorageModal from './AddStorageModal';
 import FileBrowser     from './FileBrowser';
+import ConfirmDialog from '../../ui/dialogs/ConfirmDialog/ConfirmDialog';
 import styles          from './StoragePage.module.css';
 import {
   DatabaseIcon, CheckCircleIcon, AlertTriangleIcon,
   FolderIcon, DiskIcon, TrashIcon, PlugIcon, PlusIcon,
   EditIcon, SpinnerIcon,
-} from '../../components/Icons';
+} from '../../ui/icons/Icons';
 import { SL_ABBR } from '../../constants';
 
 // ── Status helpers ─────────────────────────────────────────────────
@@ -151,6 +152,8 @@ export default function StoragePage() {
   const [testResult, setTestResult]       = useState<{
     status: string; available_space_gb?: number; latency_ms: number | null;
   } | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<ApiStorageLocation | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const listPane = useResizableWidth({
     storageKey: 'dg-storage-left-width',
     defaultWidth: 280,
@@ -218,15 +221,23 @@ export default function StoragePage() {
   // ── Delete ──────────────────────────────────────────────────────
 
   const handleDelete = useCallback(async (loc: ApiStorageLocation) => {
-    if (!confirm(`Remover storage "${loc.name}"? Esta ação não pode ser desfeita.`)) return;
+    setDeleteTarget(loc);
+  }, []);
+
+  const confirmDelete = useCallback(async () => {
+    if (!deleteTarget) return;
     try {
-      await storageApi.remove(loc.id);
-      setLocations(prev => prev.filter(l => l.id !== loc.id));
-      if (selectedLoc?.id === loc.id) { setSelectedLoc(null); setDetail(null); }
+      setDeleting(true);
+      await storageApi.remove(deleteTarget.id);
+      setLocations(prev => prev.filter(l => l.id !== deleteTarget.id));
+      if (selectedLoc?.id === deleteTarget.id) { setSelectedLoc(null); setDetail(null); }
+      setDeleteTarget(null);
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Erro ao remover storage');
+    } finally {
+      setDeleting(false);
     }
-  }, [selectedLoc]);
+  }, [deleteTarget, selectedLoc?.id]);
 
   // ── Save (create / update) ──────────────────────────────────────
 
@@ -375,6 +386,18 @@ export default function StoragePage() {
           onSave={handleSave}
         />
       )}
+
+      <ConfirmDialog
+        open={Boolean(deleteTarget)}
+        title="Confirmar exclusao de storage"
+        message={deleteTarget ? `Deseja remover o storage "${deleteTarget.name}"?` : ''}
+        confirmLabel="Excluir storage"
+        loading={deleting}
+        onClose={() => {
+          if (!deleting) setDeleteTarget(null);
+        }}
+        onConfirm={() => void confirmDelete()}
+      />
     </div>
   );
 }
@@ -434,3 +457,5 @@ function Placeholder({ onAddNew }: { onAddNew: () => void }) {
     </div>
   );
 }
+
+

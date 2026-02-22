@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
-import Modal from '../../components/Modal/Modal';
-import { PlusIcon, TrashIcon, SpinnerIcon } from '../../components/Icons';
+import Modal from '../../ui/overlay/Modal/Modal';
+import { PlusIcon, TrashIcon, SpinnerIcon } from '../../ui/icons/Icons';
 import { datasourceApi } from '../../services/api';
 import type { ApiDatasource } from '../../services/api';
 import styles from './CreateTableModal.module.css';
@@ -267,3 +267,5 @@ export default function CreateTableModal({ datasource, initialSchemaName, onClos
     </Modal>
   );
 }
+
+

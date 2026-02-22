@@ -767,6 +767,17 @@ export async function retryExecutionUploadNow(executionId: string) {
     const hasUploadContext = Boolean(uploadContext.backup_relative_path && uploadContext.manifest_relative_path);
 
     if (!hasLocalArtifacts || !hasUploadContext) {
+      const requeueLogs = readExecutionLogs(execution.metadata);
+      requeueLogs.push({
+        ts: new Date().toISOString(),
+        level: 'info',
+        message: 'Motivo da fila: retry-upload sem artefatos locais; execucao reenfileirada para refazer dump e upload.',
+      });
+      const requeueMetadata: RuntimeMetadata = {
+        ...metadataObj,
+        execution_logs: requeueLogs,
+      };
+
       const requeued = await prisma.backupExecution.updateMany({
         where: { id: executionId, status: 'failed' },
         data: {
@@ -774,6 +785,7 @@ export async function retryExecutionUploadNow(executionId: string) {
           startedAt: null,
           finishedAt: null,
           errorMessage: null,
+          metadata: requeueMetadata as unknown as Prisma.InputJsonValue,
         },
       });
 

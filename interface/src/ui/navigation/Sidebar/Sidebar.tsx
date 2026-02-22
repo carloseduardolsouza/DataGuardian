@@ -14,8 +14,8 @@ import {
   LogIcon,
   SettingsIcon,
   LogoutIcon,
-} from '../Icons';
-import { PERMISSIONS } from '../../constants/permissions';
+} from '../../icons/Icons';
+import { PERMISSIONS } from '../../../constants/permissions';
 
 export type NavKey =
   | 'dashboard'

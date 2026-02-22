@@ -29,7 +29,7 @@ const whatsappStatusQuerySchema = z.object({
   instance: z.string().min(1).optional(),
 });
 const notificationTemplateQuerySchema = z.object({
-  channel: z.enum(['smtp', 'webhook', 'whatsapp']).optional(),
+  channel: z.enum(['whatsapp']).optional(),
   type: z.enum([
     'backup_success',
     'backup_failed',
@@ -42,7 +42,7 @@ const notificationTemplateQuerySchema = z.object({
   ]).optional(),
 });
 const createNotificationTemplateSchema = z.object({
-  channel: z.enum(['smtp', 'webhook', 'whatsapp']),
+  channel: z.enum(['whatsapp']),
   type: z.enum([
     'backup_success',
     'backup_failed',
@@ -82,7 +82,6 @@ systemRouter.put(
   validate(updateSettingsSchema),
   SystemController.updateSettings,
 );
-systemRouter.post("/settings/test-smtp", requirePermission(PERMISSIONS.SYSTEM_WRITE), SystemController.testSmtp);
 systemRouter.post(
   "/settings/whatsapp/qr",
   requirePermission(PERMISSIONS.SYSTEM_WRITE),

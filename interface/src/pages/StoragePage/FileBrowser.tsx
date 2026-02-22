@@ -1,7 +1,8 @@
-﻿import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ApiStorageBrowserEntry } from '../../services/api';
 import { storageApi } from '../../services/api';
-import { CopyIcon, ExportIcon, TrashIcon } from '../../components/Icons';
+import { CopyIcon, ExportIcon, TrashIcon } from '../../ui/icons/Icons';
+import ConfirmDialog from '../../ui/dialogs/ConfirmDialog/ConfirmDialog';
 import styles from './FileBrowser.module.css';
 
 interface Props {
@@ -40,6 +41,8 @@ export default function FileBrowser({ locationId, locationName }: Props) {
   const [sortBy, setSortBy] = useState<'name' | 'size' | 'modified'>('name');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [refreshTick, setRefreshTick] = useState(0);
+  const [pendingDeletePaths, setPendingDeletePaths] = useState<string[]>([]);
+  const [deleting, setDeleting] = useState(false);
 
   const loadEntries = useCallback(async () => {
     try {
@@ -125,15 +128,21 @@ export default function FileBrowser({ locationId, locationName }: Props) {
 
   const deletePaths = async (paths: string[]) => {
     if (paths.length === 0) return;
-    const confirmed = confirm(`Excluir ${paths.length} item(ns)? Esta ação não pode ser desfeita.`);
-    if (!confirmed) return;
+    setPendingDeletePaths(paths);
+  };
 
+  const confirmDeletePaths = async () => {
+    if (pendingDeletePaths.length === 0) return;
     try {
-      await Promise.all(paths.map((targetPath) => storageApi.deletePath(locationId, targetPath)));
+      setDeleting(true);
+      await Promise.all(pendingDeletePaths.map((targetPath) => storageApi.deletePath(locationId, targetPath)));
       setSelected(new Set());
       setRefreshTick((v) => v + 1);
+      setPendingDeletePaths([]);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Falha ao excluir itens');
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -269,8 +278,22 @@ export default function FileBrowser({ locationId, locationName }: Props) {
       </div>
 
       <div className={styles.statusBar}>
-        <span>{sorted.filter((e) => e.kind === 'folder').length} pasta(s) · {sorted.filter((e) => e.kind === 'file').length} arquivo(s)</span>
+        <span>{sorted.filter((e) => e.kind === 'folder').length} pasta(s) � {sorted.filter((e) => e.kind === 'file').length} arquivo(s)</span>
       </div>
+
+      <ConfirmDialog
+        open={pendingDeletePaths.length > 0}
+        title="Confirmar exclusao no storage"
+        message={pendingDeletePaths.length === 1
+          ? 'Deseja excluir este item?'
+          : `Deseja excluir ${pendingDeletePaths.length} itens selecionados?`}
+        confirmLabel={pendingDeletePaths.length === 1 ? 'Excluir item' : 'Excluir itens'}
+        loading={deleting}
+        onClose={() => {
+          if (!deleting) setPendingDeletePaths([]);
+        }}
+        onConfirm={() => void confirmDeletePaths()}
+      />
     </div>
   );
 }
@@ -293,6 +316,8 @@ function RefreshIcon() {
 function FolderEmptyIcon() {
   return <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z" /></svg>;
 }
+
+
 
 
 

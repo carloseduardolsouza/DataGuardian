@@ -2,7 +2,7 @@ import { NotificationType, Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { AppError } from '../middlewares/error-handler';
 
-type AlertChannel = 'smtp' | 'webhook' | 'whatsapp';
+type AlertChannel = 'whatsapp';
 const prismaAny = prisma as any;
 
 const ALL_NOTIFICATION_TYPES: NotificationType[] = [
@@ -16,35 +16,13 @@ const ALL_NOTIFICATION_TYPES: NotificationType[] = [
   'cleanup_completed',
 ];
 
-const ALL_ALERT_CHANNELS: AlertChannel[] = ['smtp', 'webhook', 'whatsapp'];
+const ALL_ALERT_CHANNELS: AlertChannel[] = ['whatsapp'];
 
 function getDefaultTemplate(channel: AlertChannel, _type: NotificationType) {
   const header = `DataGuardian {{severity_upper}}`;
   const title = '{{title}}';
   const message = '{{message}}';
   const details = 'Tipo: {{type}}\nEntidade: {{entity_type}}/{{entity_id}}\nHorario: {{created_at}}';
-
-  if (channel === 'webhook') {
-    return {
-      title_tpl: null,
-      message_tpl: JSON.stringify(
-        {
-          version: 1,
-          source: 'DataGuardian',
-          type: '{{type}}',
-          severity: '{{severity}}',
-          title: '{{title}}',
-          message: '{{message}}',
-          entity_type: '{{entity_type}}',
-          entity_id: '{{entity_id}}',
-          created_at: '{{created_at}}',
-          metadata: '{{metadata_json}}',
-        },
-        null,
-        2,
-      ),
-    };
-  }
 
   return {
     title_tpl: `${header} - ${title}`,

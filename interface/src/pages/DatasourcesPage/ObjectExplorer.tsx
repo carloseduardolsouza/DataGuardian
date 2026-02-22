@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { ApiDatasource, ApiSchema, ApiSchemaTable } from '../../services/api';
-import { SpinnerIcon } from '../../components/Icons';
+import { SpinnerIcon } from '../../ui/icons/Icons';
 import styles from './ObjectExplorer.module.css';
 
 interface Props {
@@ -245,3 +245,5 @@ function RefreshIcon() {
     </svg>
   );
 }
+
+

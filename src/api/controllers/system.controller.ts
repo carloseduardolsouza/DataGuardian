@@ -6,7 +6,6 @@ import {
   updateSystemSettings,
   updateSystemSettingByKey,
   deleteSystemSettingByKey,
-  testSmtpConnection,
   getWhatsappEvolutionStatus,
   getWhatsappEvolutionQrCode,
 } from '../models/system.model';
@@ -102,15 +101,6 @@ export const SystemController = {
         changes: { deleted: before },
       });
       res.status(204).send();
-    } catch (err) {
-      next(err);
-    }
-  },
-
-  async testSmtp(_req: Request, res: Response, next: NextFunction) {
-    try {
-      const result = await testSmtpConnection();
-      res.status(result.status).json(result.body);
     } catch (err) {
       next(err);
     }

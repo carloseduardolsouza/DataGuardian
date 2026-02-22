@@ -1,11 +1,11 @@
-﻿import { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import LoginPage from './pages/LoginPage/LoginPage';
 import SetupPage from './pages/SetupPage/SetupPage';
 import DashboardPage from './pages/DashboardPage/DashboardPage';
-import { ROUTE_PATHS, type NavKey } from './components/Sidebar/Sidebar';
-import { ToastProvider } from './components/Toast/ToastProvider';
-import { notify } from './components/Toast/notify';
+import { ROUTE_PATHS, type NavKey } from './ui/navigation/Sidebar/Sidebar';
+import { ToastProvider } from './ui/feedback/Toast/ToastProvider';
+import { notify } from './ui/feedback/Toast/notify';
 import { authApi, notificationsApi, type ApiAuthUser } from './services/api';
 import { PERMISSIONS } from './constants/permissions';
 
@@ -253,3 +253,5 @@ export default function App() {
     </div>
   );
 }
+
+

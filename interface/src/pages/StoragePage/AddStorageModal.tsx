@@ -7,9 +7,9 @@ import styles from './AddStorageModal.module.css';
 import {
   CheckIcon, AlertIcon, PlugIcon, SpinnerIcon,
   LocalStorageIcon, SshIcon, S3Icon, MinioIcon, BackblazeIcon,
-} from '../../components/Icons';
-import FormField, { formStyles } from '../../components/FormField/FormField';
-import Modal from '../../components/Modal/Modal';
+} from '../../ui/icons/Icons';
+import FormField, { formStyles } from '../../ui/forms/FormField/FormField';
+import Modal from '../../ui/overlay/Modal/Modal';
 import { STORAGE_TYPES } from '../../constants';
 
 interface Props {
@@ -591,3 +591,5 @@ export default function AddStorageModal({ onClose, onSave, editData }: Props) {
     </Modal>
   );
 }
+
+

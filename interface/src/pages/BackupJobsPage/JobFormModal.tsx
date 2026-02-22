@@ -7,8 +7,8 @@ import {
   StorageIcon,
   ClockIcon,
   RetentionIcon,
-} from '../../components/Icons';
-import Modal from '../../components/Modal/Modal';
+} from '../../ui/icons/Icons';
+import Modal from '../../ui/overlay/Modal/Modal';
 import { DS_ABBR, SL_ABBR } from '../../constants';
 import styles from './JobFormModal.module.css';
 
@@ -510,6 +510,8 @@ function RetentionField({ label, value, onChange }: { label: string; value: numb
     </div>
   );
 }
+
+
 
 
 

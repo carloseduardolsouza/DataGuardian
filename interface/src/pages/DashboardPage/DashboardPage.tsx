@@ -1,6 +1,6 @@
-ï»¿import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import Sidebar, { ROUTE_PATHS, type NavKey } from '../../components/Sidebar/Sidebar';
+import Sidebar, { ROUTE_PATHS, type NavKey } from '../../ui/navigation/Sidebar/Sidebar';
 import {
   DatabaseStatIcon,
   JobStatIcon,
@@ -9,8 +9,8 @@ import {
   SunIcon,
   MoonIcon,
   EmptyPageIcon,
-} from '../../components/Icons';
-import StatusBadge from '../../components/StatusBadge/StatusBadge';
+} from '../../ui/icons/Icons';
+import StatusBadge from '../../ui/data-display/StatusBadge/StatusBadge';
 import DatasourcesPage from '../DatasourcesPage/DatasourcesPage';
 import StoragePage from '../StoragePage/StoragePage';
 import BackupJobsPage from '../BackupJobsPage/BackupJobsPage';
@@ -52,9 +52,9 @@ const PAGE_TITLES: Record<NavKey, { title: string; sub: string }> = {
 };
 
 function formatBytes(value: number | string | null) {
-  if (value === null) return 'â€”';
+  if (value === null) return '—';
   const bytes = typeof value === 'string' ? Number(value) : value;
-  if (!Number.isFinite(bytes) || bytes <= 0) return 'â€”';
+  if (!Number.isFinite(bytes) || bytes <= 0) return '—';
 
   const units = ['B', 'KB', 'MB', 'GB', 'TB'];
   const index = Math.min(units.length - 1, Math.floor(Math.log(bytes) / Math.log(1024)));
@@ -63,7 +63,7 @@ function formatBytes(value: number | string | null) {
 }
 
 function formatDuration(secs: number | null) {
-  if (secs === null || secs <= 0) return 'â€”';
+  if (secs === null || secs <= 0) return '—';
   if (secs < 60) return `${secs}s`;
   if (secs < 3600) return `${Math.floor(secs / 60)}m ${secs % 60}s`;
   return `${Math.floor(secs / 3600)}h ${Math.floor((secs % 3600) / 60)}m`;
@@ -260,7 +260,7 @@ function DashboardContent() {
       <div className={styles.section}>
         <div className={styles.sectionHeader}>
           <h2 className={styles.sectionTitle}>Execucoes Recentes</h2>
-          <button className={styles.sectionAction} onClick={() => navigate(ROUTE_PATHS.executions)}>Ver todas â†’</button>
+          <button className={styles.sectionAction} onClick={() => navigate(ROUTE_PATHS.executions)}>Ver todas ?</button>
         </div>
         <div className={styles.tableWrap}>
           <table className={styles.table}>
@@ -299,14 +299,14 @@ function DashboardContent() {
         <div className={styles.section}>
           <div className={styles.sectionHeader}>
             <h2 className={styles.sectionTitle}>Proximos Backups</h2>
-            <button className={styles.sectionAction} onClick={() => navigate(ROUTE_PATHS['backup-jobs'])}>Gerenciar â†’</button>
+            <button className={styles.sectionAction} onClick={() => navigate(ROUTE_PATHS['backup-jobs'])}>Gerenciar ?</button>
           </div>
           {(data?.upcoming_jobs ?? []).map((job) => (
             <div className={styles.jobItem} key={job.id}>
               <div className={styles.jobItemLeft}>
                 <span className={styles.jobItemName}>{job.name}</span>
                 <span className={styles.jobItemMeta}>
-                  {job.schedule_cron} Â· {job.next_execution_at ? new Date(job.next_execution_at).toLocaleString('pt-BR') : 'sem agendamento'}
+                  {job.schedule_cron} · {job.next_execution_at ? new Date(job.next_execution_at).toLocaleString('pt-BR') : 'sem agendamento'}
                 </span>
               </div>
               <StatusBadge status={job.enabled ? 'success' : 'warning'} label={job.enabled ? 'Ativo' : 'Inativo'} />
@@ -322,13 +322,13 @@ function DashboardContent() {
         <div className={styles.section}>
           <div className={styles.sectionHeader}>
             <h2 className={styles.sectionTitle}>Health Check</h2>
-            <button className={styles.sectionAction} onClick={() => navigate(ROUTE_PATHS.health)}>Detalhes â†’</button>
+            <button className={styles.sectionAction} onClick={() => navigate(ROUTE_PATHS.health)}>Detalhes ?</button>
           </div>
           {(data?.datasource_health ?? []).map((hc) => (
             <div className={styles.healthRow} key={hc.id}>
               <span className={`${styles.healthDot} ${styles[mapHealthDot(hc.status)]}`} />
               <span className={styles.healthName}>{hc.name}</span>
-              <span className={styles.healthLatency}>{hc.latency_ms !== null ? `${hc.latency_ms}ms` : 'â€”'}</span>
+              <span className={styles.healthLatency}>{hc.latency_ms !== null ? `${hc.latency_ms}ms` : '—'}</span>
             </div>
           ))}
           {(data?.datasource_health.length ?? 0) === 0 && (
@@ -365,3 +365,5 @@ function EmptyPage({ page }: { page: NavKey }) {
     </div>
   );
 }
+
+

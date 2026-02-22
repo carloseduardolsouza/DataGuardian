@@ -16,9 +16,9 @@ import {
   CheckCircleIcon,
   AlertTriangleIcon,
   ErrorIcon,
-} from '../../components/Icons';
-import { ROUTE_PATHS } from '../../components/Sidebar/Sidebar';
-import Modal from '../../components/Modal/Modal';
+} from '../../ui/icons/Icons';
+import { ROUTE_PATHS } from '../../ui/navigation/Sidebar/Sidebar';
+import Modal from '../../ui/overlay/Modal/Modal';
 import { PERMISSIONS } from '../../constants/permissions';
 import styles from './BackupsPage.module.css';
 
@@ -464,3 +464,5 @@ export default function BackupsPage({ permissions = [] }: Props) {
     </div>
   );
 }
+
+

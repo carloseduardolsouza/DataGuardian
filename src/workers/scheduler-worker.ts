@@ -73,6 +73,16 @@ async function executeSchedulerCycle() {
             storageLocationId: job.storageLocationId,
             status: 'queued',
             backupType: 'full',
+            metadata: {
+              enqueue_source: 'scheduled',
+              execution_logs: [
+                {
+                  ts: new Date().toISOString(),
+                  level: 'info',
+                  message: `Motivo da fila: agendamento automatico atingiu a janela do job '${job.name}'.`,
+                },
+              ],
+            },
           },
         });
 

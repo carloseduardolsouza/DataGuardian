@@ -1,8 +1,8 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import type { ApiDatasource, ApiSchemaTable } from '../../services/api';
 import { datasourceApi } from '../../services/api';
-import Modal from '../../components/Modal/Modal';
-import { PlayFilledIcon, TrashIcon, ExportIcon } from '../../components/Icons';
+import Modal from '../../ui/overlay/Modal/Modal';
+import { PlayFilledIcon, TrashIcon, ExportIcon } from '../../ui/icons/Icons';
 import styles from './MainPanel.module.css';
 
 type Tab = 'query' | 'structure';
@@ -687,3 +687,5 @@ function HistoryIcon() {
     </svg>
   );
 }
+
+

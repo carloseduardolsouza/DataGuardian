@@ -2,9 +2,10 @@ import { useEffect, useMemo, useState } from 'react';
 import { backupJobsApi, datasourceApi, storageApi } from '../../services/api';
 import type { ApiBackupJob, ApiDatasource, ApiStorageLocation } from '../../services/api';
 import JobFormModal from './JobFormModal';
+import ConfirmDialog from '../../ui/dialogs/ConfirmDialog/ConfirmDialog';
 import styles from './BackupJobsPage.module.css';
 
-import StatusBadge from '../../components/StatusBadge/StatusBadge';
+import StatusBadge from '../../ui/data-display/StatusBadge/StatusBadge';
 import {
   PlusIcon,
   PlayFilledIcon,
@@ -14,7 +15,7 @@ import {
   EmptyJobsIcon,
   SpinnerIcon,
   TrashIcon,
-} from '../../components/Icons';
+} from '../../ui/icons/Icons';
 
 type Filter = 'all' | 'active' | 'inactive';
 
@@ -74,6 +75,8 @@ export default function BackupJobsPage() {
   const [runningNowIds, setRunningNowIds] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<ApiBackupJob | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   async function loadAll() {
     try {
@@ -161,12 +164,20 @@ export default function BackupJobsPage() {
   }
 
   async function removeJob(job: ApiBackupJob) {
-    if (!confirm(`Remover job '${job.name}'?`)) return;
+    setDeleteTarget(job);
+  }
+
+  async function confirmRemoveJob() {
+    if (!deleteTarget) return;
     try {
-      await backupJobsApi.remove(job.id);
+      setDeleting(true);
+      await backupJobsApi.remove(deleteTarget.id);
       await loadAll();
+      setDeleteTarget(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao remover job.');
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -343,7 +354,21 @@ export default function BackupJobsPage() {
           onSave={handleSave}
         />
       )}
+
+      <ConfirmDialog
+        open={Boolean(deleteTarget)}
+        title="Confirmar exclusao de backup job"
+        message={deleteTarget ? `Deseja remover o job "${deleteTarget.name}"?` : ''}
+        confirmLabel="Excluir job"
+        loading={deleting}
+        onClose={() => {
+          if (!deleting) setDeleteTarget(null);
+        }}
+        onConfirm={() => void confirmRemoveJob()}
+      />
     </div>
   );
 }
+
+
 

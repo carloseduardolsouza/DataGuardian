@@ -1,11 +1,9 @@
 import {
-  AlertChannel,
   NotificationEntityType,
   NotificationSeverity,
   NotificationType,
   Prisma,
 } from '@prisma/client';
-import nodemailer from 'nodemailer';
 import { prisma } from '../lib/prisma';
 import { logger } from './logger';
 import { sendEvolutionText } from '../integrations/evolution-api/client';
@@ -24,16 +22,6 @@ interface CreateNotificationInput {
   message: string;
   metadata?: Record<string, unknown>;
 }
-
-type SmtpConfig = {
-  host?: string;
-  port?: number;
-  user?: string;
-  password?: string;
-  from?: string;
-  to?: string[];
-  secure?: boolean;
-};
 
 type WhatsappEvolutionConfig = {
   api_url?: string;
@@ -77,30 +65,12 @@ async function readSystemSetting(key: string) {
 }
 
 async function readDispatchConfig() {
-  const [
-    emailEnabledRaw,
-    smtpRaw,
-    webhookUrlRaw,
-    webhookHeadersRaw,
-    webhookTimeoutRaw,
-    whatsappEnabledRaw,
-    whatsappRaw,
-  ] = await Promise.all([
-    readSystemSetting('notifications.email_enabled'),
-    readSystemSetting('notifications.email_smtp_config'),
-    readSystemSetting('notifications.webhook_url'),
-    readSystemSetting('notifications.webhook_headers'),
-    readSystemSetting('notifications.webhook_timeout_ms'),
+  const [whatsappEnabledRaw, whatsappRaw] = await Promise.all([
     readSystemSetting('notifications.whatsapp_enabled'),
     readSystemSetting('notifications.whatsapp_evolution_config'),
   ]);
 
   return {
-    emailEnabled: Boolean(emailEnabledRaw),
-    smtp: asObject(smtpRaw) as SmtpConfig,
-    webhookUrl: asString(webhookUrlRaw),
-    webhookHeaders: asObject(webhookHeadersRaw),
-    webhookTimeoutMs: Number(webhookTimeoutRaw) > 0 ? Number(webhookTimeoutRaw) : 10_000,
     whatsappEnabled: Boolean(whatsappEnabledRaw),
     whatsapp: asObject(whatsappRaw) as WhatsappEvolutionConfig,
   };
@@ -111,7 +81,7 @@ function isImportantNotification(input: CreateNotificationInput) {
 }
 
 async function resolveRenderedTemplate(
-  channel: AlertChannel,
+  channel: 'whatsapp',
   input: CreateNotificationInput,
 ) {
   const template = await getActiveTemplate(channel, input.type);
@@ -130,87 +100,6 @@ async function resolveRenderedTemplate(
     message: renderTemplate(template?.messageTpl ?? '{{message}}', context) || input.message,
     template_version: template?.version ?? 0,
   };
-}
-
-async function dispatchSmtpNotification(input: CreateNotificationInput) {
-  const cfg = await readDispatchConfig();
-  if (!cfg.emailEnabled) return;
-
-  const host = asString(cfg.smtp.host);
-  const user = asString(cfg.smtp.user);
-  const password = asString(cfg.smtp.password);
-  const from = asString(cfg.smtp.from);
-  const recipients = asStringArray(cfg.smtp.to);
-  const port = Number(cfg.smtp.port) > 0 ? Number(cfg.smtp.port) : 587;
-
-  if (!host || !user || !password || !from || recipients.length === 0) {
-    logger.warn('SMTP habilitado, mas configuracao incompleta. Notificacao nao enviada.');
-    return;
-  }
-
-  const rendered = await resolveRenderedTemplate('smtp', input);
-  const transport = nodemailer.createTransport({
-    host,
-    port,
-    secure: asBoolean(cfg.smtp.secure, port === 465),
-    auth: { user, pass: password },
-    connectionTimeout: 10_000,
-    greetingTimeout: 10_000,
-    socketTimeout: 15_000,
-  });
-
-  await transport.sendMail({
-    from,
-    to: recipients.join(', '),
-    subject: rendered.title,
-    text: rendered.message,
-    headers: {
-      'X-DataGuardian-Notification-Type': input.type,
-      'X-DataGuardian-Template-Version': String(rendered.template_version),
-    },
-  });
-}
-
-async function dispatchWebhookNotification(input: CreateNotificationInput) {
-  const cfg = await readDispatchConfig();
-  if (!cfg.webhookUrl) return;
-
-  const rendered = await resolveRenderedTemplate('webhook', input);
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), cfg.webhookTimeoutMs);
-
-  try {
-    const res = await fetch(cfg.webhookUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...Object.fromEntries(
-          Object.entries(cfg.webhookHeaders).map(([k, v]) => [k, String(v)]),
-        ),
-      },
-      body: JSON.stringify({
-        source: 'DataGuardian',
-        channel: 'webhook',
-        type: input.type,
-        severity: input.severity,
-        title: rendered.title,
-        message: rendered.message,
-        entity_type: input.entityType,
-        entity_id: input.entityId,
-        metadata: input.metadata ?? {},
-        template_version: rendered.template_version,
-        created_at: new Date().toISOString(),
-      }),
-      signal: controller.signal,
-    });
-
-    if (!res.ok) {
-      const raw = await res.text().catch(() => '');
-      throw new Error(`Webhook retornou ${res.status}${raw ? `: ${raw}` : ''}`);
-    }
-  } finally {
-    clearTimeout(timeout);
-  }
 }
 
 async function dispatchWhatsappNotification(input: CreateNotificationInput) {
@@ -242,9 +131,7 @@ async function dispatchWhatsappNotification(input: CreateNotificationInput) {
 }
 
 async function dispatchExternalNotifications(input: CreateNotificationInput) {
-  const channels: Array<{ channel: AlertChannel; run: () => Promise<void> }> = [
-    { channel: 'smtp', run: () => dispatchSmtpNotification(input) },
-    { channel: 'webhook', run: () => dispatchWebhookNotification(input) },
+  const channels: Array<{ channel: 'whatsapp'; run: () => Promise<void> }> = [
     { channel: 'whatsapp', run: () => dispatchWhatsappNotification(input) },
   ];
 

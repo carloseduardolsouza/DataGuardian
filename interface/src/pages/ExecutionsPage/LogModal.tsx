@@ -1,11 +1,12 @@
-﻿import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { executionsApi } from '../../services/api';
 import type { ApiExecution, ApiExecutionLogEntry } from '../../services/api';
 import {
   CloseIcon, CopyIcon, CheckIcon, AlertIcon,
   SearchIcon, ChevronUpIcon, ChevronDownIcon,
-} from '../../components/Icons';
+} from '../../ui/icons/Icons';
 import { LEVEL_LABELS, EXEC_STATUS_LABELS } from '../../constants';
+import ConfirmDialog from '../../ui/dialogs/ConfirmDialog/ConfirmDialog';
 import styles from './LogModal.module.css';
 
 interface Props {
@@ -19,7 +20,7 @@ type LevelFilter = 'all' | ApiExecutionLogEntry['level'];
 const LEVEL_ORDER: ApiExecutionLogEntry['level'][] = ['error', 'warn', 'info', 'success', 'debug'];
 
 function formatDateTime(iso: string | null) {
-  if (!iso) return 'â€”';
+  if (!iso) return '—';
   return new Date(iso).toLocaleString('pt-BR', {
     day: '2-digit', month: '2-digit', year: '2-digit',
     hour: '2-digit', minute: '2-digit', second: '2-digit',
@@ -27,16 +28,16 @@ function formatDateTime(iso: string | null) {
 }
 
 function formatDuration(secs: number | null) {
-  if (secs === null) return 'â€”';
+  if (secs === null) return '—';
   if (secs < 60) return `${secs}s`;
   if (secs < 3600) return `${Math.floor(secs / 60)}m ${secs % 60}s`;
   return `${Math.floor(secs / 3600)}h ${Math.floor((secs % 3600) / 60)}m`;
 }
 
 function formatBytes(value: number | string | null) {
-  if (value === null) return 'â€”';
+  if (value === null) return '—';
   const bytes = typeof value === 'string' ? Number(value) : value;
-  if (!Number.isFinite(bytes) || bytes <= 0) return 'â€”';
+  if (!Number.isFinite(bytes) || bytes <= 0) return '—';
   const units = ['B', 'KB', 'MB', 'GB', 'TB'];
   const index = Math.min(units.length - 1, Math.floor(Math.log(bytes) / Math.log(1024)));
   const amount = bytes / 1024 ** index;
@@ -49,6 +50,7 @@ export default function LogModal({ executionId, onClose, onChanged }: Props) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [acting, setActing] = useState<'cancel' | 'delete' | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const [levelFilter, setLevelFilter] = useState<LevelFilter>('all');
   const [search, setSearch] = useState('');
@@ -66,7 +68,7 @@ export default function LogModal({ executionId, onClose, onChanged }: Props) {
       setExecution(exec);
       setLogs(logsRes.logs ?? []);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erro ao carregar execuÃ§Ã£o');
+      setError(err instanceof Error ? err.message : 'Erro ao carregar execução');
     } finally {
       setLoading(false);
     }
@@ -127,7 +129,7 @@ export default function LogModal({ executionId, onClose, onChanged }: Props) {
       await onChanged();
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erro ao cancelar execuÃ§Ã£o');
+      setError(err instanceof Error ? err.message : 'Erro ao cancelar execução');
     } finally {
       setActing(null);
     }
@@ -135,14 +137,14 @@ export default function LogModal({ executionId, onClose, onChanged }: Props) {
 
   async function handleDelete() {
     if (!execution) return;
-    if (!confirm('Remover esta execuÃ§Ã£o? Esta aÃ§Ã£o nÃ£o pode ser desfeita.')) return;
     try {
       setActing('delete');
       await executionsApi.remove(execution.id);
       await onChanged();
+      setShowDeleteConfirm(false);
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erro ao remover execuÃ§Ã£o');
+      setError(err instanceof Error ? err.message : 'Erro ao remover execução');
       setActing(null);
     }
   }
@@ -161,17 +163,17 @@ export default function LogModal({ executionId, onClose, onChanged }: Props) {
         <div className={styles.header}>
           <div className={styles.headerLeft}>
             <div className={styles.execId}>{execution?.id ?? executionId}</div>
-            <h2 className={styles.title}>{execution?.job?.name ?? 'ExecuÃ§Ã£o'}</h2>
+            <h2 className={styles.title}>{execution?.job?.name ?? 'Execução'}</h2>
             <div className={styles.meta}>
               <span className={`${styles.statusPill} ${styles[execution?.status ?? 'queued']}`}>
                 {execution ? EXEC_STATUS_LABELS[execution.status] : 'Carregando'}
               </span>
               {execution?.datasource?.name && <span className={styles.metaItem}>{execution.datasource.name}</span>}
-              <span className={styles.metaDot}>Â·</span>
+              <span className={styles.metaDot}>·</span>
               <span className={styles.metaItem}>{formatDateTime(execution?.started_at ?? null)}</span>
-              <span className={styles.metaDot}>Â·</span>
+              <span className={styles.metaDot}>·</span>
               <span className={styles.metaItem}>{formatDuration(execution?.duration_seconds ?? null)}</span>
-              <span className={styles.metaDot}>Â·</span>
+              <span className={styles.metaDot}>·</span>
               <span className={styles.metaItem}>{formatBytes(execution?.compressed_size_bytes ?? execution?.size_bytes ?? null)}</span>
             </div>
           </div>
@@ -186,7 +188,7 @@ export default function LogModal({ executionId, onClose, onChanged }: Props) {
               </button>
             )}
             {execution && execution.status !== 'queued' && execution.status !== 'running' && (
-              <button className={styles.copyBtn} onClick={() => void handleDelete()} disabled={acting !== null}>
+              <button className={styles.copyBtn} onClick={() => setShowDeleteConfirm(true)} disabled={acting !== null}>
                 {acting === 'delete' ? 'Removendo...' : 'Remover'}
               </button>
             )}
@@ -276,7 +278,21 @@ export default function LogModal({ executionId, onClose, onChanged }: Props) {
           <button className={styles.closeFooterBtn} onClick={onClose}>Fechar</button>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={showDeleteConfirm}
+        title="Confirmar exclusao de execucao"
+        message="Deseja remover esta execucao?"
+        confirmLabel="Excluir execucao"
+        loading={acting === 'delete'}
+        onClose={() => {
+          if (acting !== 'delete') setShowDeleteConfirm(false);
+        }}
+        onConfirm={() => void handleDelete()}
+      />
     </div>
   );
 }
+
+
 

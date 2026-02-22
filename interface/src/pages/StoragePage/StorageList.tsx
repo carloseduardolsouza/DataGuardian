@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { ApiStorageLocation } from '../../services/api';
-import { EditIcon, PlusIcon, SearchIcon, SpinnerIcon, TrashIcon } from '../../components/Icons';
+import { EditIcon, PlusIcon, SearchIcon, SpinnerIcon, TrashIcon } from '../../ui/icons/Icons';
 import { SL_ABBR } from '../../constants';
 import styles from './StorageList.module.css';
 
@@ -124,3 +124,5 @@ export default function StorageList({
     </div>
   );
 }
+
+

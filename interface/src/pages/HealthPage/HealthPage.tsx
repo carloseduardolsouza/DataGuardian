@@ -1,11 +1,11 @@
-ï»¿import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { healthApi } from '../../services/api';
 import type {
   ApiSystemHealth,
   ApiDatasourceHealthEntry,
   ApiStorageHealthEntry,
 } from '../../services/api';
-import { SpinnerIcon, ClockIcon, AlertTriangleIcon, ServerIcon, DatabaseIcon } from '../../components/Icons';
+import { SpinnerIcon, ClockIcon, AlertTriangleIcon, ServerIcon, DatabaseIcon } from '../../ui/icons/Icons';
 import styles from './HealthPage.module.css';
 
 function formatDate(iso: string) {
@@ -108,7 +108,7 @@ export default function HealthPage() {
       <div className={styles.header}>
         <div>
           <h2 className={styles.title}>Monitoramento de Health</h2>
-          <p className={styles.subtitle}>VerificaÃ§Ã£o automÃ¡tica de bancos e storages em segundo plano.</p>
+          <p className={styles.subtitle}>Verificação automática de bancos e storages em segundo plano.</p>
         </div>
         <button className={styles.refreshBtn} onClick={() => void loadData(true)} disabled={refreshing}>
           {refreshing ? <SpinnerIcon width={14} height={14} /> : <ClockIcon width={14} height={14} />}
@@ -152,16 +152,16 @@ export default function HealthPage() {
               <DatabaseIcon width={16} height={16} />
               <span className={styles.summaryValue}>{system.stats.datasources_healthy}/{system.stats.datasources_total}</span>
             </div>
-            <span className={styles.summarySub}>SaudÃ¡veis</span>
+            <span className={styles.summarySub}>Saudáveis</span>
           </div>
 
           <div className={styles.summaryCard}>
             <span className={styles.summaryLabel}>Storages</span>
             <div className={styles.summaryValueRow}>
               <ServerIcon width={16} height={16} />
-              <span className={styles.summaryValue}>{storageSummary.ok}/{storageSummary.total}</span>
+              <span className={styles.summaryValue}>{storageSummary.total}/{storageSummary.ok}</span>
             </div>
-            <span className={styles.summarySub}>SaudÃ¡veis</span>
+            <span className={styles.summarySub}>Saudáveis</span>
           </div>
         </div>
       )}
@@ -194,7 +194,7 @@ export default function HealthPage() {
                 <tr>
                   <th>Datasource</th>
                   <th>Status</th>
-                  <th>LatÃªncia</th>
+                  <th>Latência</th>
                   <th>Quando</th>
                 </tr>
               </thead>
@@ -224,7 +224,7 @@ export default function HealthPage() {
         <div className={styles.tableCard}>
           <div className={styles.tableHeader}>
             <h3 className={styles.sectionTitle}>Health dos Storages</h3>
-            <span className={styles.tableMeta}>{storageSummary.ok}/{storageSummary.total} OK</span>
+            <span className={styles.tableMeta}>{storageSummary.total}/{storageSummary.ok} OK</span>
           </div>
           <div className={styles.tableWrap}>
             <table className={styles.table}>
@@ -232,7 +232,7 @@ export default function HealthPage() {
                 <tr>
                   <th>Storage</th>
                   <th>Status</th>
-                  <th>LatÃªncia</th>
+                  <th>Latência</th>
                   <th>Quando</th>
                 </tr>
               </thead>
@@ -262,4 +262,7 @@ export default function HealthPage() {
     </div>
   );
 }
+
+
+
 

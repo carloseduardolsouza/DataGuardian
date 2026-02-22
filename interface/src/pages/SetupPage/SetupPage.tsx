@@ -1,5 +1,5 @@
-ï»¿import { useState } from 'react';
-import { LogoIcon, SunIcon, MoonIcon, AlertIcon } from '../../components/Icons';
+import { useState } from 'react';
+import { LogoIcon, SunIcon, MoonIcon, AlertIcon } from '../../ui/icons/Icons';
 import styles from './SetupPage.module.css';
 
 interface Props {
@@ -88,7 +88,7 @@ export default function SetupPage({ onSetup, theme, onToggleTheme }: Props) {
               type="password"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
-              placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢"
+              placeholder="••••••••"
               autoComplete="new-password"
               disabled={loading}
             />
@@ -102,7 +102,7 @@ export default function SetupPage({ onSetup, theme, onToggleTheme }: Props) {
               type="password"
               value={confirmPassword}
               onChange={(event) => setConfirmPassword(event.target.value)}
-              placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢"
+              placeholder="••••••••"
               autoComplete="new-password"
               disabled={loading}
             />
@@ -124,3 +124,5 @@ export default function SetupPage({ onSetup, theme, onToggleTheme }: Props) {
     </div>
   );
 }
+
+

@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   accessApi,
   systemApi,
@@ -8,18 +8,9 @@ import {
   type ApiNotificationTemplate,
   type ApiWhatsappEvolutionStatus,
 } from '../../services/api';
-import { AlertTriangleIcon, CheckCircleIcon, SpinnerIcon } from '../../components/Icons';
-import Modal from '../../components/Modal/Modal';
+import { AlertTriangleIcon, CheckCircleIcon, SpinnerIcon } from '../../ui/icons/Icons';
+import Modal from '../../ui/overlay/Modal/Modal';
 import styles from './SettingsPage.module.css';
-
-type SmtpConfig = {
-  host?: string;
-  port?: number;
-  user?: string;
-  password?: string;
-  from?: string;
-  to?: string[];
-};
 
 type WhatsappEvolutionConfig = {
   api_url?: string;
@@ -110,20 +101,6 @@ export default function SettingsPage({ canManageAccess = false }: Props) {
   const [tempDirectory, setTempDirectory] = useState('/tmp/dataguardian');
   const [healthIntervalMin, setHealthIntervalMin] = useState(5);
   const [schedulerIntervalMin, setSchedulerIntervalMin] = useState(1);
-
-  const [emailEnabled, setEmailEnabled] = useState(false);
-  const [smtpHost, setSmtpHost] = useState('');
-  const [smtpPort, setSmtpPort] = useState(587);
-  const [smtpUser, setSmtpUser] = useState('');
-  const [smtpPassword, setSmtpPassword] = useState('');
-  const [smtpHasPassword, setSmtpHasPassword] = useState(false);
-  const [smtpFrom, setSmtpFrom] = useState('');
-  const [smtpTo, setSmtpTo] = useState('');
-
-  const [webhookUrl, setWebhookUrl] = useState('');
-  const [webhookHeadersJson, setWebhookHeadersJson] = useState('{}');
-  const [webhookTimeoutMs, setWebhookTimeoutMs] = useState(10000);
-
   const [whatsappEnabled, setWhatsappEnabled] = useState(false);
   const [waApiUrl, setWaApiUrl] = useState('http://localhost:8080');
   const [waApiKey, setWaApiKey] = useState('');
@@ -162,7 +139,6 @@ export default function SettingsPage({ canManageAccess = false }: Props) {
 
   const [templatesLoading, setTemplatesLoading] = useState(false);
   const [templates, setTemplates] = useState<ApiNotificationTemplate[]>([]);
-  const [templateChannel, setTemplateChannel] = useState<'smtp' | 'webhook' | 'whatsapp'>('smtp');
   const [templateType, setTemplateType] = useState<ApiNotificationTemplate['type']>('backup_failed');
   const [templateVersion, setTemplateVersion] = useState<number | null>(null);
   const [templateEnabled, setTemplateEnabled] = useState(true);
@@ -179,21 +155,6 @@ export default function SettingsPage({ canManageAccess = false }: Props) {
       setTempDirectory(asString(data['system.temp_directory']?.value, '/tmp/dataguardian'));
       setHealthIntervalMin(Math.max(1, Math.round(asNumber(data['system.health_check_interval_ms']?.value, 300000) / 60000)));
       setSchedulerIntervalMin(Math.max(1, Math.round(asNumber(data['system.scheduler_interval_ms']?.value, 60000) / 60000)));
-
-      setEmailEnabled(asBool(data['notifications.email_enabled']?.value, false));
-
-      const smtp = (data['notifications.email_smtp_config']?.value ?? {}) as SmtpConfig;
-      setSmtpHost(asString(smtp.host));
-      setSmtpPort(asNumber(smtp.port, 587));
-      setSmtpUser(asString(smtp.user));
-      setSmtpPassword('');
-      setSmtpHasPassword(Boolean(asString(smtp.password)));
-      setSmtpFrom(asString(smtp.from));
-      setSmtpTo(Array.isArray(smtp.to) ? smtp.to.join(', ') : '');
-
-      setWebhookUrl(asString(data['notifications.webhook_url']?.value, ''));
-      setWebhookHeadersJson(JSON.stringify(data['notifications.webhook_headers']?.value ?? {}, null, 2));
-      setWebhookTimeoutMs(asNumber(data['notifications.webhook_timeout_ms']?.value, 10000));
 
       setWhatsappEnabled(asBool(data['notifications.whatsapp_enabled']?.value, false));
       const wa = (data['notifications.whatsapp_evolution_config']?.value ?? {}) as WhatsappEvolutionConfig;
@@ -254,7 +215,7 @@ export default function SettingsPage({ canManageAccess = false }: Props) {
 
   useEffect(() => {
     const filtered = templates
-      .filter((item) => item.channel === templateChannel && item.type === templateType)
+      .filter((item) => item.channel === 'whatsapp' && item.type === templateType)
       .sort((a, b) => b.version - a.version);
     const selected = templateVersion
       ? filtered.find((item) => item.version === templateVersion) ?? filtered[0]
@@ -270,20 +231,7 @@ export default function SettingsPage({ canManageAccess = false }: Props) {
     setTemplateEnabled(selected.enabled);
     setTemplateTitle(selected.title_tpl ?? '');
     setTemplateMessage(selected.message_tpl);
-  }, [templates, templateChannel, templateType]);
-
-  const smtpConfigured = useMemo(() => {
-    return Boolean(
-      smtpHost.trim()
-      && smtpPort > 0
-      && smtpUser.trim()
-      && smtpFrom.trim()
-      && parseCsv(smtpTo).length > 0
-      && (smtpHasPassword || smtpPassword.trim()),
-    );
-  }, [smtpFrom, smtpHasPassword, smtpHost, smtpPassword, smtpPort, smtpTo, smtpUser]);
-
-  const webhookConfigured = useMemo(() => Boolean(webhookUrl.trim()), [webhookUrl]);
+  }, [templates, templateType]);
 
   const waConfigured = useMemo(() => {
     return Boolean(
@@ -329,26 +277,6 @@ export default function SettingsPage({ canManageAccess = false }: Props) {
         'system.temp_directory': tempDirectory,
         'system.health_check_interval_ms': Math.max(1, healthIntervalMin) * 60000,
         'system.scheduler_interval_ms': Math.max(1, schedulerIntervalMin) * 60000,
-
-        'notifications.email_enabled': emailEnabled,
-        'notifications.email_smtp_config': {
-          host: smtpHost.trim(),
-          port: smtpPort,
-          user: smtpUser.trim(),
-          ...(smtpPassword.trim() ? { password: smtpPassword.trim() } : {}),
-          from: smtpFrom.trim(),
-          to: parseCsv(smtpTo),
-        },
-
-        'notifications.webhook_url': webhookUrl.trim() ? webhookUrl.trim() : null,
-        'notifications.webhook_headers': (() => {
-          try {
-            return webhookHeadersJson.trim() ? JSON.parse(webhookHeadersJson) : {};
-          } catch {
-            throw new Error('JSON de headers do webhook invalido');
-          }
-        })(),
-        'notifications.webhook_timeout_ms': Math.max(1000, webhookTimeoutMs),
 
         'notifications.whatsapp_enabled': whatsappEnabled,
         'notifications.whatsapp_evolution_config': {
@@ -399,10 +327,10 @@ export default function SettingsPage({ canManageAccess = false }: Props) {
   async function handleSaveTemplate() {
     try {
       setError(null);
-      const current = templates.find((item) => item.channel === templateChannel && item.type === templateType && item.version === templateVersion);
+      const current = templates.find((item) => item.channel === 'whatsapp' && item.type === templateType && item.version === templateVersion);
       if (!current) {
         const created = await systemApi.createNotificationTemplate({
-          channel: templateChannel,
+          channel: 'whatsapp',
           type: templateType,
           enabled: templateEnabled,
           title_tpl: templateTitle || null,
@@ -426,7 +354,7 @@ export default function SettingsPage({ canManageAccess = false }: Props) {
   async function handleCreateTemplateVersion() {
     try {
       setError(null);
-      const current = templates.find((item) => item.channel === templateChannel && item.type === templateType && item.version === templateVersion);
+      const current = templates.find((item) => item.channel === 'whatsapp' && item.type === templateType && item.version === templateVersion);
       if (!current) {
         throw new Error('Selecione um template existente para criar nova versao.');
       }
@@ -609,61 +537,6 @@ export default function SettingsPage({ canManageAccess = false }: Props) {
       {success && <div className={`${styles.alert} ${styles.alertOk}`}><CheckCircleIcon width={14} height={14} /> {success}</div>}
 
       <div className={styles.grid}>
-        <section className={styles.card}>
-          <div className={styles.cardHeader}>
-            <h3 className={styles.cardTitle}>E-mail (SMTP)</h3>
-            <span className={`${styles.badge} ${smtpConfigured ? styles.badgeOk : styles.badgeWarn}`}>{boolLabel(smtpConfigured)}</span>
-          </div>
-
-          <label className={styles.checkboxRow}>
-            <input type="checkbox" checked={emailEnabled} onChange={(e) => setEmailEnabled(e.target.checked)} />
-            <span>Ativar envio por e-mail</span>
-          </label>
-
-          <div className={styles.twoCols}>
-            <label className={styles.field}><span>Host SMTP</span><input className={styles.input} type="text" value={smtpHost} onChange={(e) => setSmtpHost(e.target.value)} placeholder="smtp.empresa.com" /></label>
-            <label className={styles.field}><span>Porta</span><input className={styles.input} type="number" value={smtpPort} onChange={(e) => setSmtpPort(Number(e.target.value))} /></label>
-            <label className={styles.field}><span>Usuario</span><input className={styles.input} type="text" value={smtpUser} onChange={(e) => setSmtpUser(e.target.value)} /></label>
-            <label className={styles.field}><span>Remetente (from)</span><input className={styles.input} type="text" value={smtpFrom} onChange={(e) => setSmtpFrom(e.target.value)} placeholder="noreply@empresa.com" /></label>
-          </div>
-
-          <label className={styles.field}>
-            <span>Senha SMTP (deixe vazio para manter)</span>
-            <input className={styles.input} type="password" value={smtpPassword} onChange={(e) => setSmtpPassword(e.target.value)} />
-            {smtpHasPassword && !smtpPassword.trim() && <small className={styles.hint}>Uma senha ja esta salva.</small>}
-          </label>
-
-          <label className={styles.field}>
-            <span>Destinatarios</span>
-            <input className={styles.input} type="text" value={smtpTo} onChange={(e) => setSmtpTo(e.target.value)} placeholder="admin@empresa.com, devops@empresa.com" />
-          </label>
-
-          <div className={styles.actionsRow}>
-            <button className={styles.secondaryBtn} onClick={() => void systemApi.testSmtp()} disabled={!emailEnabled}>
-              Testar SMTP
-            </button>
-          </div>
-        </section>
-
-        <section className={styles.card}>
-          <div className={styles.cardHeader}>
-            <h3 className={styles.cardTitle}>Webhook</h3>
-            <span className={`${styles.badge} ${webhookConfigured ? styles.badgeOk : styles.badgeWarn}`}>{boolLabel(webhookConfigured)}</span>
-          </div>
-          <label className={styles.field}>
-            <span>URL do webhook</span>
-            <input className={styles.input} type="text" value={webhookUrl} onChange={(e) => setWebhookUrl(e.target.value)} placeholder="https://hooks.slack.com/services/..." />
-            <small className={styles.hint}>Deixe vazio para desativar.</small>
-          </label>
-          <label className={styles.field}>
-            <span>Headers (JSON)</span>
-            <textarea className={styles.input} rows={4} value={webhookHeadersJson} onChange={(e) => setWebhookHeadersJson(e.target.value)} />
-          </label>
-          <label className={styles.field}>
-            <span>Timeout (ms)</span>
-            <input className={styles.input} type="number" min={1000} value={webhookTimeoutMs} onChange={(e) => setWebhookTimeoutMs(Math.max(1000, Number(e.target.value) || 1000))} />
-          </label>
-        </section>
 
         <section className={styles.card}>
           <div className={styles.cardHeader}>
@@ -675,14 +548,6 @@ export default function SettingsPage({ canManageAccess = false }: Props) {
             </div>
           </div>
           <div className={styles.twoCols}>
-            <label className={styles.field}>
-              <span>Canal</span>
-              <select className={styles.input} value={templateChannel} onChange={(e) => setTemplateChannel(e.target.value as 'smtp' | 'webhook' | 'whatsapp')}>
-                <option value="smtp">smtp</option>
-                <option value="webhook">webhook</option>
-                <option value="whatsapp">whatsapp</option>
-              </select>
-            </label>
             <label className={styles.field}>
               <span>Tipo</span>
               <select className={styles.input} value={templateType} onChange={(e) => setTemplateType(e.target.value as ApiNotificationTemplate['type'])}>
@@ -825,7 +690,7 @@ export default function SettingsPage({ canManageAccess = false }: Props) {
                   <div className={styles.accessRow}>
                     <div>
                       <strong className={styles.helpTitle}>{role.name}</strong>
-                      <p className={styles.hint} >{role.description || 'Sem descricao'} · {role.users_count} usuario(s)</p>
+                      <p className={styles.hint} >{role.description || 'Sem descricao'} � {role.users_count} usuario(s)</p>
                     </div>
                     <div className={styles.actionsRow}>
                       <button className={styles.secondaryBtn} onClick={() => setEditingRoleId(role.id)}>Editar</button>
@@ -1086,3 +951,6 @@ export default function SettingsPage({ canManageAccess = false }: Props) {
     </div>
   );
 }
+
+
+

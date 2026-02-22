@@ -7,6 +7,7 @@ import AddDatasourceModal from './AddDatasourceModal';
 import CreateTableModal from './CreateTableModal';
 import ObjectExplorer from './ObjectExplorer';
 import MainPanel from './MainPanel';
+import ConfirmDialog from '../../ui/dialogs/ConfirmDialog/ConfirmDialog';
 import {
   FolderIcon,
   DatabaseIcon,
@@ -14,7 +15,7 @@ import {
   TrashIcon,
   PlugIcon,
   SpinnerIcon,
-} from '../../components/Icons';
+} from '../../ui/icons/Icons';
 import { DS_ABBR } from '../../constants';
 import styles from './DatasourcesPage.module.css';
 
@@ -268,6 +269,8 @@ export default function DatasourcesPage() {
   const [editData, setEditData] = useState<ApiDatasourceDetail | null>(null);
   const [tableModalDs, setTableModalDs] = useState<ApiDatasource | null>(null);
   const [tableModalSchema, setTableModalSchema] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<ApiDatasource | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ status: string; latency_ms: number | null } | null>(null);
@@ -397,33 +400,40 @@ export default function DatasourcesPage() {
 
   const handleDelete = useCallback(
     async (ds: ApiDatasource) => {
-      if (!confirm(`Remover datasource "${ds.name}"? Esta acao nao pode ser desfeita.`)) return;
-
-      try {
-        await datasourceApi.remove(ds.id);
-
-        setDatasources((prev) => {
-          const next = prev.filter((d) => d.id !== ds.id);
-
-          if (selectedDs?.id === ds.id) {
-            if (next.length > 0) {
-              void handleSelect(next[0]);
-            } else {
-              setSelectedDs(null);
-              setDetail(null);
-              setSchemas([]);
-              setSchemaError(null);
-            }
-          }
-
-          return next;
-        });
-      } catch (err) {
-        alert(err instanceof Error ? err.message : 'Erro ao remover datasource');
-      }
+      setDeleteTarget(ds);
     },
-    [selectedDs, handleSelect],
+    [],
   );
+
+  const confirmDelete = useCallback(async () => {
+    if (!deleteTarget) return;
+    try {
+      setDeleting(true);
+      await datasourceApi.remove(deleteTarget.id);
+
+      setDatasources((prev) => {
+        const next = prev.filter((d) => d.id !== deleteTarget.id);
+
+        if (selectedDs?.id === deleteTarget.id) {
+          if (next.length > 0) {
+            void handleSelect(next[0]);
+          } else {
+            setSelectedDs(null);
+            setDetail(null);
+            setSchemas([]);
+            setSchemaError(null);
+          }
+        }
+
+        return next;
+      });
+      setDeleteTarget(null);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Erro ao remover datasource');
+    } finally {
+      setDeleting(false);
+    }
+  }, [deleteTarget, handleSelect, selectedDs?.id]);
 
   const handleSave = useCallback(
     async (data: unknown, editId?: string) => {
@@ -595,6 +605,20 @@ export default function DatasourcesPage() {
           }}
         />
       )}
+
+      <ConfirmDialog
+        open={Boolean(deleteTarget)}
+        title="Confirmar exclusao de datasource"
+        message={deleteTarget ? `Deseja remover o datasource "${deleteTarget.name}"?` : ''}
+        confirmLabel="Excluir datasource"
+        loading={deleting}
+        onClose={() => {
+          if (!deleting) setDeleteTarget(null);
+        }}
+        onConfirm={() => void confirmDelete()}
+      />
     </div>
   );
 }
+
+

@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import Modal from '../../components/Modal/Modal';
-import FormField from '../../components/FormField/FormField';
-import { formStyles } from '../../components/FormField/FormField';
+import Modal from '../../ui/overlay/Modal/Modal';
+import FormField from '../../ui/forms/FormField/FormField';
+import { formStyles } from '../../ui/forms/FormField/FormField';
 import {
   CheckIcon,
   AlertIcon,
@@ -16,7 +16,7 @@ import {
   SqliteIcon,
   FilesIcon,
   DatabaseIcon,
-} from '../../components/Icons';
+} from '../../ui/icons/Icons';
 import { DATASOURCE_TYPES } from '../../constants';
 import type { DatasourceType } from '../../constants';
 import { datasourceApi } from '../../services/api';
@@ -530,3 +530,5 @@ export default function AddDatasourceModal({ onClose, onSave, editData }: Props)
     </Modal>
   );
 }
+
+
