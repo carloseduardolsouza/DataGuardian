@@ -21,6 +21,7 @@ import { dashboardRouter } from './routes/dashboard';
 import { backupsRouter } from './routes/backups';
 import { accessRouter } from './routes/access';
 import { auditLogsRouter } from './routes/audit-logs';
+import { integrationsRouter } from './routes/integrations';
 import { requireAuth, requirePermission } from './middlewares/auth';
 import { PERMISSIONS } from '../core/auth/permissions';
 import { auditTrailMiddleware } from './middlewares/audit-trail';
@@ -56,6 +57,7 @@ export function createApp() {
     }
   });
 
+  app.use('/api/integrations', integrationsRouter);
   app.use('/api', auditTrailMiddleware);
   app.use('/api/auth', authRouter);
   app.use('/api', requireAuth);

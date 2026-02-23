@@ -9,7 +9,8 @@ Publico (sem auth):
 - `GET /health`
 - `GET /metrics` (formato Prometheus)
 
-Observacao: todas as rotas em `/api/*` exigem sessao autenticada, exceto `/api/auth/*`.
+Observacao: quase todas as rotas em `/api/*` exigem sessao autenticada.
+Excecoes publicas: `/api/auth/*` e `/api/integrations/whatsapp/webhook`.
 
 ## Auth
 
@@ -18,6 +19,12 @@ Observacao: todas as rotas em `/api/*` exigem sessao autenticada, exceto `/api/a
 - `POST /api/auth/login`
 - `POST /api/auth/logout`
 - `GET /api/auth/me`
+
+## Integrations (webhooks publicos)
+
+- `POST /api/integrations/whatsapp/webhook`
+  - endpoint inbound do chatbot WhatsApp
+  - aceita token opcional via header `x-whatsapp-webhook-token` ou query `?token=...`
 
 ## Datasources
 

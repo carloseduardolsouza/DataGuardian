@@ -24,6 +24,18 @@ export function getDefaultSettings(): Record<string, { value: unknown; descripti
       },
       description: 'Configuracao da Evolution API para notificacoes WhatsApp',
     },
+    'notifications.whatsapp_chatbot_enabled': {
+      value: false,
+      description: 'Habilitar chatbot de comandos via mensagens recebidas no WhatsApp',
+    },
+    'notifications.whatsapp_chatbot_allowed_numbers': {
+      value: [],
+      description: 'Lista de numeros permitidos para usar o chatbot (vazio = todos)',
+    },
+    'notifications.whatsapp_chatbot_webhook_token': {
+      value: '',
+      description: 'Token opcional para validar webhook inbound do chatbot WhatsApp',
+    },
     'system.max_concurrent_backups': {
       value: 3,
       description: 'Numero maximo de backups executando em paralelo',
@@ -72,6 +84,11 @@ function maskSensitiveSettings(settings: SettingsMap): SettingsMap {
     if (value.api_key) value.api_key = '**********';
     result[waKey] = { ...result[waKey], value };
   }
+  const botTokenKey = 'notifications.whatsapp_chatbot_webhook_token';
+  if (result[botTokenKey]) {
+    const token = String(result[botTokenKey].value ?? '');
+    if (token) result[botTokenKey] = { ...result[botTokenKey], value: '**********' };
+  }
 
   return result;
 }
@@ -81,6 +98,10 @@ function maskSensitiveSettingItem(item: SystemSettingItem): SystemSettingItem {
     const value = { ...(item.value as Record<string, unknown>) };
     if (value.api_key) value.api_key = '**********';
     return { ...item, value };
+  }
+  if (item.key === 'notifications.whatsapp_chatbot_webhook_token') {
+    const token = String(item.value ?? '');
+    if (token) return { ...item, value: '**********' };
   }
 
   return item;
@@ -105,6 +126,15 @@ async function normalizeWhatsappConfigValueForPersist(value: unknown): Promise<P
 async function normalizeSettingValueForPersist(key: string, value: unknown): Promise<Prisma.InputJsonValue> {
   if (key === 'notifications.whatsapp_evolution_config') {
     return normalizeWhatsappConfigValueForPersist(value);
+  }
+  if (key === 'notifications.whatsapp_chatbot_webhook_token') {
+    const incoming = asString(value);
+    if (!incoming || incoming === '**********') {
+      const current = await prisma.systemSetting.findUnique({ where: { key } });
+      const currentValue = asString(current?.value);
+      return currentValue as Prisma.InputJsonValue;
+    }
+    return incoming as Prisma.InputJsonValue;
   }
   return value as Prisma.InputJsonValue;
 }
