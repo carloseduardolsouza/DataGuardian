@@ -9,6 +9,7 @@ import {
   JobsIcon,
   FolderIcon,
   PlayIcon,
+  PlugIcon,
   HealthIcon,
   BellIcon,
   LogIcon,
@@ -22,6 +23,7 @@ export type NavKey =
   | 'datasources'
   | 'storage'
   | 'backup-jobs'
+  | 'sync'
   | 'backups'
   | 'executions'
   | 'health'
@@ -34,6 +36,7 @@ export const ROUTE_PATHS: Record<NavKey, string> = {
   datasources: '/datasources',
   storage: '/storage',
   'backup-jobs': '/backup-jobs',
+  sync: '/sync',
   backups: '/backups',
   executions: '/executions',
   health: '/health',
@@ -65,6 +68,7 @@ const mainNav: NavItem[] = [
   { key: 'datasources', label: 'Datasources', icon: <DatabaseIcon />, permission: PERMISSIONS.DATASOURCES_READ },
   { key: 'storage', label: 'Storage', icon: <ServerIcon />, permission: PERMISSIONS.STORAGE_READ },
   { key: 'backup-jobs', label: 'Backup Jobs', icon: <JobsIcon />, permission: PERMISSIONS.BACKUP_JOBS_READ },
+  { key: 'sync', label: 'Sincronizacao', icon: <PlugIcon />, permission: PERMISSIONS.DB_SYNC_JOBS_READ },
   { key: 'backups', label: 'Backups', icon: <FolderIcon />, permission: PERMISSIONS.BACKUPS_READ },
   { key: 'executions', label: 'Execucoes', icon: <PlayIcon />, permission: PERMISSIONS.EXECUTIONS_READ },
 ];

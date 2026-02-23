@@ -6,6 +6,7 @@ import { logger } from './utils/logger';
 import { startBackupWorker, stopBackupWorker } from './workers/backup-worker';
 import { startRestoreWorker, stopRestoreWorker } from './workers/restore-worker';
 import { startSchedulerWorker, stopSchedulerWorker } from './workers/scheduler-worker';
+import { startDbSyncWorker, stopDbSyncWorker } from './workers/db-sync-worker';
 import { startHealthWorker, stopHealthWorker } from './workers/health-worker';
 import { startCleanupWorker, stopCleanupWorker } from './workers/cleanup-worker';
 import { closeQueues } from './queue/queues';
@@ -74,8 +75,9 @@ async function bootstrap() {
     startSchedulerWorker();
     startBackupWorker();
     startRestoreWorker();
+    startDbSyncWorker();
     queueServicesEnabled = true;
-    logger.info('Servicos de fila ativados (Scheduler/Backup/Restore)');
+    logger.info('Servicos de fila ativados (Scheduler/Backup/Restore/DB-Sync)');
   };
 
   const stopQueueServices = async () => {
@@ -83,9 +85,10 @@ async function bootstrap() {
     stopSchedulerWorker();
     await stopBackupWorker();
     await stopRestoreWorker();
+    await stopDbSyncWorker();
     await closeQueues();
     queueServicesEnabled = false;
-    logger.warn('Servicos de fila desativados por indisponibilidade do Redis (Scheduler/Backup/Restore)');
+    logger.warn('Servicos de fila desativados por indisponibilidade do Redis (Scheduler/Backup/Restore/DB-Sync)');
   };
 
   const syncQueueServicesWithRedis = async () => {

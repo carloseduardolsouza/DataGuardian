@@ -94,6 +94,19 @@ enum AlertChannel {
   whatsapp
 }
 
+enum SyncOverwriteDirection {
+  source_to_target
+  target_to_source
+}
+
+enum SyncExecutionStatus {
+  queued
+  running
+  completed
+  failed
+  cancelled
+}
+
 // ──────────────────────────────────────────
 // Models
 // ──────────────────────────────────────────
@@ -113,6 +126,10 @@ model Datasource {
   backupJobs       BackupJob[]
   healthChecks     HealthCheck[]
   backupExecutions BackupExecution[]
+  sourceSyncJobs   DatabaseSyncJob[]       @relation("SyncSourceDatasource")
+  targetSyncJobs   DatabaseSyncJob[]       @relation("SyncTargetDatasource")
+  sourceSyncExecutions DatabaseSyncExecution[] @relation("SyncExecutionSourceDatasource")
+  targetSyncExecutions DatabaseSyncExecution[] @relation("SyncExecutionTargetDatasource")
 
   @@map("datasources")
 }
@@ -131,6 +148,7 @@ model StorageLocation {
   backupJobs       BackupJob[]
   backupExecutions BackupExecution[]
   healthChecks     StorageHealthCheck[]
+  syncJobs         DatabaseSyncJob[]
 
   @@map("storage_locations")
 }
@@ -385,4 +403,60 @@ model NotificationTemplate {
   @@unique([channel, type, version])
   @@index([channel, type, enabled, version])
   @@map("notification_templates")
+}
+
+model DatabaseSyncJob {
+  id                 String                 @id @default(uuid())
+  name               String                 @db.VarChar(255)
+  sourceDatasourceId String                 @map("source_datasource_id")
+  targetDatasourceId String                 @map("target_datasource_id")
+  storageLocationId  String                 @map("storage_location_id")
+  scheduleCron       String                 @db.VarChar(100) @map("schedule_cron")
+  scheduleTimezone   String                 @db.VarChar(50) @default("UTC") @map("schedule_timezone")
+  overwriteDirection SyncOverwriteDirection @default(source_to_target) @map("overwrite_direction")
+  dropExisting       Boolean                @default(true) @map("drop_existing")
+  runOnManual        Boolean                @default(true) @map("run_on_manual")
+  enabled            Boolean                @default(true)
+  lastExecutionAt    DateTime?              @map("last_execution_at")
+  nextExecutionAt    DateTime?              @map("next_execution_at")
+  createdAt          DateTime               @default(now()) @map("created_at")
+  updatedAt          DateTime               @updatedAt @map("updated_at")
+
+  sourceDatasource Datasource @relation("SyncSourceDatasource", fields: [sourceDatasourceId], references: [id])
+  targetDatasource Datasource @relation("SyncTargetDatasource", fields: [targetDatasourceId], references: [id])
+  storageLocation  StorageLocation @relation(fields: [storageLocationId], references: [id])
+  executions       DatabaseSyncExecution[]
+
+  @@index([nextExecutionAt])
+  @@index([sourceDatasourceId])
+  @@index([targetDatasourceId])
+  @@index([storageLocationId])
+  @@map("database_sync_jobs")
+}
+
+model DatabaseSyncExecution {
+  id                 String              @id @default(uuid())
+  syncJobId          String              @map("sync_job_id")
+  sourceDatasourceId String              @map("source_datasource_id")
+  targetDatasourceId String              @map("target_datasource_id")
+  status             SyncExecutionStatus @default(queued)
+  triggerSource      String              @db.VarChar(20) @map("trigger_source")
+  startedAt          DateTime?           @map("started_at")
+  finishedAt         DateTime?           @map("finished_at")
+  durationSeconds    Int?                @map("duration_seconds")
+  backupExecutionId  String?             @map("backup_execution_id")
+  restoreExecutionId String?             @map("restore_execution_id")
+  errorMessage       String?             @map("error_message")
+  metadata           Json?
+  createdAt          DateTime            @default(now()) @map("created_at")
+
+  syncJob          DatabaseSyncJob @relation(fields: [syncJobId], references: [id], onDelete: Cascade)
+  sourceDatasource Datasource      @relation("SyncExecutionSourceDatasource", fields: [sourceDatasourceId], references: [id])
+  targetDatasource Datasource      @relation("SyncExecutionTargetDatasource", fields: [targetDatasourceId], references: [id])
+
+  @@index([syncJobId, createdAt(sort: Desc)])
+  @@index([status])
+  @@index([backupExecutionId])
+  @@index([restoreExecutionId])
+  @@map("database_sync_executions")
 }

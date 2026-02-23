@@ -48,6 +48,14 @@ Referencia baseada em `prisma/schema.prisma`.
 - historico de backup e restore
 - `metadata` guarda logs e dados operacionais
 
+### `database_sync_jobs`
+
+- configuracao de sincronizacao dedicada (origem, destino, storage, cron e politicas)
+
+### `database_sync_executions`
+
+- historico das execucoes de sincronizacao (backup + restore)
+
 ### `backup_chunks`
 
 - controle de chunks gerados/subidos por execucao

@@ -1081,6 +1081,12 @@ export async function restoreBackupExecution(params: {
   dropExisting?: boolean;
   verificationMode?: boolean;
   keepVerificationDatabase?: boolean;
+  syncContext?: {
+    syncJobId: string;
+    sourceDatasourceId: string;
+    targetDatasourceId: string;
+    overwriteDirection: 'job_to_pair' | 'pair_to_job';
+  };
 }) {
   const execution = await prisma.backupExecution.findUniqueOrThrow({
     where: { id: params.executionId },
@@ -1167,6 +1173,14 @@ export async function restoreBackupExecution(params: {
           drop_existing: dropExisting,
           verification_mode: verificationMode,
           keep_verification_database: keepVerificationDatabase,
+          ...(params.syncContext && {
+            sync_context: {
+              sync_job_id: params.syncContext.syncJobId,
+              source_datasource_id: params.syncContext.sourceDatasourceId,
+              target_datasource_id: params.syncContext.targetDatasourceId,
+              overwrite_direction: params.syncContext.overwriteDirection,
+            },
+          }),
         },
         execution_logs: [
           {
@@ -1174,7 +1188,7 @@ export async function restoreBackupExecution(params: {
             level: 'info',
             message: verificationMode
               ? 'Restore verification enfileirado'
-              : 'Restore enfileirado',
+              : (params.syncContext ? 'Restore de sincronizacao enfileirado' : 'Restore enfileirado'),
           },
         ],
       } as unknown as Prisma.InputJsonValue,

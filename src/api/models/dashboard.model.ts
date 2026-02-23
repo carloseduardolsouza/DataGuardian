@@ -221,6 +221,7 @@ export async function getDashboardOverview() {
         backup: workers.backup.status,
         restore: workers.restore.status,
         scheduler: workers.scheduler.status,
+        db_sync: workers.db_sync.status,
         health: workers.health.status,
         cleanup: workers.cleanup.status,
       },

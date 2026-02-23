@@ -106,6 +106,33 @@ Campos usados hoje:
   - `missing_file_policy`: `warn | fail`
   - `max_files`: limite maximo de arquivos por execucao
 
+## DB Sync Jobs (modulo separado)
+
+- `GET /api/db-sync-jobs`
+- `POST /api/db-sync-jobs`
+- `GET /api/db-sync-jobs/:id`
+- `PUT /api/db-sync-jobs/:id`
+- `DELETE /api/db-sync-jobs/:id`
+- `POST /api/db-sync-jobs/:id/run`
+- `GET /api/db-sync-jobs/:id/executions`
+
+Campos principais do sync job:
+
+```json
+{
+  "name": "Sync Producao -> Teste",
+  "source_datasource_id": "uuid",
+  "target_datasource_id": "uuid",
+  "storage_location_id": "uuid",
+  "schedule_cron": "0 2 * * *",
+  "schedule_timezone": "UTC",
+  "overwrite_direction": "source_to_target",
+  "drop_existing": true,
+  "run_on_manual": true,
+  "enabled": true
+}
+```
+
 ## Executions
 
 - `GET /api/executions`

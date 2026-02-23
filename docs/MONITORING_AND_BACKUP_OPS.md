@@ -14,6 +14,7 @@
 - `scheduler-worker`: agenda backups vencidos (depende de Redis)
 - `backup-worker`: processa `backup-queue`
 - `restore-worker`: processa `restore-queue`
+- `db-sync-worker`: processa `db-sync-queue` e agenda jobs de sync (`database_sync_jobs`)
 - `health-worker`: checa datasources/storages periodicamente
 - `cleanup-worker`: aplica retencao
 
@@ -35,6 +36,20 @@ No terminal, progresso relevante:
 4. dump -> compressao -> upload
 5. status final `completed` ou `failed`
 6. cleanup de retencao apos sucesso
+
+## Sincronizacao automatica entre bancos (modulo dedicado)
+
+A sincronizacao usa tabelas proprias:
+
+- `database_sync_jobs`
+- `database_sync_executions`
+
+Fluxo:
+
+1. `db-sync-worker` identifica sync jobs vencidos (`next_execution_at <= now`)
+2. cria `database_sync_executions` com status `queued`
+3. executa backup da origem e depois restore no destino
+4. finaliza a execucao como `completed` ou `failed`
 
 ## Fluxo de restore
 

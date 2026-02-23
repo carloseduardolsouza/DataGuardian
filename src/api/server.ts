@@ -12,6 +12,7 @@ import { errorHandler } from './middlewares/error-handler';
 import { datasourcesRouter } from './routes/datasources';
 import { storageLocationsRouter } from './routes/storage-locations';
 import { backupJobsRouter } from './routes/backup-jobs';
+import { dbSyncJobsRouter } from './routes/db-sync-jobs';
 import { executionsRouter } from './routes/executions';
 import { healthRouter } from './routes/health';
 import { notificationsRouter } from './routes/notifications';
@@ -64,6 +65,7 @@ export function createApp() {
   app.use('/api/datasources', datasourcesRouter);
   app.use('/api/storage-locations', storageLocationsRouter);
   app.use('/api/backup-jobs', backupJobsRouter);
+  app.use('/api/db-sync-jobs', dbSyncJobsRouter);
   app.use('/api/executions', executionsRouter);
   app.use('/api/health', healthRouter);
   app.use('/api/notifications', notificationsRouter);

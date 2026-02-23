@@ -1,6 +1,11 @@
 import { useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
-import type { ApiBackupJob, ApiDatasource, ApiStorageLocation } from '../../services/api';
+import type {
+  ApiBackupJob,
+  ApiBackupOptions,
+  ApiDatasource,
+  ApiStorageLocation,
+} from '../../services/api';
 import {
   CheckIcon,  InfoIcon,
   DbIcon,
@@ -26,36 +31,7 @@ interface JobPayload {
     max_backups: number;
     auto_delete: boolean;
   };
-  backup_options: {
-    backup_type?: 'full' | 'incremental' | 'differential';
-    compression: 'gzip' | 'zstd' | 'lz4' | 'none';
-    compression_level?: number;
-    parallel_jobs?: number;
-    exclude_tables?: string[];
-    include_tables?: string[];
-    max_file_size_mb?: number;
-    storage_strategy?: 'replicate' | 'fallback';
-    storage_targets?: Array<{
-      storage_location_id: string;
-      order: number;
-    }>;
-    referenced_files?: {
-      enabled: boolean;
-      discovery_query?: string;
-      path_column?: string;
-      base_directories?: string[];
-      missing_file_policy?: 'warn' | 'fail';
-      max_files?: number;
-      source_type?: 'local' | 'ssh';
-      source?: {
-        host?: string;
-        port?: number;
-        username?: string;
-        password?: string;
-        private_key?: string;
-      };
-    };
-  };
+  backup_options: ApiBackupOptions;
 }
 
 interface Props {

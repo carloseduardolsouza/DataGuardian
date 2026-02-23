@@ -371,7 +371,7 @@ async function buildMachineMessage() {
     '',
     `database: ${dbCheck}`,
     `redis: ${redis}`,
-    `workers: backup=${workers.backup.status}, restore=${workers.restore.status}, scheduler=${workers.scheduler.status}, health=${workers.health.status}, cleanup=${workers.cleanup.status}`,
+    `workers: backup=${workers.backup.status}, restore=${workers.restore.status}, scheduler=${workers.scheduler.status}, db_sync=${workers.db_sync.status}, health=${workers.health.status}, cleanup=${workers.cleanup.status}`,
     `thread_pool: enabled=${threadPool.enabled}, size=${threadPool.size}, busy=${threadPool.busy}, queued=${threadPool.queued}, processed=${threadPool.processed}, failed=${threadPool.failed}`,
   ].join('\n');
 }

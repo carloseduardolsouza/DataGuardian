@@ -15,6 +15,7 @@ import StatusBadge from '../../ui/data-display/StatusBadge/StatusBadge';
 import DatasourcesPage from '../DatasourcesPage/DatasourcesPage';
 import StoragePage from '../StoragePage/StoragePage';
 import BackupJobsPage from '../BackupJobsPage/BackupJobsPage';
+import SyncPage from '../SyncPage/SyncPage';
 import BackupsPage from '../BackupsPage/BackupsPage';
 import ExecutionsPage from '../ExecutionsPage/ExecutionsPage';
 import HealthPage from '../HealthPage/HealthPage';
@@ -44,6 +45,7 @@ const PAGE_TITLES: Record<NavKey, { title: string; sub: string }> = {
   datasources: { title: 'Datasources', sub: 'Gerencie suas fontes de dados' },
   storage: { title: 'Storage', sub: 'Locais de armazenamento' },
   'backup-jobs': { title: 'Backup Jobs', sub: 'Gerencie seus jobs de backup' },
+  sync: { title: 'Sincronizacao', sub: 'Mantenha bancos pareados com backup + restore automatico' },
   backups: { title: 'Backups', sub: 'Explore backups por banco e execute restore' },
   executions: { title: 'Execucoes', sub: 'Historico de execucoes' },
   health: { title: 'Health', sub: 'Monitoramento de saude' },
@@ -145,6 +147,7 @@ export default function DashboardPage({
             activePage === 'datasources'
             || activePage === 'storage'
             || activePage === 'backup-jobs'
+            || activePage === 'sync'
             || activePage === 'backups'
             || activePage === 'executions'
             || activePage === 'notifications'
@@ -157,6 +160,7 @@ export default function DashboardPage({
           {activePage === 'datasources' && <DatasourcesPage />}
           {activePage === 'storage' && <StoragePage />}
           {activePage === 'backup-jobs' && <BackupJobsPage />}
+          {activePage === 'sync' && <SyncPage permissions={permissions} />}
           {activePage === 'backups' && <BackupsPage permissions={permissions} />}
           {activePage === 'executions' && <ExecutionsPage />}
           {activePage === 'health' && <HealthPage />}
@@ -165,7 +169,7 @@ export default function DashboardPage({
           )}
           {activePage === 'audit' && <AuditPage />}
           {activePage === 'settings' && <SettingsPage canManageAccess={permissions.includes(PERMISSIONS.ACCESS_MANAGE)} />}
-          {activePage !== 'dashboard' && activePage !== 'datasources' && activePage !== 'storage' && activePage !== 'backup-jobs' && activePage !== 'backups' && activePage !== 'executions' && activePage !== 'health' && activePage !== 'notifications' && activePage !== 'audit' && activePage !== 'settings' && (
+          {activePage !== 'dashboard' && activePage !== 'datasources' && activePage !== 'storage' && activePage !== 'backup-jobs' && activePage !== 'sync' && activePage !== 'backups' && activePage !== 'executions' && activePage !== 'health' && activePage !== 'notifications' && activePage !== 'audit' && activePage !== 'settings' && (
             <EmptyPage page={activePage} />
           )}
         </main>

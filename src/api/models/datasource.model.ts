@@ -508,6 +508,24 @@ export async function deleteDatasource(id: string) {
     );
   }
 
+  const linkedSyncJobs = await prisma.databaseSyncJob.findMany({
+    where: {
+      OR: [
+        { sourceDatasourceId: id },
+        { targetDatasourceId: id },
+      ],
+    },
+    select: { id: true },
+  });
+  if (linkedSyncJobs.length > 0) {
+    throw new AppError(
+      'DATASOURCE_IS_SYNC_PAIR',
+      409,
+      `Datasource usada em ${linkedSyncJobs.length} sync job(s). Atualize/remova essas sincronizacoes primeiro.`,
+      { sync_job_ids: linkedSyncJobs.map((j) => j.id) },
+    );
+  }
+
   await prisma.datasource.delete({ where: { id } });
 }
 

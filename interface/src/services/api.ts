@@ -166,36 +166,7 @@ export interface ApiBackupJob {
     keep_monthly?: number;
     auto_delete: boolean;
   };
-  backup_options: {
-    backup_type?: 'full' | 'incremental' | 'differential';
-    compression: 'gzip' | 'zstd' | 'lz4' | 'none';
-    compression_level?: number;
-    parallel_jobs?: number;
-    exclude_tables?: string[];
-    include_tables?: string[];
-    max_file_size_mb?: number;
-    storage_strategy?: 'replicate' | 'fallback';
-    storage_targets?: Array<{
-      storage_location_id: string;
-      order: number;
-    }>;
-    referenced_files?: {
-      enabled: boolean;
-      discovery_query?: string;
-      path_column?: string;
-      base_directories?: string[];
-      missing_file_policy?: 'warn' | 'fail';
-      max_files?: number;
-      source_type?: 'local' | 'ssh';
-      source?: {
-        host?: string;
-        port?: number;
-        username?: string;
-        password?: string;
-        private_key?: string;
-      };
-    };
-  };
+  backup_options: ApiBackupOptions;
   storage_targets?: Array<{
     storage_location_id: string;
     order: number;
@@ -214,6 +185,72 @@ export interface ApiBackupJob {
     size_bytes: number | null;
     duration_seconds: number | null;
   };
+}
+
+export interface ApiBackupOptions {
+  backup_type?: 'full' | 'incremental' | 'differential';
+  compression: 'gzip' | 'zstd' | 'lz4' | 'none';
+  compression_level?: number;
+  parallel_jobs?: number;
+  exclude_tables?: string[];
+  include_tables?: string[];
+  max_file_size_mb?: number;
+  storage_strategy?: 'replicate' | 'fallback';
+  storage_targets?: Array<{
+    storage_location_id: string;
+    order: number;
+  }>;
+  referenced_files?: {
+    enabled: boolean;
+    discovery_query?: string;
+    path_column?: string;
+    base_directories?: string[];
+    missing_file_policy?: 'warn' | 'fail';
+    max_files?: number;
+    source_type?: 'local' | 'ssh';
+    source?: {
+      host?: string;
+      port?: number;
+      username?: string;
+      password?: string;
+      private_key?: string;
+    };
+  };
+}
+
+export interface ApiDbSyncExecution {
+  id: string;
+  status: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';
+  trigger_source: 'manual' | 'scheduled';
+  started_at: string | null;
+  finished_at: string | null;
+  duration_seconds: number | null;
+  backup_execution_id: string | null;
+  restore_execution_id: string | null;
+  error_message: string | null;
+  created_at: string;
+}
+
+export interface ApiDbSyncJob {
+  id: string;
+  name: string;
+  source_datasource_id: string;
+  target_datasource_id: string;
+  storage_location_id: string;
+  schedule_cron: string;
+  schedule_timezone: string;
+  overwrite_direction: 'source_to_target' | 'target_to_source';
+  drop_existing: boolean;
+  run_on_manual: boolean;
+  enabled: boolean;
+  last_execution_at: string | null;
+  next_execution_at: string | null;
+  created_at: string;
+  updated_at: string;
+  source_datasource?: { id: string; name: string; type: DatasourceType };
+  target_datasource?: { id: string; name: string; type: DatasourceType };
+  storage_location?: { id: string; name: string; type: StorageLocationType };
+  last_sync_execution?: ApiDbSyncExecution;
 }
 
 export interface ApiExecution {
@@ -974,36 +1011,7 @@ export const backupJobsApi = {
       keep_monthly?: number;
       auto_delete: boolean;
     };
-    backup_options: {
-      backup_type?: 'full' | 'incremental' | 'differential';
-      compression: 'gzip' | 'zstd' | 'lz4' | 'none';
-      compression_level?: number;
-      parallel_jobs?: number;
-      exclude_tables?: string[];
-      include_tables?: string[];
-      max_file_size_mb?: number;
-      storage_strategy?: 'replicate' | 'fallback';
-      storage_targets?: Array<{
-        storage_location_id: string;
-        order: number;
-      }>;
-      referenced_files?: {
-        enabled: boolean;
-        discovery_query?: string;
-        path_column?: string;
-        base_directories?: string[];
-        missing_file_policy?: 'warn' | 'fail';
-        max_files?: number;
-        source_type?: 'local' | 'ssh';
-        source?: {
-          host?: string;
-          port?: number;
-          username?: string;
-          password?: string;
-          private_key?: string;
-        };
-      };
-    };
+    backup_options: ApiBackupOptions;
   }) =>
     request<ApiBackupJob>('/backup-jobs', {
       method: 'POST',
@@ -1024,36 +1032,7 @@ export const backupJobsApi = {
       keep_monthly?: number;
       auto_delete: boolean;
     };
-    backup_options?: {
-      backup_type?: 'full' | 'incremental' | 'differential';
-      compression: 'gzip' | 'zstd' | 'lz4' | 'none';
-      compression_level?: number;
-      parallel_jobs?: number;
-      exclude_tables?: string[];
-      include_tables?: string[];
-      max_file_size_mb?: number;
-      storage_strategy?: 'replicate' | 'fallback';
-      storage_targets?: Array<{
-        storage_location_id: string;
-        order: number;
-      }>;
-      referenced_files?: {
-        enabled: boolean;
-        discovery_query?: string;
-        path_column?: string;
-        base_directories?: string[];
-        missing_file_policy?: 'warn' | 'fail';
-        max_files?: number;
-        source_type?: 'local' | 'ssh';
-        source?: {
-          host?: string;
-          port?: number;
-          username?: string;
-          password?: string;
-          private_key?: string;
-        };
-      };
-    };
+    backup_options?: ApiBackupOptions;
   }) =>
     request<ApiBackupJob>(`/backup-jobs/${id}`, {
       method: 'PUT',
@@ -1067,6 +1046,64 @@ export const backupJobsApi = {
     request<{ execution_id: string; message: string; status: string }>(`/backup-jobs/${id}/run`, {
       method: 'POST',
     }),
+};
+
+export const dbSyncJobsApi = {
+  list: (params?: { page?: number; limit?: number }) => {
+    const qs = new URLSearchParams();
+    if (params?.page) qs.set('page', String(params.page));
+    if (params?.limit) qs.set('limit', String(params.limit));
+    const query = qs.toString();
+    return request<PaginatedResponse<ApiDbSyncJob>>(`/db-sync-jobs${query ? `?${query}` : ''}`);
+  },
+
+  getById: (id: string) =>
+    request<ApiDbSyncJob>(`/db-sync-jobs/${id}`),
+
+  create: (data: {
+    name: string;
+    source_datasource_id: string;
+    target_datasource_id: string;
+    storage_location_id: string;
+    schedule_cron: string;
+    schedule_timezone: string;
+    overwrite_direction?: 'source_to_target' | 'target_to_source';
+    drop_existing?: boolean;
+    run_on_manual?: boolean;
+    enabled?: boolean;
+  }) =>
+    request<ApiDbSyncJob>('/db-sync-jobs', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  update: (id: string, data: {
+    name?: string;
+    source_datasource_id?: string;
+    target_datasource_id?: string;
+    storage_location_id?: string;
+    schedule_cron?: string;
+    schedule_timezone?: string;
+    overwrite_direction?: 'source_to_target' | 'target_to_source';
+    drop_existing?: boolean;
+    run_on_manual?: boolean;
+    enabled?: boolean;
+  }) =>
+    request<ApiDbSyncJob>(`/db-sync-jobs/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  run: (id: string) =>
+    request<{ sync_job_id: string; sync_execution_id: string; status: string; message: string }>(`/db-sync-jobs/${id}/run`, {
+      method: 'POST',
+    }),
+
+  executions: (id: string) =>
+    request<{ data: ApiDbSyncExecution[] }>(`/db-sync-jobs/${id}/executions`),
+
+  remove: (id: string) =>
+    request<void>(`/db-sync-jobs/${id}`, { method: 'DELETE' }),
 };
 
 // Ã¢â€â‚¬Ã¢â€â‚¬ Executions API Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
