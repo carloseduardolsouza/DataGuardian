@@ -27,6 +27,7 @@ interface JobPayload {
     auto_delete: boolean;
   };
   backup_options: {
+    backup_type?: 'full' | 'incremental' | 'differential';
     compression: 'gzip' | 'zstd' | 'lz4' | 'none';
     compression_level?: number;
     parallel_jobs?: number;
@@ -134,7 +135,9 @@ export default function JobFormModal({
   const [storageStrategy, setStorageStrategy] = useState<'replicate' | 'fallback'>(
     job?.storage_strategy ?? job?.backup_options?.storage_strategy ?? 'fallback',
   );
-  const [backupType, setBackupType] = useState<BackupType>('full');
+  const [backupType, setBackupType] = useState<BackupType>(
+    (job?.backup_options?.backup_type as BackupType | undefined) ?? 'full',
+  );
 
   const [frequency, setFrequency] = useState<Frequency>(parsed.frequency);
   const [hour, setHour] = useState(parsed.hour);
@@ -208,6 +211,7 @@ export default function JobFormModal({
         auto_delete: autoDelete,
       },
       backup_options: {
+        backup_type: backupType,
         compression,
         storage_strategy: storageStrategy,
         storage_targets: storageTargets.map((t, index) => ({

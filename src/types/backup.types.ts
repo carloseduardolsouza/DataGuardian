@@ -32,8 +32,11 @@ export type RetentionPolicy = z.infer<typeof retentionPolicySchema>;
 
 export const compressionValues = ['gzip', 'zstd', 'lz4', 'none'] as const;
 export type CompressionType = (typeof compressionValues)[number];
+export const backupTypeValues = ['full', 'incremental', 'differential'] as const;
+export type BackupTypeValue = (typeof backupTypeValues)[number];
 
 export const backupOptionsSchema = z.object({
+  backup_type:       z.enum(backupTypeValues).optional(),
   compression:       z.enum(compressionValues),
   compression_level: z.number().int().min(1).max(9).optional(),
   parallel_jobs:     z.number().int().min(1).max(16).optional(),

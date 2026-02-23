@@ -1,8 +1,9 @@
-import { Prisma, DatasourceType, StorageLocationType } from '@prisma/client';
+import { Prisma, DatasourceType, StorageLocationType, BackupType } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { AppError } from '../middlewares/error-handler';
 import { validateCron } from '../../core/scheduler/cron-parser';
 import { calculateNextExecution } from '../../core/scheduler/job-scheduler';
+import { resolveBackupTypeFromOptions, withNormalizedBackupType } from '../../core/backup/backup-type';
 import { logger } from '../../utils/logger';
 import { triggerBackupExecutionNow } from '../../workers/backup-worker';
 
@@ -216,11 +217,11 @@ export async function createBackupJob(data: CreateBackupJobData) {
       scheduleTimezone:  data.schedule_timezone ?? 'UTC',
       enabled:           data.enabled,
       retentionPolicy:   data.retention_policy,
-      backupOptions: {
+      backupOptions: withNormalizedBackupType({
         ...backupOptions,
         storage_strategy: strategy,
         storage_targets: storageTargets,
-      },
+      }),
       nextExecutionAt,
     },
     include: jobInclude,
@@ -296,6 +297,7 @@ export async function updateBackupJob(id: string, data: UpdateBackupJobData) {
           ...mergedBackupOptions,
           storage_strategy: mergedBackupOptions.storage_strategy === 'replicate' ? 'replicate' : 'fallback',
           storage_targets: computedTargets,
+          backup_type: resolveBackupTypeFromOptions(mergedBackupOptions),
         },
       }),
       ...(nextExecutionAt          !== undefined && { nextExecutionAt }),
@@ -314,6 +316,7 @@ export async function deleteBackupJob(id: string) {
 
 export async function runBackupJob(id: string) {
   const job = await prisma.backupJob.findUniqueOrThrow({ where: { id } });
+  const backupType = resolveBackupTypeFromOptions(job.backupOptions) as BackupType;
 
   const execution = await prisma.backupExecution.create({
     data: {
@@ -321,7 +324,7 @@ export async function runBackupJob(id: string) {
       datasourceId:      job.datasourceId,
       storageLocationId: job.storageLocationId,
       status:            'queued',
-      backupType:        'full',
+      backupType,
       metadata: {
         enqueue_source: 'manual_direct',
         execution_logs: [

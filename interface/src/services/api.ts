@@ -119,6 +119,8 @@ export interface ApiSystemHealth {
     datasources_total: number;
     datasources_healthy: number;
     datasources_critical: number;
+    storages_total: number;
+    storages_accessible: number;
     jobs_total: number;
     jobs_enabled: number;
     executions_today: number;
@@ -165,6 +167,7 @@ export interface ApiBackupJob {
     auto_delete: boolean;
   };
   backup_options: {
+    backup_type?: 'full' | 'incremental' | 'differential';
     compression: 'gzip' | 'zstd' | 'lz4' | 'none';
     compression_level?: number;
     parallel_jobs?: number;
@@ -830,6 +833,7 @@ export const backupJobsApi = {
       auto_delete: boolean;
     };
     backup_options: {
+      backup_type?: 'full' | 'incremental' | 'differential';
       compression: 'gzip' | 'zstd' | 'lz4' | 'none';
       compression_level?: number;
       parallel_jobs?: number;
@@ -863,6 +867,7 @@ export const backupJobsApi = {
       auto_delete: boolean;
     };
     backup_options?: {
+      backup_type?: 'full' | 'incremental' | 'differential';
       compression: 'gzip' | 'zstd' | 'lz4' | 'none';
       compression_level?: number;
       parallel_jobs?: number;

@@ -1,7 +1,9 @@
-﻿import { prisma } from '../lib/prisma';
+import { BackupType } from '@prisma/client';
+import { prisma } from '../lib/prisma';
 import { logger } from '../utils/logger';
 import { config } from '../utils/config';
 import { calculateNextExecution } from '../core/scheduler/job-scheduler';
+import { resolveBackupTypeFromOptions } from '../core/backup/backup-type';
 import { markWorkerError, markWorkerRunning, markWorkerStopped } from './worker-registry';
 import { enqueueBackupExecution } from '../queue/queues';
 import { ensureRedisAvailable } from '../queue/redis-client';
@@ -38,6 +40,7 @@ async function executeSchedulerCycle() {
         name: true,
         datasourceId: true,
         storageLocationId: true,
+        backupOptions: true,
         scheduleCron: true,
         scheduleTimezone: true,
       },
@@ -66,13 +69,14 @@ async function executeSchedulerCycle() {
       }
 
       const execution = await prisma.$transaction(async (tx) => {
+        const backupType = resolveBackupTypeFromOptions(job.backupOptions) as BackupType;
         const createdExecution = await tx.backupExecution.create({
           data: {
             jobId: job.id,
             datasourceId: job.datasourceId,
             storageLocationId: job.storageLocationId,
             status: 'queued',
-            backupType: 'full',
+            backupType,
             metadata: {
               enqueue_source: 'scheduled',
               execution_logs: [
@@ -150,4 +154,3 @@ export function stopSchedulerWorker() {
   markWorkerStopped('scheduler');
   logger.info('Scheduler worker finalizado');
 }
-
