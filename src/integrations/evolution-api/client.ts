@@ -41,6 +41,17 @@ function normalizePhone(value: string) {
   return value.replace(/\D+/g, '');
 }
 
+function buildPhoneCandidates(value: string) {
+  const normalized = normalizePhone(value);
+  if (!normalized) return [];
+  const candidates = [normalized];
+
+  const seemsLocalBr = (normalized.length === 10 || normalized.length === 11) && !normalized.startsWith('55');
+  if (seemsLocalBr) candidates.push(`55${normalized}`);
+
+  return Array.from(new Set(candidates));
+}
+
 async function postWithTimeout(url: string, payload: unknown, headers: Record<string, string>, timeoutMs = 10_000) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
@@ -242,27 +253,44 @@ export async function getEvolutionConnectionStatus(params: EvolutionQrParams): P
 
 export async function sendEvolutionText(params: EvolutionSendParams): Promise<void> {
   const base = params.apiUrl.replace(/\/+$/, '');
-  const number = normalizePhone(params.to);
-  if (!number) {
+  const numbers = buildPhoneCandidates(params.to);
+  if (numbers.length === 0) {
     throw new Error('Numero de destino invalido para WhatsApp');
   }
 
   const endpoint = `${base}/message/sendText/${encodeURIComponent(params.instance)}`;
-  const payload = {
-    number,
-    text: params.text,
-  };
+  let lastStatus = 0;
+  let lastRaw = '';
+  let lastError: unknown = null;
 
-  const response = await postWithTimeout(
-    endpoint,
-    payload,
-    { apikey: params.apiKey },
-  );
+  for (const number of numbers) {
+    const payload = {
+      number,
+      text: params.text,
+    };
 
-  if (!response.ok) {
-    const raw = await response.text().catch(() => '');
-    throw new Error(`Evolution API retornou ${response.status}${raw ? `: ${raw}` : ''}`);
+    try {
+      const response = await postWithTimeout(
+        endpoint,
+        payload,
+        { apikey: params.apiKey },
+      );
+
+      if (response.ok) return;
+
+      lastStatus = response.status;
+      lastRaw = await response.text().catch(() => '');
+    } catch (error) {
+      lastError = error;
+      lastRaw = error instanceof Error ? error.message : String(error);
+    }
   }
+
+  if (lastError && !lastStatus) {
+    throw new Error(`Falha ao chamar Evolution API: ${lastRaw}`);
+  }
+
+  throw new Error(`Evolution API retornou ${lastStatus}${lastRaw ? `: ${lastRaw}` : ''}`);
 }
 
 export async function fetchEvolutionQrCode(params: EvolutionQrParams): Promise<string> {

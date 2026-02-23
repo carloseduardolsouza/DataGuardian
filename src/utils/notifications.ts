@@ -31,6 +31,30 @@ type WhatsappEvolutionConfig = {
   important_only?: boolean;
 };
 
+const SEVERITY_EMOJI: Record<NotificationSeverity, string> = {
+  info: 'ℹ️',
+  warning: '⚠️',
+  critical: '🚨',
+};
+
+const TYPE_EMOJI: Record<NotificationType, string> = {
+  backup_success: '✅',
+  backup_failed: '❌',
+  connection_lost: '🔌',
+  connection_restored: '🟢',
+  storage_full: '🧱',
+  storage_unreachable: '📦',
+  health_degraded: '🩺',
+  cleanup_completed: '🧹',
+};
+
+const ERROR_NOTIFICATION_TYPES = new Set<NotificationType>([
+  'backup_failed',
+  'connection_lost',
+  'storage_unreachable',
+  'health_degraded',
+]);
+
 function asObject(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? value as Record<string, unknown>
@@ -80,6 +104,45 @@ function isImportantNotification(input: CreateNotificationInput) {
   return input.severity === 'critical' || input.severity === 'warning';
 }
 
+function isErrorNotification(input: CreateNotificationInput) {
+  if (input.severity === 'critical') return true;
+  if (ERROR_NOTIFICATION_TYPES.has(input.type)) return true;
+
+  const text = `${input.title} ${input.message}`.toLowerCase();
+  return /(erro|error|falha|failed|failure)/.test(text);
+}
+
+function humanizeType(type: NotificationType) {
+  return type
+    .split('_')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
+function buildWhatsappText(
+  input: CreateNotificationInput,
+  rendered: { title: string; message: string },
+) {
+  const severityEmoji = SEVERITY_EMOJI[input.severity] ?? '🔔';
+  const typeEmoji = TYPE_EMOJI[input.type] ?? '📣';
+  const title = rendered.title.trim() || input.title;
+  const message = rendered.message.trim() || input.message;
+  const typeLabel = humanizeType(input.type);
+  const when = new Date().toLocaleString('pt-BR', { hour12: false });
+
+  return [
+    `${severityEmoji} *DataGuardian | Alerta* ${typeEmoji}`,
+    '',
+    `*${title}*`,
+    message,
+    '',
+    `• Tipo: ${typeLabel}`,
+    `• Severidade: ${input.severity.toUpperCase()}`,
+    `• Entidade: ${input.entityType} (${input.entityId})`,
+    `• Horário: ${when}`,
+  ].join('\n');
+}
+
 async function resolveRenderedTemplate(
   channel: 'whatsapp',
   input: CreateNotificationInput,
@@ -104,28 +167,93 @@ async function resolveRenderedTemplate(
 
 async function dispatchWhatsappNotification(input: CreateNotificationInput) {
   const cfg = await readDispatchConfig();
-  if (!cfg.whatsappEnabled) return;
+  if (!cfg.whatsappEnabled) {
+    logger.info(
+      { type: input.type, entityId: input.entityId },
+      '[WHATSAPP] Envio ignorado: notifications.whatsapp_enabled=false',
+    );
+    return;
+  }
 
   const apiUrl = asString(cfg.whatsapp.api_url);
   const apiKey = asString(cfg.whatsapp.api_key);
   const instance = asString(cfg.whatsapp.instance);
   const recipients = asStringArray(cfg.whatsapp.to);
-  const importantOnly = cfg.whatsapp.important_only !== false;
+  const importantOnly = asBoolean(cfg.whatsapp.important_only, true);
 
-  if (!apiUrl || !apiKey || !instance || recipients.length === 0) return;
-  if (importantOnly && !isImportantNotification(input)) return;
+  if (!apiUrl || !apiKey || !instance || recipients.length === 0) {
+    logger.warn(
+      {
+        type: input.type,
+        entityId: input.entityId,
+        has_api_url: Boolean(apiUrl),
+        has_api_key: Boolean(apiKey),
+        has_instance: Boolean(instance),
+        recipients_count: recipients.length,
+      },
+      '[WHATSAPP] Envio ignorado: configuracao incompleta',
+    );
+    return;
+  }
+  if (importantOnly && !isImportantNotification(input) && !isErrorNotification(input)) {
+    logger.info(
+      {
+        type: input.type,
+        severity: input.severity,
+        entityId: input.entityId,
+      },
+      '[WHATSAPP] Envio ignorado: filtro important_only',
+    );
+    return;
+  }
 
   const rendered = await resolveRenderedTemplate('whatsapp', input);
+  logger.info(
+    {
+      type: input.type,
+      severity: input.severity,
+      entityId: input.entityId,
+      instance,
+      recipients_count: recipients.length,
+    },
+    '[WHATSAPP] Iniciando envio de notificacao',
+  );
 
   await Promise.all(
     recipients.map(async (to) => {
-      await sendEvolutionText({
-        apiUrl,
-        apiKey,
-        instance,
-        to,
-        text: `${rendered.title}\n\n${rendered.message}`,
-      });
+      const startedAt = Date.now();
+      try {
+        const text = buildWhatsappText(input, rendered);
+        await sendEvolutionText({
+          apiUrl,
+          apiKey,
+          instance,
+          to,
+          text,
+        });
+        logger.info(
+          {
+            type: input.type,
+            entityId: input.entityId,
+            to,
+            duration_ms: Date.now() - startedAt,
+          },
+          '[WHATSAPP] Mensagem enviada com sucesso',
+        );
+      } catch (error) {
+        logger.error(
+          {
+            err: error,
+            error_message: error instanceof Error ? error.message : String(error),
+            type: input.type,
+            entityId: input.entityId,
+            to,
+            duration_ms: Date.now() - startedAt,
+          },
+          '[WHATSAPP] Falha ao enviar mensagem',
+        );
+        throw error;
+      }
     }),
   );
 }
@@ -140,7 +268,15 @@ async function dispatchExternalNotifications(input: CreateNotificationInput) {
       try {
         await run();
       } catch (error) {
-        logger.error({ error, channel, type: input.type }, 'Falha no dispatch externo de notificacao');
+        logger.error(
+          {
+            err: error,
+            error_message: error instanceof Error ? error.message : String(error),
+            channel,
+            type: input.type,
+          },
+          'Falha no dispatch externo de notificacao',
+        );
       }
     }),
   );
@@ -171,6 +307,13 @@ export async function createNotification(input: CreateNotificationInput): Promis
       `Notificacao criada: ${input.title}`,
     );
   } catch (error) {
-    logger.error({ error, input }, 'Erro ao criar notificacao');
+    logger.error(
+      {
+        err: error,
+        error_message: error instanceof Error ? error.message : String(error),
+        input,
+      },
+      'Erro ao criar notificacao',
+    );
   }
 }

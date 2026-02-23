@@ -90,17 +90,15 @@ async function checkDatasourceConnection(datasource: {
       },
     });
 
-    if (datasource.status !== 'critical') {
-      await createNotification({
-        type: 'connection_lost',
-        severity: 'critical',
-        entityType: 'datasource',
-        entityId: datasource.id,
-        title: `Conexão perdida: ${datasource.name}`,
-        message: `Falha no health check do datasource '${datasource.name}': ${errorMessage}`,
-        metadata: { latency_ms: latencyMs },
-      });
-    }
+    await createNotification({
+      type: 'connection_lost',
+      severity: 'critical',
+      entityType: 'datasource',
+      entityId: datasource.id,
+      title: `Conexão perdida: ${datasource.name}`,
+      message: `Falha no health check do datasource '${datasource.name}': ${errorMessage}`,
+      metadata: { latency_ms: latencyMs },
+    });
 
     logger.warn(
       { datasourceId: datasource.id, err },
@@ -161,16 +159,14 @@ async function checkStorageConnection(storage: {
       },
     });
 
-    if (storage.status !== 'unreachable') {
-      await createNotification({
-        type: 'storage_unreachable',
-        severity: 'critical',
-        entityType: 'storage_location',
-        entityId: storage.id,
-        title: `Storage inacessível: ${storage.name}`,
-        message: `Falha no health check do storage '${storage.name}': ${message}`,
-      });
-    }
+    await createNotification({
+      type: 'storage_unreachable',
+      severity: 'critical',
+      entityType: 'storage_location',
+      entityId: storage.id,
+      title: `Storage inacessível: ${storage.name}`,
+      message: `Falha no health check do storage '${storage.name}': ${message}`,
+    });
 
     logger.warn(
       { storageId: storage.id, err },
