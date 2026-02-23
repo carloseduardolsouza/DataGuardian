@@ -12,6 +12,8 @@ import { closeQueues } from './queue/queues';
 import { closeRedis, connectRedis, ensureRedisAvailable } from './queue/redis-client';
 import { seedAuthDefaults } from './core/auth/auth.service';
 import { seedDefaultNotificationTemplates } from './api/models/notification-template.model';
+import { startSystemMonitor, stopSystemMonitor } from './core/performance/system-monitor';
+import { shutdownThreadPool } from './core/performance/thread-pool';
 
 async function bootstrap() {
   logger.info('Iniciando DataGuardian...');
@@ -103,6 +105,10 @@ async function bootstrap() {
 
   startHealthWorker();
   startCleanupWorker();
+  startSystemMonitor({
+    intervalMs: config.monitoring.systemSampleIntervalMs,
+    maxHistory: config.monitoring.systemSampleHistorySize,
+  });
   await syncQueueServicesWithRedis();
   redisMonitorTimer = setInterval(() => {
     void syncQueueServicesWithRedis();
@@ -113,11 +119,13 @@ async function bootstrap() {
     server.close(async () => {
       stopHealthWorker();
       stopCleanupWorker();
+      stopSystemMonitor();
       if (redisMonitorTimer) {
         clearInterval(redisMonitorTimer);
         redisMonitorTimer = null;
       }
       await stopQueueServices();
+      await shutdownThreadPool();
       await closeRedis();
       await prisma.$disconnect();
       logger.info('Servidor encerrado com sucesso');

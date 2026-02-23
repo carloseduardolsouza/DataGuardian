@@ -81,3 +81,9 @@ npm run dev
 - `/api/*` exige login/sessao (exceto `/api/auth/*`)
 - frontend deve seguir `STYLE_GUIDE.md`
 - para setup inicial, usar `POST /api/auth/setup` quando `GET /api/auth/status` retornar `has_user=false`
+
+## Variaveis de performance
+
+- `WORKER_THREAD_POOL_SIZE`: tamanho do pool `worker_threads` para tarefas CPU-bound
+- `SYSTEM_MONITOR_INTERVAL_MS`: intervalo de coleta do monitor de maquina/processo
+- `SYSTEM_MONITOR_HISTORY_SIZE`: tamanho maximo do historico em memoria para dashboard

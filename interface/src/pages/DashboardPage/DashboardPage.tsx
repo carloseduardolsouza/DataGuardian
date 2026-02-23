@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+﻿import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Sidebar, { ROUTE_PATHS, type NavKey } from '../../ui/navigation/Sidebar/Sidebar';
 import {
@@ -6,6 +6,7 @@ import {
   JobStatIcon,
   ExecutionStatIcon,
   DangerStatIcon,
+  ServerIcon,
   SunIcon,
   MoonIcon,
   EmptyPageIcon,
@@ -52,9 +53,9 @@ const PAGE_TITLES: Record<NavKey, { title: string; sub: string }> = {
 };
 
 function formatBytes(value: number | string | null) {
-  if (value === null) return '�';
+  if (value === null) return '—';
   const bytes = typeof value === 'string' ? Number(value) : value;
-  if (!Number.isFinite(bytes) || bytes <= 0) return '�';
+  if (!Number.isFinite(bytes) || bytes <= 0) return '—';
 
   const units = ['B', 'KB', 'MB', 'GB', 'TB'];
   const index = Math.min(units.length - 1, Math.floor(Math.log(bytes) / Math.log(1024)));
@@ -63,7 +64,7 @@ function formatBytes(value: number | string | null) {
 }
 
 function formatDuration(secs: number | null) {
-  if (secs === null || secs <= 0) return '�';
+  if (secs === null || secs <= 0) return '—';
   if (secs < 60) return `${secs}s`;
   if (secs < 3600) return `${Math.floor(secs / 60)}m ${secs % 60}s`;
   return `${Math.floor(secs / 3600)}h ${Math.floor((secs % 3600) / 60)}m`;
@@ -80,6 +81,20 @@ function formatAgo(isoDate: string) {
   if (h < 24) return `${h}h atras`;
   const d = Math.floor(h / 24);
   return `${d}d atras`;
+}
+
+function formatPercent(value: number | null | undefined) {
+  if (value === null || value === undefined || !Number.isFinite(value)) return '0.0%';
+  return `${value.toFixed(1)}%`;
+}
+
+function formatUptime(seconds: number | null | undefined) {
+  if (!seconds || seconds <= 0) return '—';
+  const days = Math.floor(seconds / 86400);
+  const hours = Math.floor((seconds % 86400) / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  if (days > 0) return `${days}d ${hours}h`;
+  return `${hours}h ${minutes}m`;
 }
 
 function mapHealthDot(status: 'healthy' | 'warning' | 'critical' | 'unknown') {
@@ -227,6 +242,60 @@ function DashboardContent() {
     ];
   }, [data]);
 
+  const performanceCards = useMemo(() => {
+    if (!data) {
+      return [
+        { label: 'CPU maquina', value: '0.0%', detail: 'load 0.0 / 0.0 / 0.0' },
+        { label: 'Memoria maquina', value: '—', detail: '0.0%' },
+        { label: 'CPU processo', value: '0.0%', detail: 'Node.js' },
+        { label: 'Memoria processo', value: '—', detail: 'heap —' },
+        { label: 'Event loop lag', value: '0.0 ms', detail: 'responsividade' },
+        { label: 'Thread pool', value: '0/0', detail: 'fila 0' },
+      ];
+    }
+
+    const perf = data.performance;
+    const memUsed = formatBytes(perf.current.memory_used_bytes);
+    const memTotal = formatBytes(perf.current.memory_total_bytes);
+    const procRss = formatBytes(perf.current.process_memory_rss_bytes);
+    const heapUsed = formatBytes(perf.current.process_heap_used_bytes);
+    const heapTotal = formatBytes(perf.current.process_heap_total_bytes);
+    const threadPool = perf.thread_pool;
+
+    return [
+      {
+        label: 'CPU maquina',
+        value: formatPercent(perf.current.cpu_percent),
+        detail: `load ${perf.current.load_avg_1m.toFixed(1)} / ${perf.current.load_avg_5m.toFixed(1)} / ${perf.current.load_avg_15m.toFixed(1)}`,
+      },
+      {
+        label: 'Memoria maquina',
+        value: `${memUsed} / ${memTotal}`,
+        detail: formatPercent(perf.current.memory_usage_percent),
+      },
+      {
+        label: 'CPU processo',
+        value: formatPercent(perf.current.process_cpu_percent),
+        detail: `Node ${perf.machine.node_version}`,
+      },
+      {
+        label: 'Memoria processo',
+        value: procRss,
+        detail: `heap ${heapUsed} / ${heapTotal}`,
+      },
+      {
+        label: 'Event loop lag',
+        value: `${perf.current.event_loop_lag_ms.toFixed(1)} ms`,
+        detail: 'responsividade interna',
+      },
+      {
+        label: 'Thread pool',
+        value: `${perf.thread_pool.busy}/${perf.thread_pool.size}`,
+        detail: `fila ${threadPool.queued} | ok ${threadPool.processed} | falhas ${threadPool.failed}`,
+      },
+    ];
+  }, [data]);
+
   if (loading && !data) {
     return <div className={styles.section} style={{ padding: '20px' }}>Carregando dashboard...</div>;
   }
@@ -255,6 +324,28 @@ function DashboardContent() {
             </div>
           </div>
         ))}
+      </div>
+
+      <div className={styles.section}>
+        <div className={styles.sectionHeader}>
+          <h2 className={styles.sectionTitle}>Performance da Maquina</h2>
+          <span className={styles.textMuted}>
+            {data?.performance.machine.hostname ?? 'host'} · {data?.performance.machine.cpu_cores ?? 0} vCPU · uptime {formatUptime(data?.performance.machine.system_uptime_seconds ?? 0)}
+          </span>
+        </div>
+        <div className={styles.performanceGrid}>
+          {performanceCards.map((card) => (
+            <div className={styles.performanceCard} key={card.label}>
+              <div className={styles.performanceCardHead}>
+                <ServerIcon width={14} height={14} />
+                <span className={styles.performanceCardLabel}>{card.label}</span>
+              </div>
+              <div className={styles.performanceCardValue}>{card.value}</div>
+              <div className={styles.performanceCardDetail}>{card.detail}</div>
+            </div>
+          ))}
+        </div>
+
       </div>
 
       <div className={styles.section}>
@@ -306,7 +397,7 @@ function DashboardContent() {
               <div className={styles.jobItemLeft}>
                 <span className={styles.jobItemName}>{job.name}</span>
                 <span className={styles.jobItemMeta}>
-                  {job.schedule_cron} � {job.next_execution_at ? new Date(job.next_execution_at).toLocaleString('pt-BR') : 'sem agendamento'}
+                  {job.schedule_cron} · {job.next_execution_at ? new Date(job.next_execution_at).toLocaleString('pt-BR') : 'sem agendamento'}
                 </span>
               </div>
               <StatusBadge status={job.enabled ? 'success' : 'warning'} label={job.enabled ? 'Ativo' : 'Inativo'} />
@@ -328,7 +419,7 @@ function DashboardContent() {
             <div className={styles.healthRow} key={hc.id}>
               <span className={`${styles.healthDot} ${styles[mapHealthDot(hc.status)]}`} />
               <span className={styles.healthName}>{hc.name}</span>
-              <span className={styles.healthLatency}>{hc.latency_ms !== null ? `${hc.latency_ms}ms` : '�'}</span>
+              <span className={styles.healthLatency}>{hc.latency_ms !== null ? `${hc.latency_ms}ms` : '—'}</span>
             </div>
           ))}
           {(data?.datasource_health.length ?? 0) === 0 && (
@@ -365,5 +456,6 @@ function EmptyPage({ page }: { page: NavKey }) {
     </div>
   );
 }
+
 
 

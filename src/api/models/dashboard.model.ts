@@ -2,6 +2,8 @@ import { ExecutionStatus } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { getWorkersSnapshot } from '../../workers/worker-registry';
 import { isRedisAvailable } from '../../queue/redis-client';
+import { getSystemMonitorSnapshot } from '../../core/performance/system-monitor';
+import { getThreadPoolStats } from '../../core/performance/thread-pool';
 
 type DaySeriesItem = {
   date: string;
@@ -50,6 +52,8 @@ function statusLevel(status: string) {
 export async function getDashboardOverview() {
   const workers = getWorkersSnapshot();
   const redisStatus = isRedisAvailable() ? 'ok' : 'error';
+  const system = getSystemMonitorSnapshot();
+  const threadPool = getThreadPoolStats();
 
   let databaseStatus: 'ok' | 'error' = 'ok';
   try {
@@ -220,6 +224,12 @@ export async function getDashboardOverview() {
         health: workers.health.status,
         cleanup: workers.cleanup.status,
       },
+    },
+    performance: {
+      machine: system.machine,
+      current: system.current,
+      history: system.history.slice(-24),
+      thread_pool: threadPool,
     },
     recent_executions: recentExecutionsRaw.map((exec) => ({
       id: exec.id,

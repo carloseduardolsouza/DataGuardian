@@ -139,6 +139,51 @@ Confirmacao obrigatoria:
 
 - `GET /api/dashboard/overview`
 
+Campos relevantes de performance em `GET /api/dashboard/overview`:
+
+```json
+{
+  "performance": {
+    "machine": {
+      "hostname": "backup-host",
+      "platform": "linux",
+      "release": "6.8.0",
+      "arch": "x64",
+      "cpu_cores": 8,
+      "cpu_model": "Intel(R) Xeon(R)",
+      "total_memory_bytes": 33554432000,
+      "system_uptime_seconds": 90211,
+      "process_uptime_seconds": 1220,
+      "node_version": "v22.0.0"
+    },
+    "current": {
+      "cpu_percent": 42.3,
+      "memory_usage_percent": 71.2,
+      "process_cpu_percent": 8.9,
+      "process_memory_rss_bytes": 201195520,
+      "event_loop_lag_ms": 2.1
+    },
+    "history": [
+      {
+        "ts": "2026-02-23T00:00:00.000Z",
+        "cpu_percent": 38.1,
+        "memory_usage_percent": 70.8,
+        "process_cpu_percent": 7.5,
+        "event_loop_lag_ms": 1.9
+      }
+    ],
+    "thread_pool": {
+      "enabled": true,
+      "size": 3,
+      "busy": 1,
+      "queued": 0,
+      "processed": 152,
+      "failed": 0
+    }
+  }
+}
+```
+
 ## Notifications
 
 - `GET /api/notifications`

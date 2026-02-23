@@ -16,6 +16,7 @@ DataGuardian e um monolito Node.js com:
 - `src/workers/*`: scheduler, backup, restore, health, cleanup
 - `src/queue/*`: configuracao BullMQ/Redis
 - `src/lib/prisma.ts`: acesso ao banco
+- `src/core/performance/*`: monitor da maquina/processo e thread pool CPU-bound
 
 ## Inicializacao
 
@@ -113,3 +114,34 @@ Tipos suportados hoje:
 - health detalhado: `GET /api/health`
 - metricas Prometheus: `GET /metrics`
 - logs por execucao em `backup_executions.metadata.execution_logs`
+- dashboard inclui `performance.machine`, `performance.current`, `performance.history`
+
+## Thread Pool de Performance
+
+- implementado com `worker_threads` em `src/core/performance/thread-pool.ts`
+- objetivo: tirar tarefas CPU-bound do event-loop principal
+- uso atual: checksum SHA-256 de artefatos no `backup-worker`
+- fallback: se worker thread falhar, tarefa roda em thread principal para nao interromper backup
+
+Metricas expostas no dashboard:
+
+- `thread_pool.size`
+- `thread_pool.busy`
+- `thread_pool.queued`
+- `thread_pool.processed`
+- `thread_pool.failed`
+
+## Monitor da Maquina
+
+- implementado em `src/core/performance/system-monitor.ts`
+- coleta periodica de:
+- CPU da maquina (`cpu_percent`)
+- memoria da maquina (`memory_usage_percent`)
+- CPU e memoria do processo Node
+- event loop lag medio (`event_loop_lag_ms`)
+- load average (1m, 5m, 15m)
+
+Configuracao:
+
+- `SYSTEM_MONITOR_INTERVAL_MS`
+- `SYSTEM_MONITOR_HISTORY_SIZE`

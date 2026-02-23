@@ -1,5 +1,4 @@
-﻿import { createHash } from 'node:crypto';
-import { createReadStream, promises as fs } from 'node:fs';
+﻿import { promises as fs } from 'node:fs';
 import * as path from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import { DatasourceType, Prisma } from '@prisma/client';
@@ -27,6 +26,7 @@ import {
 } from '../queue/queues';
 import { getBullConnection } from '../queue/redis-client';
 import { config } from '../utils/config';
+import { hashFileSha256 } from '../core/performance/thread-pool';
 
 const processing = new Set<string>();
 let worker: Worker<BackupQueueJobData> | null = null;
@@ -281,15 +281,6 @@ function readExecutionLogs(value: unknown): ExecutionLogEntry[] {
       return { ts, level, message };
     })
     .filter((entry): entry is ExecutionLogEntry => entry !== null);
-}
-
-async function computeSha256(filePath: string) {
-  const hash = createHash('sha256');
-  const stream = createReadStream(filePath);
-  for await (const chunk of stream) {
-    hash.update(chunk as Buffer);
-  }
-  return hash.digest('hex');
 }
 
 async function uploadBackupArtifacts(params: {
@@ -571,7 +562,7 @@ async function processExecution(executionId: string) {
     const compressed = await compressBackupFile(artifactInputFile, compression, compressionLevel);
     pushLog('success', `Compactacao concluida (${compressed.compressedSizeBytes} bytes)`, true);
     pushLog('info', 'Calculando checksum do arquivo compactado', true);
-    const checksum = await computeSha256(compressed.outputFile);
+    const checksum = await hashFileSha256(compressed.outputFile);
     pushLog('success', 'Checksum calculado com sucesso', true);
 
     runtimeMetadata.requested_backup_type = execution.backupType;
@@ -937,7 +928,7 @@ export async function retryExecutionUploadNow(executionId: string) {
     const compressedStat = await fs.stat(compressedFilePath);
     const checksumValue =
       String(runtimeMetadata.checksum ?? '').replace(/^sha256:/, '')
-      || await computeSha256(compressedFilePath);
+      || await hashFileSha256(compressedFilePath);
     const rawSize = Number(runtimeMetadata.total_size_bytes ?? execution.sizeBytes ?? 0);
     const durationSeconds = 1;
     const finishedAt = new Date();
@@ -1074,3 +1065,5 @@ export async function stopBackupWorker() {
   markWorkerStopped('backup');
   logger.info('Backup worker finalizado');
 }
+
+

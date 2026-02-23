@@ -1,4 +1,5 @@
 import { getDefaultTempDirectory } from './runtime';
+import { cpus } from 'node:os';
 
 // ──────────────────────────────────────────
 // Configuração centralizada via env vars
@@ -19,6 +20,7 @@ function buildRedisUrl(rawUrl: string, password?: string) {
 
 const redisPassword = process.env.REDIS_PASSWORD?.trim();
 const redisUrl = buildRedisUrl(process.env.REDIS_URL ?? 'redis://localhost:6379', redisPassword);
+const cpuCount = Math.max(1, cpus().length);
 
 export const config = {
   env: (process.env.NODE_ENV ?? 'development') as 'development' | 'production' | 'test',
@@ -44,6 +46,12 @@ export const config = {
     healthCheckIntervalMs: parseInt(process.env.HEALTH_CHECK_INTERVAL_MS ?? '300000', 10),
     cleanupCron: process.env.CLEANUP_CRON ?? '0 4 * * *',
     tempDirectory: process.env.TEMP_DIRECTORY ?? getDefaultTempDirectory(),
+    threadPoolSize: parseInt(process.env.WORKER_THREAD_POOL_SIZE ?? String(Math.max(1, Math.min(8, cpuCount - 1))), 10),
+  },
+
+  monitoring: {
+    systemSampleIntervalMs: parseInt(process.env.SYSTEM_MONITOR_INTERVAL_MS ?? '5000', 10),
+    systemSampleHistorySize: parseInt(process.env.SYSTEM_MONITOR_HISTORY_SIZE ?? '120', 10),
   },
 } as const;
 

@@ -367,6 +367,51 @@ export interface ApiDashboardOverview {
       cleanup: string;
     };
   };
+  performance: {
+    machine: {
+      hostname: string;
+      platform: string;
+      release: string;
+      arch: string;
+      cpu_cores: number;
+      cpu_model: string;
+      total_memory_bytes: number;
+      system_uptime_seconds: number;
+      process_uptime_seconds: number;
+      node_version: string;
+    };
+    current: {
+      ts: string;
+      cpu_percent: number;
+      load_avg_1m: number;
+      load_avg_5m: number;
+      load_avg_15m: number;
+      memory_total_bytes: number;
+      memory_free_bytes: number;
+      memory_used_bytes: number;
+      memory_usage_percent: number;
+      process_cpu_percent: number;
+      process_memory_rss_bytes: number;
+      process_heap_used_bytes: number;
+      process_heap_total_bytes: number;
+      event_loop_lag_ms: number;
+    };
+    history: Array<{
+      ts: string;
+      cpu_percent: number;
+      memory_usage_percent: number;
+      process_cpu_percent: number;
+      event_loop_lag_ms: number;
+    }>;
+    thread_pool: {
+      enabled: boolean;
+      size: number;
+      busy: number;
+      queued: number;
+      processed: number;
+      failed: number;
+    };
+  };
   recent_executions: Array<{
     id: string;
     datasource_name: string;

@@ -1,7 +1,7 @@
-import { createHash } from 'node:crypto';
 import { createReadStream, createWriteStream, promises as fs } from 'node:fs';
 import * as path from 'node:path';
 import { pipeline } from 'node:stream/promises';
+import { hashFileSha256 } from '../performance/thread-pool';
 
 export type DeltaMode = 'incremental' | 'differential';
 
@@ -34,15 +34,6 @@ export interface CreateDeltaResult {
   targetSizeBytes: number;
   usable: boolean;
   reason?: string;
-}
-
-async function sha256File(filePath: string) {
-  const hash = createHash('sha256');
-  const stream = createReadStream(filePath);
-  for await (const chunk of stream) {
-    hash.update(chunk as Buffer);
-  }
-  return hash.digest('hex');
 }
 
 function bufferEquals(a: Buffer, aLen: number, b: Buffer, bLen: number) {
@@ -87,8 +78,8 @@ export async function createDeltaArtifact(params: CreateDeltaParams): Promise<Cr
   }
 
   const [baseChecksum, targetChecksum] = await Promise.all([
-    sha256File(params.baseFile),
-    sha256File(params.targetFile),
+    hashFileSha256(params.baseFile),
+    hashFileSha256(params.targetFile),
   ]);
 
   const delta: DeltaArtifact = {
@@ -179,7 +170,7 @@ export async function applyDeltaArtifact(params: {
     await fd.close();
   }
 
-  const checksum = await sha256File(params.outputFile);
+  const checksum = await hashFileSha256(params.outputFile);
   if (delta.target_checksum_sha256 && checksum !== delta.target_checksum_sha256) {
     throw new Error('Falha ao validar checksum do delta aplicado');
   }
