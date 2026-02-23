@@ -77,6 +77,7 @@ function buildMissingBinaryGuide(binary: string) {
     || normalizedBinary === 'mysql'
     || normalizedBinary === 'mariadb-dump'
     || normalizedBinary === 'mariadb';
+  const isCompressionBinary = normalizedBinary === 'zstd' || normalizedBinary === 'lz4';
   if (process.platform === 'win32') {
     if (normalizedBinary === 'docker') {
       return [
@@ -99,6 +100,17 @@ function buildMissingBinaryGuide(binary: string) {
       ].join('\n');
     }
 
+    if (isCompressionBinary) {
+      return [
+        `1. Abra o PowerShell como Administrador.`,
+        `2. Execute: winget install -e --id zstd.zstd --accept-package-agreements --accept-source-agreements`,
+        `3. Para lz4, use: choco install lz4 -y`,
+        `4. Feche e abra novamente o terminal/servico da API.`,
+        `5. Valide com: ${binary} --version`,
+        `6. Tente novamente o backup.`,
+      ].join('\n');
+    }
+
     return [
       `1. Abra o PowerShell como Administrador.`,
       `2. Execute: winget install -e --id PostgreSQL.PostgreSQL --accept-package-agreements --accept-source-agreements`,
@@ -109,6 +121,15 @@ function buildMissingBinaryGuide(binary: string) {
   }
 
   if (process.platform === 'linux') {
+    if (isCompressionBinary) {
+      return [
+        `1. Instale o binario de compressao no host da API (ex: apt-get install -y zstd lz4).`,
+        `2. Reinicie o processo da API.`,
+        `3. Valide com: ${binary} --version`,
+        `4. Tente novamente o backup.`,
+      ].join('\n');
+    }
+
     if (isMysqlFamilyBinary) {
       return [
         `1. Instale o client MySQL/MariaDB no host da API (ex: apt-get install -y default-mysql-client).`,
@@ -127,6 +148,15 @@ function buildMissingBinaryGuide(binary: string) {
   }
 
   if (process.platform === 'darwin') {
+    if (isCompressionBinary) {
+      return [
+        `1. Instale via Homebrew: brew install zstd lz4`,
+        `2. Reinicie o processo da API.`,
+        `3. Valide com: ${binary} --version`,
+        `4. Tente novamente o backup.`,
+      ].join('\n');
+    }
+
     if (isMysqlFamilyBinary) {
       return [
         `1. Instale via Homebrew: brew install mysql-client`,
@@ -212,10 +242,19 @@ function rawTargetsFrom(raw: unknown[]) {
 function getBackupOptions(backupOptions: unknown) {
   const opts = (backupOptions ?? {}) as Record<string, unknown>;
   const compressionRaw = String(opts.compression ?? 'gzip').toLowerCase();
-  const compression: 'none' | 'gzip' = compressionRaw === 'none' ? 'none' : 'gzip';
+  const compression: 'none' | 'gzip' | 'zstd' | 'lz4' =
+    compressionRaw === 'none'
+      ? 'none'
+      : (compressionRaw === 'zstd' || compressionRaw === 'lz4' || compressionRaw === 'gzip'
+        ? compressionRaw
+        : 'gzip');
+  const compressionLevelRaw = opts.compression_level;
+  const compressionLevel = Number.isFinite(Number(compressionLevelRaw))
+    ? Number(compressionLevelRaw)
+    : undefined;
   const storageStrategy: 'replicate' | 'fallback' =
     String(opts.storage_strategy ?? 'fallback') === 'replicate' ? 'replicate' : 'fallback';
-  return { compression, strategy: storageStrategy };
+  return { compression, compressionLevel, strategy: storageStrategy };
 }
 
 function toMetadataObject(value: unknown): Record<string, unknown> {
@@ -419,13 +458,17 @@ async function processExecution(executionId: string) {
     pushLog('success', `Conexao com datasource validada (${execution.datasource.type})`, true);
 
     const targets = getStorageTargets(execution.job.backupOptions, execution.storageLocationId);
-    const { compression, strategy } = getBackupOptions(execution.job.backupOptions);
+    const { compression, compressionLevel, strategy } = getBackupOptions(execution.job.backupOptions);
 
     runtimeMetadata.compression = compression;
     runtimeMetadata.storage_strategy = strategy;
 
     pushLog('info', `Estrategia de storage '${strategy}' com ${targets.length} destino(s)`, true);
-    pushLog('info', `Compressao configurada: ${compression}`, true);
+    pushLog(
+      'info',
+      `Compressao configurada: ${compression}${compressionLevel ? ` (level ${compressionLevel})` : ''}`,
+      true,
+    );
 
     tempDir = path.join(config.workers.tempDirectory, execution.id);
     await fs.mkdir(tempDir, { recursive: true });
@@ -525,7 +568,7 @@ async function processExecution(executionId: string) {
 
     const rawStat = await fs.stat(rawDumpFile);
     const artifactStat = await fs.stat(artifactInputFile);
-    const compressed = await compressBackupFile(artifactInputFile, compression);
+    const compressed = await compressBackupFile(artifactInputFile, compression, compressionLevel);
     pushLog('success', `Compactacao concluida (${compressed.compressedSizeBytes} bytes)`, true);
     pushLog('info', 'Calculando checksum do arquivo compactado', true);
     const checksum = await computeSha256(compressed.outputFile);

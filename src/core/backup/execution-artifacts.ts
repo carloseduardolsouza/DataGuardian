@@ -1,12 +1,11 @@
-import { createReadStream, createWriteStream, promises as fs } from 'node:fs';
+import { promises as fs } from 'node:fs';
 import * as path from 'node:path';
-import { pipeline } from 'node:stream/promises';
-import { createGunzip } from 'node:zlib';
 import { Prisma, StorageLocationType } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { createStorageAdapter } from '../storage/storage-factory';
 import { normalizeLocalStoragePath } from '../../utils/runtime';
 import { applyDeltaArtifact } from './delta';
+import { decompressBackupFile } from './compressor';
 
 function asObject(value: unknown): Record<string, unknown> {
   if (value && typeof value === 'object' && !Array.isArray(value)) {
@@ -198,15 +197,7 @@ async function downloadExecutionArtifact(params: {
 }
 
 async function ensureUncompressed(filePath: string) {
-  if (!filePath.endsWith('.gz')) return filePath;
-
-  const output = filePath.slice(0, -3);
-  await pipeline(
-    createReadStream(filePath),
-    createGunzip(),
-    createWriteStream(output),
-  );
-  return output;
+  return decompressBackupFile(filePath);
 }
 
 export async function materializeExecutionRawSnapshot(params: {

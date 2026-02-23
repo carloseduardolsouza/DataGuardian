@@ -125,6 +125,48 @@ async function tryInstallMySqlTools(onLog?: InstallerLog) {
   return false;
 }
 
+async function tryInstallCompressionTools(command: 'zstd' | 'lz4', onLog?: InstallerLog) {
+  if (process.platform === 'win32') {
+    if (command === 'zstd') {
+      onLog?.('Tentando instalar zstd via winget...');
+      if (await runCommand('winget', [
+        'install',
+        '-e',
+        '--id', 'zstd.zstd',
+        '--silent',
+        '--accept-package-agreements',
+        '--accept-source-agreements',
+      ])) {
+        onLog?.('Instalacao via winget concluida');
+        return true;
+      }
+    }
+
+    onLog?.(`Tentando instalar ${command} via choco...`);
+    if (await runCommand('choco', ['install', command, '-y'])) {
+      onLog?.('Instalacao via choco concluida');
+      return true;
+    }
+    return false;
+  }
+
+  if (process.platform === 'linux') {
+    if (await runCommand('apt-get', ['update'])) {
+      if (await runCommand('apt-get', ['install', '-y', command])) return true;
+    }
+    if (await runCommand('apk', ['add', '--no-cache', command])) return true;
+    if (await runCommand('dnf', ['install', '-y', command])) return true;
+    if (await runCommand('yum', ['install', '-y', command])) return true;
+    return false;
+  }
+
+  if (process.platform === 'darwin') {
+    return runCommand('brew', ['install', command]);
+  }
+
+  return false;
+}
+
 export async function tryAutoInstallBinary(command: string, onLog?: InstallerLog) {
   if (!canAutoInstall()) {
     onLog?.('Auto-instalacao de binarios desabilitada por DATAGUARDIAN_AUTO_INSTALL_BINARIES=false');
@@ -137,8 +179,9 @@ export async function tryAutoInstallBinary(command: string, onLog?: InstallerLog
     || normalized === 'mysql'
     || normalized === 'mariadb-dump'
     || normalized === 'mariadb';
+  const isCompressionTool = normalized === 'zstd' || normalized === 'lz4';
 
-  if (!isPostgresTool && !isMySqlTool) {
+  if (!isPostgresTool && !isMySqlTool && !isCompressionTool) {
     onLog?.(`Auto-instalacao nao suportada para o binario '${command}'`);
     return false;
   }
@@ -148,7 +191,9 @@ export async function tryAutoInstallBinary(command: string, onLog?: InstallerLog
 
   const installed = isPostgresTool
     ? await tryInstallPostgresTools(onLog)
-    : await tryInstallMySqlTools(onLog);
+    : (isMySqlTool
+      ? await tryInstallMySqlTools(onLog)
+      : await tryInstallCompressionTools(normalized as 'zstd' | 'lz4', onLog));
 
   if (installed) {
     logger.info({ command }, 'Instalacao automatica concluida');

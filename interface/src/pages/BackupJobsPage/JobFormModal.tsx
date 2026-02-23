@@ -163,8 +163,9 @@ export default function JobFormModal({
     if (storageTargets.length === 0) return false;
     if (frequency === 'weekly' && daysOfWeek.length === 0) return false;
     if (frequency === 'monthly' && (dayOfMonth < 1 || dayOfMonth > 28)) return false;
+    if (!Number.isFinite(maxBackups) || maxBackups < 1) return false;
     return true;
-  }, [name, datasourceId, storageTargets.length, frequency, daysOfWeek, dayOfMonth]);
+  }, [name, datasourceId, storageTargets.length, frequency, daysOfWeek, dayOfMonth, maxBackups]);
 
   function addStorageTarget() {
     if (!storageToAddId) return;
@@ -461,11 +462,20 @@ export default function JobFormModal({
         </label>
 
         <div className={styles.retentionGrid}>
-          <RetentionField
-            label="Maximo de backups por banco"
-            value={maxBackups}
-            onChange={(value) => setMaxBackups(Math.max(1, value))}
-          />
+          <div className={styles.retField}>
+            <label className={styles.retLabel}>Maximo de backups por banco</label>
+            <input
+              className={`${styles.input} ${styles.retInput}`}
+              type="number"
+              min={1}
+              step={1}
+              value={maxBackups}
+              onChange={(e) => {
+                const parsed = Number(e.target.value);
+                setMaxBackups(Number.isFinite(parsed) ? Math.max(1, Math.trunc(parsed)) : 1);
+              }}
+            />
+          </div>
         </div>
 
         <p className={styles.sectionHint}>
@@ -494,19 +504,6 @@ function Section({ icon, title, children }: { icon: ReactNode; title: string; ch
         <h3 className={styles.sectionTitle}>{title}</h3>
       </div>
       <div className={styles.sectionBody}>{children}</div>
-    </div>
-  );
-}
-
-function RetentionField({ label, value, onChange }: { label: string; value: number; onChange: (v: number) => void }) {
-  return (
-    <div className={styles.retField}>
-      <label className={styles.retLabel}>{label}</label>
-      <div className={styles.retControl}>
-        <button className={styles.retBtn} onClick={() => onChange(Math.max(1, value - 1))} type="button">-</button>
-        <span className={styles.retValue}>{value}</span>
-        <button className={styles.retBtn} onClick={() => onChange(value + 1)} type="button">+</button>
-      </div>
     </div>
   );
 }
