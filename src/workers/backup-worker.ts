@@ -5,7 +5,7 @@ import { DatasourceType, Prisma } from '@prisma/client';
 import { Worker } from 'bullmq';
 import { prisma } from '../lib/prisma';
 import { logger } from '../utils/logger';
-import { testDatasourceConnection } from '../api/models/datasource.model';
+import { executeDatasourceQuery, testDatasourceConnection } from '../api/models/datasource.model';
 import { AppError } from '../api/middlewares/error-handler';
 import { createNotification } from '../utils/notifications';
 import { markWorkerError, markWorkerRunning, markWorkerStopped } from './worker-registry';
@@ -27,6 +27,11 @@ import {
 import { getBullConnection } from '../queue/redis-client';
 import { config } from '../utils/config';
 import { hashFileSha256 } from '../core/performance/thread-pool';
+import {
+  collectReferencedFilesArtifacts,
+  parseReferencedFilesConfig,
+  type ReferencedFilesCollection,
+} from '../core/backup/referenced-files';
 
 const processing = new Set<string>();
 let worker: Worker<BackupQueueJobData> | null = null;
@@ -56,12 +61,14 @@ interface LocalArtifactsMetadata {
   manifest_file: string;
   backup_filename: string;
   compression_extension: string;
+  referenced_files_manifest_file?: string;
 }
 
 interface UploadContextMetadata {
   base_relative_folder: string;
   backup_relative_path: string;
   manifest_relative_path: string;
+  referenced_files_base_relative_path?: string;
   strategy: 'replicate' | 'fallback';
   targets: StorageTarget[];
 }
@@ -288,6 +295,11 @@ async function uploadBackupArtifacts(params: {
   manifestFile: string;
   backupRelativePath: string;
   manifestRelativePath: string;
+  referencedFiles?: {
+    manifestFile: string;
+    manifestRelativePath: string;
+    files: Array<{ local_file: string; relative_path: string }>;
+  } | null;
   targets: StorageTarget[];
   strategy: 'replicate' | 'fallback';
   pushLog: (level: ExecutionLogLevel, message: string, logToTerminal?: boolean) => void;
@@ -333,6 +345,18 @@ async function uploadBackupArtifacts(params: {
 
       params.pushLog('info', `Enviando manifest para '${storage.name}'`, true);
       const savedManifest = await adapter.upload(params.manifestFile, params.manifestRelativePath);
+
+      if (params.referencedFiles) {
+        params.pushLog('info', `Enviando manifest de arquivos referenciados para '${storage.name}'`, true);
+        await adapter.upload(
+          params.referencedFiles.manifestFile,
+          params.referencedFiles.manifestRelativePath,
+        );
+
+        for (const referencedFile of params.referencedFiles.files) {
+          await adapter.upload(referencedFile.local_file, referencedFile.relative_path);
+        }
+      }
 
       successes.push({
         storage_location_id: storage.id,
@@ -411,6 +435,7 @@ async function processExecution(executionId: string) {
   const startedAt = Date.now();
   let tempDir: string | null = null;
   let artifactFilesReady = false;
+  let referencedFilesCollection: ReferencedFilesCollection | null = null;
   let notificationEntityType: 'backup_job' | 'system' = 'system';
   let notificationEntityId = 'system';
   let notificationJobId: string | null = null;
@@ -577,6 +602,30 @@ async function processExecution(executionId: string) {
       : 1;
     runtimeMetadata.checksum = `sha256:${checksum}`;
 
+    const referencedFilesConfig = parseReferencedFilesConfig(execution.job.backupOptions);
+    if (referencedFilesConfig) {
+      if (dsType !== 'postgres' && dsType !== 'mysql' && dsType !== 'mariadb') {
+        pushLog(
+          'warn',
+          `Datasource '${execution.datasource.type}' nao suporta query para arquivos referenciados; recurso ignorado`,
+          true,
+        );
+        runtimeMetadata.referenced_files = {
+          enabled: true,
+          skipped: true,
+          reason: 'datasource_type_not_supported',
+        };
+      } else {
+        referencedFilesCollection = await collectReferencedFilesArtifacts({
+          config: referencedFilesConfig,
+          tempDir,
+          runQuery: async (sql) => executeDatasourceQuery(execution.datasourceId, sql),
+          pushLog,
+        });
+        runtimeMetadata.referenced_files = referencedFilesCollection.summary;
+      }
+    }
+
     const datasourceFolder = resolveDatabaseFolderName(execution.datasource);
     const executionFolder = formatExecutionFolder(new Date(execution.createdAt));
     const baseRelativeFolder = path.posix.join(datasourceFolder, executionFolder);
@@ -601,6 +650,7 @@ async function processExecution(executionId: string) {
       compression_ratio: runtimeMetadata.compression_ratio,
       checksum: `sha256:${checksum}`,
       chunks: [{ number: 1, file: backupFilename, checksum: `sha256:${checksum}` }],
+      referenced_files: referencedFilesCollection?.summary ?? null,
       metadata: {
         datasource_latency_ms: dsTest.latency_ms,
       },
@@ -617,11 +667,15 @@ async function processExecution(executionId: string) {
       manifest_file: manifestFile,
       backup_filename: backupFilename,
       compression_extension: compressed.compressionExtension,
+      referenced_files_manifest_file: referencedFilesCollection?.manifestFilePath,
     } as unknown as Prisma.InputJsonValue;
     runtimeMetadata.upload_context = {
       base_relative_folder: baseRelativeFolder,
       backup_relative_path: backupRelativePath,
       manifest_relative_path: manifestRelativePath,
+      referenced_files_base_relative_path: referencedFilesCollection
+        ? path.posix.join(baseRelativeFolder, 'referenced-files')
+        : undefined,
       strategy,
       targets,
     } as unknown as Prisma.InputJsonValue;
@@ -633,6 +687,16 @@ async function processExecution(executionId: string) {
       manifestFile,
       backupRelativePath,
       manifestRelativePath,
+      referencedFiles: referencedFilesCollection
+        ? {
+          manifestFile: referencedFilesCollection.manifestFilePath,
+          manifestRelativePath: path.posix.join(baseRelativeFolder, referencedFilesCollection.uploadManifestRelativePath),
+          files: referencedFilesCollection.uploadFiles.map((item) => ({
+            local_file: item.local_file,
+            relative_path: path.posix.join(baseRelativeFolder, item.relative_path),
+          })),
+        }
+        : null,
       targets,
       strategy,
       pushLog,
@@ -670,6 +734,7 @@ async function processExecution(executionId: string) {
           durationSeconds,
           sizeBytes: BigInt(rawStat.size),
           compressedSizeBytes: BigInt(compressed.compressedSizeBytes),
+          filesCount: referencedFilesCollection?.summary.processed_files ?? null,
           backupPath: primarySuccess.backup_path,
           metadata: runtimeMetadata as unknown as Prisma.InputJsonValue,
         },
@@ -897,9 +962,49 @@ export async function retryExecutionUploadNow(executionId: string) {
 
     const compressedFilePath = String(artifacts.compressed_file);
     const manifestFilePath = String(artifacts.manifest_file);
+    const referencedFilesManifestPath = artifacts.referenced_files_manifest_file
+      ? String(artifacts.referenced_files_manifest_file)
+      : null;
+    const referencedFilesBaseRelativePath = uploadContext.referenced_files_base_relative_path
+      ? String(uploadContext.referenced_files_base_relative_path)
+      : null;
 
     await fs.access(compressedFilePath);
     await fs.access(manifestFilePath);
+
+    let referencedFilesUpload: {
+      manifestFile: string;
+      manifestRelativePath: string;
+      files: Array<{ local_file: string; relative_path: string }>;
+    } | null = null;
+
+    if (referencedFilesManifestPath && referencedFilesBaseRelativePath) {
+      await fs.access(referencedFilesManifestPath);
+      const raw = await fs.readFile(referencedFilesManifestPath, 'utf8');
+      const parsed = JSON.parse(raw) as {
+        files?: Array<{ artifact_relative_path?: string }>;
+      };
+      const files = Array.isArray(parsed.files) ? parsed.files : [];
+      const manifestDir = path.dirname(referencedFilesManifestPath);
+      const uploadFiles: Array<{ local_file: string; relative_path: string }> = [];
+
+      for (const file of files) {
+        const artifactRelativePath = String(file.artifact_relative_path ?? '').trim();
+        if (!artifactRelativePath) continue;
+        const localFile = path.join(manifestDir, artifactRelativePath.replaceAll('/', path.sep));
+        await fs.access(localFile);
+        uploadFiles.push({
+          local_file: localFile,
+          relative_path: path.posix.join(referencedFilesBaseRelativePath, artifactRelativePath),
+        });
+      }
+
+      referencedFilesUpload = {
+        manifestFile: referencedFilesManifestPath,
+        manifestRelativePath: path.posix.join(referencedFilesBaseRelativePath, 'manifest.json'),
+        files: uploadFiles,
+      };
+    }
 
     pushLog('info', 'Retomando envio do dump ja gerado', true);
     pushLog('info', `Estrategia de storage '${strategy}' com ${targets.length} destino(s)`, true);
@@ -909,6 +1014,7 @@ export async function retryExecutionUploadNow(executionId: string) {
       manifestFile: manifestFilePath,
       backupRelativePath: String(uploadContext.backup_relative_path),
       manifestRelativePath: String(uploadContext.manifest_relative_path),
+      referencedFiles: referencedFilesUpload,
       targets,
       strategy,
       pushLog,

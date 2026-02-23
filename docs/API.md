@@ -94,6 +94,17 @@ Campos usados hoje:
 - `compression`: `gzip | zstd | lz4 | none`
 - `storage_strategy`: `fallback | replicate`
 - `storage_targets`: lista ordenada de storages
+- `referenced_files` (opcional): copia arquivos referenciados por query SQL
+  - `enabled`: boolean
+  - `source_type`: `local | ssh` (default `local`)
+  - `source` (quando `source_type=ssh`):
+    - `host`, `port`, `username`
+    - autenticacao por `password` ou `private_key`
+  - `discovery_query`: SQL que retorna caminhos de arquivos
+  - `path_column` (opcional): nome da coluna com o caminho (se omitido, usa primeira coluna string)
+  - `base_directories`: lista de diretorios permitidos para resolucao/copia
+  - `missing_file_policy`: `warn | fail`
+  - `max_files`: limite maximo de arquivos por execucao
 
 ## Executions
 

@@ -39,6 +39,22 @@ interface JobPayload {
       storage_location_id: string;
       order: number;
     }>;
+    referenced_files?: {
+      enabled: boolean;
+      discovery_query?: string;
+      path_column?: string;
+      base_directories?: string[];
+      missing_file_policy?: 'warn' | 'fail';
+      max_files?: number;
+      source_type?: 'local' | 'ssh';
+      source?: {
+        host?: string;
+        port?: number;
+        username?: string;
+        password?: string;
+        private_key?: string;
+      };
+    };
   };
 }
 
@@ -159,6 +175,47 @@ export default function JobFormModal({
   const [compression, setCompression] = useState<'gzip' | 'zstd' | 'lz4' | 'none'>(
     job?.backup_options?.compression ?? 'gzip',
   );
+  const referencedFilesConfig = job?.backup_options?.referenced_files;
+  const [includeReferencedFiles, setIncludeReferencedFiles] = useState(
+    Boolean(referencedFilesConfig?.enabled),
+  );
+  const [referencedFilesQuery, setReferencedFilesQuery] = useState(
+    referencedFilesConfig?.discovery_query ?? '',
+  );
+  const [referencedFilesPathColumn, setReferencedFilesPathColumn] = useState(
+    referencedFilesConfig?.path_column ?? '',
+  );
+  const [referencedFilesBaseDirs, setReferencedFilesBaseDirs] = useState(
+    (referencedFilesConfig?.base_directories ?? []).join('\n'),
+  );
+  const [referencedFilesMissingPolicy, setReferencedFilesMissingPolicy] = useState<'warn' | 'fail'>(
+    referencedFilesConfig?.missing_file_policy ?? 'warn',
+  );
+  const [referencedFilesMax, setReferencedFilesMax] = useState(
+    Number.isFinite(Number(referencedFilesConfig?.max_files))
+      ? Math.max(1, Number(referencedFilesConfig?.max_files))
+      : 2000,
+  );
+  const [referencedFilesSourceType, setReferencedFilesSourceType] = useState<'local' | 'ssh'>(
+    referencedFilesConfig?.source_type ?? 'local',
+  );
+  const [referencedFilesSshHost, setReferencedFilesSshHost] = useState(
+    referencedFilesConfig?.source?.host ?? '',
+  );
+  const [referencedFilesSshPort, setReferencedFilesSshPort] = useState(
+    Number.isFinite(Number(referencedFilesConfig?.source?.port))
+      ? Math.max(1, Number(referencedFilesConfig?.source?.port))
+      : 22,
+  );
+  const [referencedFilesSshUser, setReferencedFilesSshUser] = useState(
+    referencedFilesConfig?.source?.username ?? '',
+  );
+  const [referencedFilesSshPassword, setReferencedFilesSshPassword] = useState(
+    referencedFilesConfig?.source?.password ?? '',
+  );
+  const [referencedFilesSshPrivateKey, setReferencedFilesSshPrivateKey] = useState(
+    referencedFilesConfig?.source?.private_key ?? '',
+  );
 
   const isValid = useMemo(() => {
     if (!name.trim()) return false;
@@ -167,8 +224,39 @@ export default function JobFormModal({
     if (frequency === 'weekly' && daysOfWeek.length === 0) return false;
     if (frequency === 'monthly' && (dayOfMonth < 1 || dayOfMonth > 28)) return false;
     if (!Number.isFinite(maxBackups) || maxBackups < 1) return false;
+    if (includeReferencedFiles) {
+      if (!referencedFilesQuery.trim()) return false;
+      const baseDirs = referencedFilesBaseDirs
+        .split('\n')
+        .map((line) => line.trim())
+        .filter((line) => line.length > 0);
+      if (baseDirs.length === 0) return false;
+      if (!Number.isFinite(referencedFilesMax) || referencedFilesMax < 1) return false;
+      if (referencedFilesSourceType === 'ssh') {
+        if (!referencedFilesSshHost.trim()) return false;
+        if (!referencedFilesSshUser.trim()) return false;
+        if (!referencedFilesSshPassword.trim() && !referencedFilesSshPrivateKey.trim()) return false;
+      }
+    }
     return true;
-  }, [name, datasourceId, storageTargets.length, frequency, daysOfWeek, dayOfMonth, maxBackups]);
+  }, [
+    name,
+    datasourceId,
+    storageTargets.length,
+    frequency,
+    daysOfWeek,
+    dayOfMonth,
+    maxBackups,
+    includeReferencedFiles,
+    referencedFilesQuery,
+    referencedFilesBaseDirs,
+    referencedFilesMax,
+    referencedFilesSourceType,
+    referencedFilesSshHost,
+    referencedFilesSshUser,
+    referencedFilesSshPassword,
+    referencedFilesSshPrivateKey,
+  ]);
 
   function addStorageTarget() {
     if (!storageToAddId) return;
@@ -198,6 +286,10 @@ export default function JobFormModal({
 
   async function handleSave() {
     if (!isValid) return;
+    const baseDirectories = referencedFilesBaseDirs
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0);
 
     const payload: JobPayload = {
       name: name.trim(),
@@ -218,6 +310,26 @@ export default function JobFormModal({
           storage_location_id: t.storage_location_id,
           order: index + 1,
         })),
+        referenced_files: includeReferencedFiles
+          ? {
+            enabled: true,
+            discovery_query: referencedFilesQuery.trim(),
+            ...(referencedFilesPathColumn.trim() && { path_column: referencedFilesPathColumn.trim() }),
+            base_directories: baseDirectories,
+            missing_file_policy: referencedFilesMissingPolicy,
+            max_files: Math.max(1, Math.trunc(referencedFilesMax)),
+            source_type: referencedFilesSourceType,
+            ...(referencedFilesSourceType === 'ssh' && {
+              source: {
+                host: referencedFilesSshHost.trim(),
+                port: Math.max(1, Math.trunc(referencedFilesSshPort || 22)),
+                username: referencedFilesSshUser.trim(),
+                ...(referencedFilesSshPassword.trim() && { password: referencedFilesSshPassword }),
+                ...(referencedFilesSshPrivateKey.trim() && { private_key: referencedFilesSshPrivateKey }),
+              },
+            }),
+          }
+          : { enabled: false },
       },
     };
 
@@ -495,6 +607,169 @@ export default function JobFormModal({
             <option value="none">none</option>
           </select>
         </div>
+        <label className={styles.checkLabel}>
+          <input
+            type="checkbox"
+            checked={includeReferencedFiles}
+            onChange={(e) => setIncludeReferencedFiles(e.target.checked)}
+          />
+          <span>Incluir arquivos referenciados pelo banco</span>
+        </label>
+
+        {includeReferencedFiles && (
+          <>
+            <div className={styles.field}>
+              <label className={styles.label}>Origem dos arquivos</label>
+              <div className={styles.freqTabs}>
+                <button
+                  type="button"
+                  className={`${styles.freqTab} ${referencedFilesSourceType === 'local' ? styles.freqTabActive : ''}`}
+                  onClick={() => setReferencedFilesSourceType('local')}
+                >
+                  Local (mesmo servidor)
+                </button>
+                <button
+                  type="button"
+                  className={`${styles.freqTab} ${referencedFilesSourceType === 'ssh' ? styles.freqTabActive : ''}`}
+                  onClick={() => setReferencedFilesSourceType('ssh')}
+                >
+                  Remoto via SSH/SFTP
+                </button>
+              </div>
+            </div>
+
+            {referencedFilesSourceType === 'ssh' && (
+              <>
+                <div className={styles.field}>
+                  <label className={styles.label}>Host SSH *</label>
+                  <input
+                    className={styles.input}
+                    type="text"
+                    placeholder="Ex: 10.0.0.15"
+                    value={referencedFilesSshHost}
+                    onChange={(e) => setReferencedFilesSshHost(e.target.value)}
+                  />
+                </div>
+
+                <div className={styles.field}>
+                  <label className={styles.label}>Porta SSH</label>
+                  <input
+                    className={`${styles.input} ${styles.inputSm}`}
+                    type="number"
+                    min={1}
+                    max={65535}
+                    value={referencedFilesSshPort}
+                    onChange={(e) => {
+                      const parsed = Number(e.target.value);
+                      setReferencedFilesSshPort(Number.isFinite(parsed) ? Math.max(1, Math.trunc(parsed)) : 22);
+                    }}
+                  />
+                </div>
+
+                <div className={styles.field}>
+                  <label className={styles.label}>Usuario SSH *</label>
+                  <input
+                    className={styles.input}
+                    type="text"
+                    placeholder="Ex: ubuntu"
+                    value={referencedFilesSshUser}
+                    onChange={(e) => setReferencedFilesSshUser(e.target.value)}
+                  />
+                </div>
+
+                <div className={styles.field}>
+                  <label className={styles.label}>Senha SSH (ou chave privada abaixo)</label>
+                  <input
+                    className={styles.input}
+                    type="password"
+                    placeholder="Opcional se usar chave privada"
+                    value={referencedFilesSshPassword}
+                    onChange={(e) => setReferencedFilesSshPassword(e.target.value)}
+                  />
+                </div>
+
+                <div className={styles.field}>
+                  <label className={styles.label}>Chave privada SSH (ou senha acima)</label>
+                  <textarea
+                    className={styles.textarea}
+                    placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"
+                    value={referencedFilesSshPrivateKey}
+                    onChange={(e) => setReferencedFilesSshPrivateKey(e.target.value)}
+                    rows={4}
+                  />
+                </div>
+              </>
+            )}
+
+            <div className={styles.field}>
+              <label className={styles.label}>Query SQL para listar caminhos dos arquivos *</label>
+              <textarea
+                className={styles.textarea}
+                placeholder="Ex: SELECT file_path FROM attachments WHERE file_path IS NOT NULL"
+                value={referencedFilesQuery}
+                onChange={(e) => setReferencedFilesQuery(e.target.value)}
+                rows={4}
+              />
+            </div>
+
+            <div className={styles.field}>
+              <label className={styles.label}>Nome da coluna com caminho (opcional)</label>
+              <input
+                className={styles.input}
+                type="text"
+                placeholder="Ex: file_path"
+                value={referencedFilesPathColumn}
+                onChange={(e) => setReferencedFilesPathColumn(e.target.value)}
+              />
+            </div>
+
+            <div className={styles.field}>
+              <label className={styles.label}>Diretorios base permitidos (1 por linha) *</label>
+              <textarea
+                className={styles.textarea}
+                placeholder={'Ex:\nC:\\dados\\anexos\nD:\\storage\\uploads'}
+                value={referencedFilesBaseDirs}
+                onChange={(e) => setReferencedFilesBaseDirs(e.target.value)}
+                rows={4}
+              />
+            </div>
+
+            <div className={styles.field}>
+              <label className={styles.label}>Politica para arquivo faltante</label>
+              <div className={styles.freqTabs}>
+                <button
+                  type="button"
+                  className={`${styles.freqTab} ${referencedFilesMissingPolicy === 'warn' ? styles.freqTabActive : ''}`}
+                  onClick={() => setReferencedFilesMissingPolicy('warn')}
+                >
+                  Avisar e continuar
+                </button>
+                <button
+                  type="button"
+                  className={`${styles.freqTab} ${referencedFilesMissingPolicy === 'fail' ? styles.freqTabActive : ''}`}
+                  onClick={() => setReferencedFilesMissingPolicy('fail')}
+                >
+                  Falhar backup
+                </button>
+              </div>
+            </div>
+
+            <div className={styles.field}>
+              <label className={styles.label}>Limite maximo de arquivos</label>
+              <input
+                className={`${styles.input} ${styles.inputSm}`}
+                type="number"
+                min={1}
+                max={20000}
+                value={referencedFilesMax}
+                onChange={(e) => {
+                  const parsed = Number(e.target.value);
+                  setReferencedFilesMax(Number.isFinite(parsed) ? Math.max(1, Math.trunc(parsed)) : 1);
+                }}
+              />
+            </div>
+          </>
+        )}
       </Section>
     </Modal>
   );

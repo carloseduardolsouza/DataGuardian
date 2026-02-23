@@ -179,6 +179,22 @@ export interface ApiBackupJob {
       storage_location_id: string;
       order: number;
     }>;
+    referenced_files?: {
+      enabled: boolean;
+      discovery_query?: string;
+      path_column?: string;
+      base_directories?: string[];
+      missing_file_policy?: 'warn' | 'fail';
+      max_files?: number;
+      source_type?: 'local' | 'ssh';
+      source?: {
+        host?: string;
+        port?: number;
+        username?: string;
+        password?: string;
+        private_key?: string;
+      };
+    };
   };
   storage_targets?: Array<{
     storage_location_id: string;
@@ -971,6 +987,22 @@ export const backupJobsApi = {
         storage_location_id: string;
         order: number;
       }>;
+      referenced_files?: {
+        enabled: boolean;
+        discovery_query?: string;
+        path_column?: string;
+        base_directories?: string[];
+        missing_file_policy?: 'warn' | 'fail';
+        max_files?: number;
+        source_type?: 'local' | 'ssh';
+        source?: {
+          host?: string;
+          port?: number;
+          username?: string;
+          password?: string;
+          private_key?: string;
+        };
+      };
     };
   }) =>
     request<ApiBackupJob>('/backup-jobs', {
@@ -1005,6 +1037,22 @@ export const backupJobsApi = {
         storage_location_id: string;
         order: number;
       }>;
+      referenced_files?: {
+        enabled: boolean;
+        discovery_query?: string;
+        path_column?: string;
+        base_directories?: string[];
+        missing_file_policy?: 'warn' | 'fail';
+        max_files?: number;
+        source_type?: 'local' | 'ssh';
+        source?: {
+          host?: string;
+          port?: number;
+          username?: string;
+          password?: string;
+          private_key?: string;
+        };
+      };
     };
   }) =>
     request<ApiBackupJob>(`/backup-jobs/${id}`, {

@@ -50,6 +50,51 @@ export const backupOptionsSchema = z.object({
       order: z.number().int().min(1),
     }),
   ).optional(),
+  referenced_files: z.object({
+    enabled: z.boolean().default(false),
+    discovery_query: z.string().min(1).optional(),
+    path_column: z.string().min(1).max(120).optional(),
+    base_directories: z.array(z.string().min(1)).optional(),
+    missing_file_policy: z.enum(['warn', 'fail']).optional(),
+    max_files: z.number().int().min(1).max(20000).optional(),
+    source_type: z.enum(['local', 'ssh']).optional(),
+    source: z.object({
+      host: z.string().min(1).optional(),
+      port: z.number().int().min(1).max(65535).optional(),
+      username: z.string().min(1).optional(),
+      password: z.string().min(1).optional(),
+      private_key: z.string().min(1).optional(),
+    }).optional(),
+  }).optional(),
+}).superRefine((value, ctx) => {
+  if (!value.referenced_files?.enabled) return;
+
+  if (!value.referenced_files.discovery_query) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['referenced_files', 'discovery_query'],
+      message: 'discovery_query e obrigatorio quando referenced_files.enabled=true',
+    });
+  }
+
+  if (!Array.isArray(value.referenced_files.base_directories) || value.referenced_files.base_directories.length === 0) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['referenced_files', 'base_directories'],
+      message: 'base_directories precisa ter ao menos um diretorio quando referenced_files.enabled=true',
+    });
+  }
+
+  if (value.referenced_files.source_type === 'ssh') {
+    const source = value.referenced_files.source;
+    if (!source?.host || !source?.username || (!source.password && !source.private_key)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['referenced_files', 'source'],
+        message: 'source ssh requer host, username e password ou private_key',
+      });
+    }
+  }
 });
 
 export type BackupOptions = z.infer<typeof backupOptionsSchema>;
