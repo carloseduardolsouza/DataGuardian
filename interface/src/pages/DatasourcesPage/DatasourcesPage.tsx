@@ -1,6 +1,14 @@
-import { useState, useEffect, useCallback } from 'react';
-import { datasourceApi } from '../../services/api';
-import type { ApiDatasource, ApiDatasourceDetail, ApiSchema, ApiSchemaTable } from '../../services/api';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { backupsApi, datasourceApi } from '../../services/api';
+import type {
+  ApiBackupDatasourceSummary,
+  ApiBackupEntry,
+  ApiDatasource,
+  ApiDatasourceDetail,
+  ApiSchema,
+  ApiSchemaTable,
+} from '../../services/api';
 import { useResizableWidth } from '../../hooks/useResizableWidth';
 import DatasourceList from './DatasourceList';
 import AddDatasourceModal from './AddDatasourceModal';
@@ -8,6 +16,7 @@ import CreateTableModal from './CreateTableModal';
 import ObjectExplorer from './ObjectExplorer';
 import MainPanel from './MainPanel';
 import ConfirmDialog from '../../ui/dialogs/ConfirmDialog/ConfirmDialog';
+import Modal from '../../ui/overlay/Modal/Modal';
 import {
   FolderIcon,
   DatabaseIcon,
@@ -15,8 +24,11 @@ import {
   TrashIcon,
   PlugIcon,
   SpinnerIcon,
+  PlayFilledIcon,
+  ExportIcon,
 } from '../../ui/icons/Icons';
 import { DS_ABBR } from '../../constants';
+import { ROUTE_PATHS } from '../../ui/navigation/Sidebar/Sidebar';
 import styles from './DatasourcesPage.module.css';
 
 const STATUS_LABELS: Record<string, string> = {
@@ -37,6 +49,30 @@ function formatDate(iso: string) {
     hour: '2-digit',
     minute: '2-digit',
   });
+}
+
+function formatBytes(value: number | string | null) {
+  if (value === null) return '-';
+  const bytes = typeof value === 'string' ? Number(value) : value;
+  if (!Number.isFinite(bytes) || bytes <= 0) return '-';
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const index = Math.min(units.length - 1, Math.floor(Math.log(bytes) / Math.log(1024)));
+  const amount = bytes / 1024 ** index;
+  return `${amount.toFixed(index === 0 ? 0 : 1)} ${units[index]}`;
+}
+
+function storageStatusLabel(status: 'available' | 'missing' | 'unreachable' | 'unknown') {
+  if (status === 'available') return 'Disponivel';
+  if (status === 'missing') return 'Arquivo ausente';
+  if (status === 'unreachable') return 'Inacessivel';
+  return 'Desconhecido';
+}
+
+function storageStatusClass(status: 'available' | 'missing' | 'unreachable' | 'unknown') {
+  if (status === 'available') return styles.storageStatusSuccess;
+  if (status === 'missing') return styles.storageStatusWarning;
+  if (status === 'unreachable') return styles.storageStatusDanger;
+  return styles.storageStatusMuted;
 }
 
 function isFilledString(value: unknown): value is string {
@@ -256,6 +292,7 @@ function DatasourceDetail({
 }
 
 export default function DatasourcesPage() {
+  const navigate = useNavigate();
   const [isDesktop, setIsDesktop] = useState(() => window.innerWidth > 1200);
   const [datasources, setDatasources] = useState<ApiDatasource[]>([]);
   const [loading, setLoading] = useState(true);
@@ -279,6 +316,28 @@ export default function DatasourcesPage() {
   const [loadingSchema, setLoadingSchema] = useState(false);
   const [schemaError, setSchemaError] = useState<string | null>(null);
   const [selectedTable, setSelectedTable] = useState<ApiSchemaTable | null>(null);
+
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; datasource: ApiDatasource } | null>(null);
+  const [restoreTargetDatasource, setRestoreTargetDatasource] = useState<ApiDatasource | null>(null);
+  const [importTargetDatasource, setImportTargetDatasource] = useState<ApiDatasource | null>(null);
+  const [backupSources, setBackupSources] = useState<ApiBackupDatasourceSummary[]>([]);
+  const [selectedBackupSourceId, setSelectedBackupSourceId] = useState<string | null>(null);
+  const [availableBackups, setAvailableBackups] = useState<ApiBackupEntry[]>([]);
+  const [loadingBackupSources, setLoadingBackupSources] = useState(false);
+  const [loadingBackups, setLoadingBackups] = useState(false);
+  const [selectedBackupExecutionId, setSelectedBackupExecutionId] = useState<string | null>(null);
+  const [selectedStorageByExecution, setSelectedStorageByExecution] = useState<Record<string, string>>({});
+  const [restoreVerificationMode, setRestoreVerificationMode] = useState(false);
+  const [restoreKeepVerificationDatabase, setRestoreKeepVerificationDatabase] = useState(false);
+  const [restoreDropExisting, setRestoreDropExisting] = useState(true);
+  const [restoreConfirmationPhrase, setRestoreConfirmationPhrase] = useState('');
+  const [restoreSubmitting, setRestoreSubmitting] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importVerificationMode, setImportVerificationMode] = useState(false);
+  const [importKeepVerificationDatabase, setImportKeepVerificationDatabase] = useState(false);
+  const [importDropExisting, setImportDropExisting] = useState(true);
+  const [importConfirmationPhrase, setImportConfirmationPhrase] = useState('');
+  const [importSubmitting, setImportSubmitting] = useState(false);
   const listPane = useResizableWidth({
     storageKey: 'dg-ds-left-width',
     defaultWidth: 260,
@@ -297,6 +356,14 @@ export default function DatasourcesPage() {
     minWidth: 240,
     maxWidth: 440,
   });
+  const restoreRequiredPhrase = restoreVerificationMode ? 'VERIFICAR RESTORE' : 'RESTAURAR';
+  const importRequiredPhrase = importVerificationMode ? 'VERIFICAR RESTORE' : 'RESTAURAR';
+
+  const filteredBackupSources = useMemo(() => {
+    if (!restoreTargetDatasource) return [] as ApiBackupDatasourceSummary[];
+    const sameType = backupSources.filter((item) => item.datasource_type === restoreTargetDatasource.type);
+    return sameType;
+  }, [backupSources, restoreTargetDatasource]);
 
   const loadDatasources = useCallback(async () => {
     try {
@@ -320,6 +387,64 @@ export default function DatasourcesPage() {
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
   }, []);
+
+  useEffect(() => {
+    if (!contextMenu) return undefined;
+    const close = () => setContextMenu(null);
+    window.addEventListener('click', close);
+    window.addEventListener('scroll', close, true);
+    return () => {
+      window.removeEventListener('click', close);
+      window.removeEventListener('scroll', close, true);
+    };
+  }, [contextMenu]);
+
+  useEffect(() => {
+    if (!restoreTargetDatasource) return;
+    const run = async () => {
+      try {
+        setLoadingBackupSources(true);
+        const response = await backupsApi.listDatasources();
+        setBackupSources(response.data);
+        const typed = response.data.filter((item) => item.datasource_type === restoreTargetDatasource.type);
+        const preferred = typed.find((item) => item.datasource_id !== restoreTargetDatasource.id) ?? typed[0] ?? null;
+        setSelectedBackupSourceId(preferred?.datasource_id ?? null);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Erro ao carregar origens de backup');
+        setBackupSources([]);
+        setSelectedBackupSourceId(null);
+      } finally {
+        setLoadingBackupSources(false);
+      }
+    };
+    void run();
+  }, [restoreTargetDatasource]);
+
+  useEffect(() => {
+    if (!selectedBackupSourceId) {
+      setAvailableBackups([]);
+      setSelectedBackupExecutionId(null);
+      setSelectedStorageByExecution({});
+      return;
+    }
+    const run = async () => {
+      try {
+        setLoadingBackups(true);
+        const response = await backupsApi.listByDatasource(selectedBackupSourceId);
+        setAvailableBackups(response.backups);
+        setSelectedBackupExecutionId(response.backups[0]?.execution_id ?? null);
+        setSelectedStorageByExecution({});
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Erro ao carregar backups da origem selecionada');
+        setAvailableBackups([]);
+        setSelectedBackupExecutionId(null);
+        setSelectedStorageByExecution({});
+      } finally {
+        setLoadingBackups(false);
+      }
+    };
+    void run();
+  }, [selectedBackupSourceId]);
 
   const loadSchema = useCallback(async (
     ds: ApiDatasource,
@@ -477,6 +602,126 @@ export default function DatasourcesPage() {
     setTableModalSchema(schemaName ?? null);
   }, []);
 
+  const closeRestoreModal = () => {
+    if (restoreSubmitting) return;
+    setRestoreTargetDatasource(null);
+    setBackupSources([]);
+    setSelectedBackupSourceId(null);
+    setAvailableBackups([]);
+    setSelectedBackupExecutionId(null);
+    setSelectedStorageByExecution({});
+    setRestoreVerificationMode(false);
+    setRestoreKeepVerificationDatabase(false);
+    setRestoreDropExisting(true);
+    setRestoreConfirmationPhrase('');
+  };
+
+  const closeImportModal = () => {
+    if (importSubmitting) return;
+    setImportTargetDatasource(null);
+    setImportFile(null);
+    setImportVerificationMode(false);
+    setImportKeepVerificationDatabase(false);
+    setImportDropExisting(true);
+    setImportConfirmationPhrase('');
+  };
+
+  const handleOpenRestoreFromBackup = (datasource: ApiDatasource) => {
+    setContextMenu(null);
+    setError(null);
+    setRestoreTargetDatasource(datasource);
+    setRestoreVerificationMode(false);
+    setRestoreKeepVerificationDatabase(false);
+    setRestoreDropExisting(true);
+    setRestoreConfirmationPhrase('');
+  };
+
+  const handleOpenImportRestore = (datasource: ApiDatasource) => {
+    setContextMenu(null);
+    setError(null);
+    setImportTargetDatasource(datasource);
+    setImportFile(null);
+    setImportVerificationMode(false);
+    setImportKeepVerificationDatabase(false);
+    setImportDropExisting(true);
+    setImportConfirmationPhrase('');
+  };
+
+  const selectedBackup = useMemo(
+    () => availableBackups.find((item) => item.execution_id === selectedBackupExecutionId) ?? null,
+    [availableBackups, selectedBackupExecutionId],
+  );
+
+  const handleRestoreFromBackup = async () => {
+    if (!restoreTargetDatasource) return;
+    if (!selectedBackupExecutionId) {
+      setError('Selecione um backup para restaurar.');
+      return;
+    }
+
+    if (restoreConfirmationPhrase.trim() !== restoreRequiredPhrase) {
+      setError(`Confirmacao invalida. Digite '${restoreRequiredPhrase}' para continuar.`);
+      return;
+    }
+
+    const storageLocationId = selectedStorageByExecution[selectedBackupExecutionId] || undefined;
+
+    try {
+      setRestoreSubmitting(true);
+      setError(null);
+      const response = await backupsApi.restore(selectedBackupExecutionId, {
+        storage_location_id: storageLocationId,
+        target_datasource_id: restoreTargetDatasource.id,
+        drop_existing: restoreDropExisting,
+        verification_mode: restoreVerificationMode,
+        keep_verification_database: restoreKeepVerificationDatabase,
+        confirmation_phrase: restoreConfirmationPhrase.trim(),
+      });
+      closeRestoreModal();
+      navigate(ROUTE_PATHS.executions, {
+        state: { openExecutionId: response.execution_id },
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao iniciar restore');
+    } finally {
+      setRestoreSubmitting(false);
+    }
+  };
+
+  const handleImportRestore = async () => {
+    if (!importTargetDatasource) return;
+    if (!importFile) {
+      setError('Selecione um arquivo de backup para importar.');
+      return;
+    }
+
+    if (importConfirmationPhrase.trim() !== importRequiredPhrase) {
+      setError(`Confirmacao invalida. Digite '${importRequiredPhrase}' para continuar.`);
+      return;
+    }
+
+    try {
+      setImportSubmitting(true);
+      setError(null);
+      const response = await backupsApi.importAndRestore({
+        file: importFile,
+        target_datasource_id: importTargetDatasource.id,
+        drop_existing: importDropExisting,
+        verification_mode: importVerificationMode,
+        keep_verification_database: importKeepVerificationDatabase,
+        confirmation_phrase: importConfirmationPhrase.trim(),
+      });
+      closeImportModal();
+      navigate(ROUTE_PATHS.executions, {
+        state: { openExecutionId: response.execution_id },
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao importar arquivo e iniciar restore');
+    } finally {
+      setImportSubmitting(false);
+    }
+  };
+
   return (
     <div className={styles.layout}>
       <div className={styles.leftPanel} style={isDesktop ? { width: listPane.width } : undefined}>
@@ -484,6 +729,9 @@ export default function DatasourcesPage() {
           datasources={datasources}
           selectedId={selectedDs?.id ?? null}
           onSelect={handleSelect}
+          onContextMenu={(datasource, x, y) => {
+            setContextMenu({ datasource, x, y });
+          }}
           onAddNew={handleAddNew}
           onEdit={handleEdit}
           onDelete={handleDelete}
@@ -617,6 +865,290 @@ export default function DatasourcesPage() {
         }}
         onConfirm={() => void confirmDelete()}
       />
+
+      {contextMenu && (
+        <div
+          className={styles.contextMenu}
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+          onClick={(event) => event.stopPropagation()}
+        >
+          <button
+            className={styles.contextMenuItem}
+            onClick={() => handleOpenRestoreFromBackup(contextMenu.datasource)}
+          >
+            <PlayFilledIcon width={14} height={14} />
+            Restaurar de backup
+          </button>
+          <button
+            className={styles.contextMenuItem}
+            onClick={() => handleOpenImportRestore(contextMenu.datasource)}
+          >
+            <ExportIcon width={14} height={14} />
+            Importar arquivo
+          </button>
+        </div>
+      )}
+
+      {restoreTargetDatasource && (
+        <Modal
+          title={`Restaurar no datasource: ${restoreTargetDatasource.name}`}
+          subtitle="Selecione a origem do backup e confirme a operacao."
+          onClose={closeRestoreModal}
+          size="lg"
+          footer={(
+            <>
+              <button className={styles.secondaryBtn} onClick={closeRestoreModal} disabled={restoreSubmitting}>
+                Cancelar
+              </button>
+              <button
+                className={styles.primaryBtn}
+                onClick={() => void handleRestoreFromBackup()}
+                disabled={restoreSubmitting || !selectedBackupExecutionId}
+              >
+                {restoreSubmitting ? (
+                  <>
+                    <SpinnerIcon width={14} height={14} />
+                    Iniciando...
+                  </>
+                ) : (
+                  <>
+                    <PlayFilledIcon width={14} height={14} />
+                    Iniciar restore
+                  </>
+                )}
+              </button>
+            </>
+          )}
+        >
+          <div className={styles.modalContent}>
+            {error && <p className={styles.errorInline}>{error}</p>}
+
+            <label className={styles.field}>
+              ORIGEM DOS BACKUPS
+              <select
+                className={styles.selectInput}
+                value={selectedBackupSourceId ?? ''}
+                onChange={(event) => setSelectedBackupSourceId(event.target.value || null)}
+                disabled={loadingBackupSources || filteredBackupSources.length === 0}
+              >
+                {filteredBackupSources.length === 0 && (
+                  <option value="">Nenhuma origem com backups disponivel</option>
+                )}
+                {filteredBackupSources.map((item) => (
+                  <option key={item.datasource_id} value={item.datasource_id}>
+                    {item.datasource_name} ({item.datasource_type}) - {item.backups_count} backup{item.backups_count !== 1 ? 's' : ''}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <div className={styles.backupList}>
+              {loadingBackups ? (
+                <div className={styles.stateLine}>
+                  <SpinnerIcon width={14} height={14} />
+                  Carregando backups...
+                </div>
+              ) : availableBackups.length === 0 ? (
+                <div className={styles.stateLine}>Nenhum backup encontrado para a origem selecionada.</div>
+              ) : (
+                availableBackups.map((backup) => {
+                  const availableLocations = backup.storage_locations.filter((item) => item.status === 'available');
+                  const selectedLocation = selectedStorageByExecution[backup.execution_id];
+                  return (
+                    <label
+                      key={backup.execution_id}
+                      className={`${styles.backupCard}${selectedBackupExecutionId === backup.execution_id ? ` ${styles.backupCardSelected}` : ''}`}
+                    >
+                      <div className={styles.backupCardTop}>
+                        <input
+                          type="radio"
+                          name="backupExecution"
+                          checked={selectedBackupExecutionId === backup.execution_id}
+                          onChange={() => setSelectedBackupExecutionId(backup.execution_id)}
+                        />
+                        <div className={styles.backupCardMeta}>
+                          <strong>{backup.job.name}</strong>
+                          <span>
+                            {formatDate(backup.finished_at ?? backup.created_at)} - {formatBytes(backup.compressed_size_bytes ?? backup.size_bytes)}
+                          </span>
+                        </div>
+                      </div>
+                      <div className={styles.backupCardStorageList}>
+                        {backup.storage_locations.map((location) => (
+                          <span key={`${backup.execution_id}:${location.storage_location_id}`} className={`${styles.storageChip} ${storageStatusClass(location.status)}`}>
+                            {location.storage_name} - {storageStatusLabel(location.status)}
+                          </span>
+                        ))}
+                      </div>
+                      <label className={styles.field}>
+                        STORAGE PARA RESTORE (OPCIONAL)
+                        <select
+                          className={styles.selectInput}
+                          value={selectedLocation ?? ''}
+                          onChange={(event) => {
+                            const next = event.target.value;
+                            setSelectedStorageByExecution((prev) => ({
+                              ...prev,
+                              [backup.execution_id]: next,
+                            }));
+                          }}
+                        >
+                          <option value="">Selecionar automaticamente</option>
+                          {availableLocations.map((location) => (
+                            <option key={location.storage_location_id} value={location.storage_location_id}>
+                              {location.storage_name}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    </label>
+                  );
+                })
+              )}
+            </div>
+
+            <label className={styles.checkboxRow}>
+              <input
+                type="checkbox"
+                checked={restoreDropExisting}
+                onChange={(event) => setRestoreDropExisting(event.target.checked)}
+              />
+              Limpar tabelas/objetos existentes antes do restore.
+            </label>
+            <label className={styles.checkboxRow}>
+              <input
+                type="checkbox"
+                checked={restoreVerificationMode}
+                onChange={(event) => {
+                  const checked = event.target.checked;
+                  setRestoreVerificationMode(checked);
+                  if (!checked) setRestoreKeepVerificationDatabase(false);
+                }}
+              />
+              Executar em modo de verificacao (nao sobrescreve banco real).
+            </label>
+            {restoreVerificationMode && (
+              <label className={styles.checkboxRow}>
+                <input
+                  type="checkbox"
+                  checked={restoreKeepVerificationDatabase}
+                  onChange={(event) => setRestoreKeepVerificationDatabase(event.target.checked)}
+                />
+                Manter banco temporario de verificacao apos concluir.
+              </label>
+            )}
+            <p className={styles.warningText}>
+              Acao irreversivel. Confirme digitando <strong>{restoreRequiredPhrase}</strong>.
+            </p>
+            <label className={styles.field}>
+              CONFIRMACAO
+              <input
+                className={styles.confirmInput}
+                placeholder={restoreRequiredPhrase}
+                value={restoreConfirmationPhrase}
+                onChange={(event) => setRestoreConfirmationPhrase(event.target.value)}
+              />
+            </label>
+            {selectedBackup && (
+              <p className={styles.modalHint}>
+                Backup selecionado: {selectedBackup.datasource.name} - {formatDate(selectedBackup.finished_at ?? selectedBackup.created_at)}
+              </p>
+            )}
+          </div>
+        </Modal>
+      )}
+
+      {importTargetDatasource && (
+        <Modal
+          title={`Importar arquivo para restore: ${importTargetDatasource.name}`}
+          subtitle="Envie um arquivo de backup e inicie o restore diretamente neste datasource."
+          onClose={closeImportModal}
+          size="md"
+          footer={(
+            <>
+              <button className={styles.secondaryBtn} onClick={closeImportModal} disabled={importSubmitting}>
+                Cancelar
+              </button>
+              <button
+                className={styles.primaryBtn}
+                onClick={() => void handleImportRestore()}
+                disabled={importSubmitting || !importFile}
+              >
+                {importSubmitting ? (
+                  <>
+                    <SpinnerIcon width={14} height={14} />
+                    Enviando...
+                  </>
+                ) : (
+                  <>
+                    <ExportIcon width={14} height={14} />
+                    Importar e restaurar
+                  </>
+                )}
+              </button>
+            </>
+          )}
+        >
+          <div className={styles.modalContent}>
+            {error && <p className={styles.errorInline}>{error}</p>}
+            <label className={styles.field}>
+              ARQUIVO DE BACKUP
+              <input
+                className={styles.fileInput}
+                type="file"
+                onChange={(event) => setImportFile(event.target.files?.[0] ?? null)}
+              />
+            </label>
+            {importFile && (
+              <p className={styles.modalHint}>
+                Arquivo selecionado: <strong>{importFile.name}</strong> ({formatBytes(importFile.size)})
+              </p>
+            )}
+            <label className={styles.checkboxRow}>
+              <input
+                type="checkbox"
+                checked={importDropExisting}
+                onChange={(event) => setImportDropExisting(event.target.checked)}
+              />
+              Limpar tabelas/objetos existentes antes do restore.
+            </label>
+            <label className={styles.checkboxRow}>
+              <input
+                type="checkbox"
+                checked={importVerificationMode}
+                onChange={(event) => {
+                  const checked = event.target.checked;
+                  setImportVerificationMode(checked);
+                  if (!checked) setImportKeepVerificationDatabase(false);
+                }}
+              />
+              Executar em modo de verificacao (nao sobrescreve banco real).
+            </label>
+            {importVerificationMode && (
+              <label className={styles.checkboxRow}>
+                <input
+                  type="checkbox"
+                  checked={importKeepVerificationDatabase}
+                  onChange={(event) => setImportKeepVerificationDatabase(event.target.checked)}
+                />
+                Manter banco temporario de verificacao apos concluir.
+              </label>
+            )}
+            <p className={styles.warningText}>
+              Acao irreversivel. Confirme digitando <strong>{importRequiredPhrase}</strong>.
+            </p>
+            <label className={styles.field}>
+              CONFIRMACAO
+              <input
+                className={styles.confirmInput}
+                placeholder={importRequiredPhrase}
+                value={importConfirmationPhrase}
+                onChange={(event) => setImportConfirmationPhrase(event.target.value)}
+              />
+            </label>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }

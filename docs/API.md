@@ -108,6 +108,8 @@ Campos usados hoje:
 
 - `GET /api/backups/datasources`
 - `GET /api/backups/datasources/:datasourceId`
+- `GET /api/backups/restore-targets`
+- `GET /api/backups/:executionId/download?storage_location_id=uuid-opcional`
 - `POST /api/backups/:executionId/restore`
 
 `POST /restore` retorna `202` e cria execucao `queued` com `operation=restore` em metadata.
@@ -124,6 +126,7 @@ Campos de body no restore:
 ```json
 {
   "storage_location_id": "uuid-opcional",
+  "target_datasource_id": "uuid-opcional",
   "drop_existing": true,
   "verification_mode": false,
   "keep_verification_database": false,

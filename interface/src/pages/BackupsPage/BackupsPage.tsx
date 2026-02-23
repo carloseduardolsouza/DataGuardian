@@ -6,12 +6,14 @@ import type {
   ApiBackupDatasourceSummary,
   ApiBackupEntry,
   ApiBackupStorageLocation,
+  ApiRestoreTargetDatasource,
 } from '../../services/api';
 import {
   FolderIcon,
   DatabaseIcon,
   SpinnerIcon,
   PlayFilledIcon,
+  ExportIcon,
   SearchIcon,
   CheckCircleIcon,
   AlertTriangleIcon,
@@ -65,6 +67,7 @@ export default function BackupsPage({ permissions = [] }: Props) {
   const [isDesktop, setIsDesktop] = useState(() => window.innerWidth > 980);
   const navigate = useNavigate();
   const [datasources, setDatasources] = useState<ApiBackupDatasourceSummary[]>([]);
+  const [restoreTargets, setRestoreTargets] = useState<ApiRestoreTargetDatasource[]>([]);
   const [loadingDatasources, setLoadingDatasources] = useState(true);
   const [selectedDatasourceId, setSelectedDatasourceId] = useState<string | null>(null);
 
@@ -75,8 +78,10 @@ export default function BackupsPage({ permissions = [] }: Props) {
   const [error, setError] = useState<string | null>(null);
 
   const [restoreRunning, setRestoreRunning] = useState<Record<string, boolean>>({});
+  const [downloadRunning, setDownloadRunning] = useState<Record<string, boolean>>({});
   const [storageSelection, setStorageSelection] = useState<Record<string, string>>({});
   const [restoreTarget, setRestoreTarget] = useState<ApiBackupEntry | null>(null);
+  const [targetDatasourceId, setTargetDatasourceId] = useState('');
   const [verificationMode, setVerificationMode] = useState(false);
   const [keepVerificationDatabase, setKeepVerificationDatabase] = useState(false);
   const [dropExisting, setDropExisting] = useState(true);
@@ -109,6 +114,7 @@ export default function BackupsPage({ permissions = [] }: Props) {
     }, 0);
   }, [backups]);
 
+  const canRestore = permissions.includes(PERMISSIONS.BACKUPS_RESTORE);
   const canRunRestoreVerification = permissions.includes(PERMISSIONS.BACKUPS_RESTORE_VERIFY);
   const requiredPhrase = verificationMode ? 'VERIFICAR RESTORE' : 'RESTAURAR';
 
@@ -133,6 +139,21 @@ export default function BackupsPage({ permissions = [] }: Props) {
     }
   };
 
+  const loadRestoreTargets = async () => {
+    if (!canRestore) {
+      setRestoreTargets([]);
+      return;
+    }
+
+    try {
+      const response = await backupsApi.restoreTargets();
+      setRestoreTargets(response.data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao carregar bancos de destino para restore');
+      setRestoreTargets([]);
+    }
+  };
+
   const loadBackups = async (datasourceId: string) => {
     try {
       setLoadingBackups(true);
@@ -153,6 +174,10 @@ export default function BackupsPage({ permissions = [] }: Props) {
   }, []);
 
   useEffect(() => {
+    void loadRestoreTargets();
+  }, [canRestore]);
+
+  useEffect(() => {
     const onResize = () => setIsDesktop(window.innerWidth > 980);
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
@@ -168,14 +193,47 @@ export default function BackupsPage({ permissions = [] }: Props) {
 
   const openRestoreModal = (backup: ApiBackupEntry) => {
     setRestoreTarget(backup);
+    setTargetDatasourceId(backup.datasource.id);
     setVerificationMode(false);
     setKeepVerificationDatabase(false);
     setDropExisting(true);
     setConfirmationPhrase('');
   };
 
+  const availableDownloadLocation = (backup: ApiBackupEntry) => {
+    const preferredStorageId = storageSelection[backup.execution_id];
+    if (preferredStorageId) {
+      const selected = backup.storage_locations.find((item) => item.storage_location_id === preferredStorageId);
+      if (selected?.status === 'available' && selected.relative_path) return selected;
+    }
+
+    return backup.storage_locations.find((item) => item.status === 'available' && Boolean(item.relative_path)) ?? null;
+  };
+
+  const handleDownload = async (backup: ApiBackupEntry) => {
+    const candidate = availableDownloadLocation(backup);
+    if (!candidate) {
+      setError('Nenhum storage disponivel para download deste backup.');
+      return;
+    }
+
+    try {
+      setDownloadRunning((prev) => ({ ...prev, [backup.execution_id]: true }));
+      setError(null);
+      await backupsApi.download(backup.execution_id, candidate.storage_location_id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao baixar backup');
+    } finally {
+      setDownloadRunning((prev) => ({ ...prev, [backup.execution_id]: false }));
+    }
+  };
+
   const handleRestore = async () => {
     if (!restoreTarget) return;
+    if (!targetDatasourceId) {
+      setError('Selecione um banco de destino para o restore.');
+      return;
+    }
     if (confirmationPhrase.trim() !== requiredPhrase) {
       setError(`Confirmacao invalida. Digite '${requiredPhrase}' para continuar.`);
       return;
@@ -193,6 +251,7 @@ export default function BackupsPage({ permissions = [] }: Props) {
       setRestoreRunning((prev) => ({ ...prev, [backup.execution_id]: true }));
       const response = await backupsApi.restore(backup.execution_id, {
         storage_location_id: storageLocationId,
+        target_datasource_id: targetDatasourceId,
         drop_existing: dropExisting,
         verification_mode: verificationMode,
         keep_verification_database: keepVerificationDatabase,
@@ -309,13 +368,15 @@ export default function BackupsPage({ permissions = [] }: Props) {
                       <th className={styles.thCell}>Job</th>
                       <th className={styles.thCell}>Tamanho</th>
                       <th className={styles.thCell}>Storages</th>
-                      <th className={styles.thCell}>Restore</th>
+                      <th className={styles.thCell}>Acoes</th>
                     </tr>
                   </thead>
                   <tbody>
                     {backups.map((backup) => {
                       const running = Boolean(restoreRunning[backup.execution_id]);
+                      const downloading = Boolean(downloadRunning[backup.execution_id]);
                       const hasMultipleStorages = backup.storage_locations.length > 1;
+                      const canDownload = availableDownloadLocation(backup) !== null;
                       return (
                         <tr key={backup.execution_id}>
                           <td className={`${styles.tdCell} ${styles.cellDate}`}>{formatDate(backup.created_at)}</td>
@@ -351,13 +412,24 @@ export default function BackupsPage({ permissions = [] }: Props) {
                               </select>
                             )}
                             <button
-                              className={styles.restoreBtn}
-                              disabled={running}
-                              onClick={() => openRestoreModal(backup)}
+                              className={styles.downloadBtn}
+                              disabled={downloading || !canDownload}
+                              onClick={() => void handleDownload(backup)}
+                              title={canDownload ? 'Baixar backup' : 'Backup indisponivel para download'}
                             >
-                              {running ? <SpinnerIcon /> : <PlayFilledIcon />}
-                              {running ? 'Restaurando...' : 'Restore'}
+                              {downloading ? <SpinnerIcon /> : <ExportIcon />}
+                              {downloading ? 'Baixando...' : 'Baixar'}
                             </button>
+                            {canRestore && (
+                              <button
+                                className={styles.restoreBtn}
+                                disabled={running}
+                                onClick={() => openRestoreModal(backup)}
+                              >
+                                {running ? <SpinnerIcon /> : <PlayFilledIcon />}
+                                {running ? 'Restaurando...' : 'Restore'}
+                              </button>
+                            )}
                           </td>
                         </tr>
                       );
@@ -399,6 +471,23 @@ export default function BackupsPage({ permissions = [] }: Props) {
             <p className={styles.modalHint}>
               Escolha o tipo de operacao. O modo de verificacao restaura em banco temporario para validar o backup sem afetar o banco principal.
             </p>
+
+            <label className={styles.field}>
+              <span>Banco de destino</span>
+              <select
+                className={styles.confirmInput}
+                value={targetDatasourceId}
+                onChange={(event) => setTargetDatasourceId(event.target.value)}
+              >
+                {restoreTargets
+                  .filter((item) => item.datasource_type === restoreTarget.datasource.type)
+                  .map((item) => (
+                    <option key={item.datasource_id} value={item.datasource_id}>
+                      {item.datasource_name} ({item.datasource_type})
+                    </option>
+                  ))}
+              </select>
+            </label>
 
             <label className={styles.checkboxRow}>
               <input

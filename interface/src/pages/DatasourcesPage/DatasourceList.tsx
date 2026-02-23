@@ -8,6 +8,7 @@ interface Props {
   datasources: ApiDatasource[];
   selectedId:  string | null;
   onSelect:    (ds: ApiDatasource) => void;
+  onContextMenu?: (ds: ApiDatasource, x: number, y: number) => void;
   onAddNew?:   () => void;
   onEdit?:     (ds: ApiDatasource) => void;
   onDelete?:   (ds: ApiDatasource) => void;
@@ -23,7 +24,7 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 export default function DatasourceList({
-  datasources, selectedId, onSelect, onAddNew, onEdit, onDelete, loading, error,
+  datasources, selectedId, onSelect, onContextMenu, onAddNew, onEdit, onDelete, loading, error,
 }: Props) {
   const [search, setSearch] = useState('');
 
@@ -99,6 +100,12 @@ export default function DatasourceList({
             key={ds.id}
             className={`${styles.card}${selectedId === ds.id ? ` ${styles.selected}` : ''}`}
             onClick={() => onSelect(ds)}
+            onContextMenu={(event) => {
+              if (!onContextMenu) return;
+              event.preventDefault();
+              event.stopPropagation();
+              onContextMenu(ds, event.clientX, event.clientY);
+            }}
           >
             {/* Topo */}
             <div className={styles.cardTop}>

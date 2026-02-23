@@ -465,6 +465,15 @@ export interface ApiBackupDatasourceSummary {
   updated_at: string;
 }
 
+export interface ApiRestoreTargetDatasource {
+  datasource_id: string;
+  datasource_name: string;
+  datasource_type: DatasourceType;
+  datasource_status: DatasourceStatus;
+  datasource_enabled: boolean;
+  updated_at: string;
+}
+
 export interface ApiBackupStorageLocation {
   storage_location_id: string;
   storage_name: string;
@@ -509,6 +518,18 @@ export interface ApiBackupsByDatasourceResponse {
   datasource_id: string;
   total_backups: number;
   backups: ApiBackupEntry[];
+}
+
+export interface ApiRestoreExecutionResponse {
+  message: string;
+  execution_id: string;
+  source_execution_id: string | null;
+  datasource_id: string;
+  datasource_name: string;
+  datasource_type: DatasourceType;
+  verification_mode: boolean;
+  status: 'queued' | 'running';
+  started_at: string;
 }
 
 export interface ApiAuditLog {
@@ -748,26 +769,86 @@ export const backupsApi = {
     executionId: string,
     data?: {
       storage_location_id?: string;
+      target_datasource_id?: string;
       drop_existing?: boolean;
       verification_mode?: boolean;
       keep_verification_database?: boolean;
       confirmation_phrase?: string;
     },
   ) =>
-    request<{
-      message: string;
-      execution_id: string;
-      source_execution_id: string;
-      datasource_id: string;
-      datasource_name: string;
-      datasource_type: DatasourceType;
-      verification_mode: boolean;
-      status: 'running';
-      started_at: string;
-    }>(`/backups/${executionId}/restore`, {
+    request<ApiRestoreExecutionResponse>(`/backups/${executionId}/restore`, {
       method: 'POST',
       body: JSON.stringify(data ?? {}),
     }),
+
+  restoreTargets: () =>
+    request<{ data: ApiRestoreTargetDatasource[] }>('/backups/restore-targets'),
+
+  download: async (executionId: string, storageLocationId?: string) => {
+    const qs = new URLSearchParams();
+    if (storageLocationId) qs.set('storage_location_id', storageLocationId);
+    const query = qs.toString();
+    const url = `${BASE}/backups/${executionId}/download${query ? `?${query}` : ''}`;
+    const res = await fetch(url, { credentials: 'include' });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ message: 'Falha ao baixar backup' }));
+      const message = err.message || `Erro HTTP ${res.status}`;
+      notifyError(message);
+      throw new Error(message);
+    }
+
+    const blob = await res.blob();
+    const contentDisposition = res.headers.get('content-disposition') ?? '';
+    const fallbackName = `${executionId}.bin`;
+    const match = contentDisposition.match(/filename\*?=(?:UTF-8''|")?([^\";]+)/i);
+    const fileName = match ? decodeURIComponent(match[1].replace(/"/g, '').trim()) : fallbackName;
+
+    const objectUrl = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = objectUrl;
+    anchor.download = fileName;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(objectUrl);
+  },
+
+  importAndRestore: async (params: {
+    file: File;
+    target_datasource_id: string;
+    drop_existing?: boolean;
+    verification_mode?: boolean;
+    keep_verification_database?: boolean;
+    confirmation_phrase: string;
+  }) => {
+    const qs = new URLSearchParams();
+    qs.set('target_datasource_id', params.target_datasource_id);
+    qs.set('drop_existing', String(params.drop_existing ?? true));
+    qs.set('verification_mode', String(params.verification_mode ?? false));
+    qs.set('keep_verification_database', String(params.keep_verification_database ?? false));
+    qs.set('confirmation_phrase', params.confirmation_phrase);
+
+    const url = `${BASE}/backups/import-restore?${qs.toString()}`;
+    const res = await fetch(url, {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/octet-stream',
+        'x-file-name': encodeURIComponent(params.file.name),
+      },
+      body: await params.file.arrayBuffer(),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ message: 'Falha ao importar arquivo para restore' }));
+      const message = err.message || `Erro HTTP ${res.status}`;
+      notifyError(message);
+      throw new Error(message);
+    }
+
+    return res.json() as Promise<ApiRestoreExecutionResponse>;
+  },
 };
 
 export const authApi = {

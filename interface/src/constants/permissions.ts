@@ -4,6 +4,7 @@ export const PERMISSIONS = {
   STORAGE_READ: 'storage.read',
   BACKUP_JOBS_READ: 'backup_jobs.read',
   BACKUPS_READ: 'backups.read',
+  BACKUPS_RESTORE: 'backups.restore',
   EXECUTIONS_READ: 'executions.read',
   BACKUPS_RESTORE_VERIFY: 'backups.restore_verify',
   HEALTH_READ: 'health.read',

@@ -16,6 +16,7 @@ import { normalizeLocalStoragePath } from '../../utils/runtime';
 import { materializeExecutionRawSnapshot } from '../../core/backup/execution-artifacts';
 import { ensureRedisAvailable } from '../../queue/redis-client';
 import { enqueueRestoreExecution } from '../../queue/queues';
+import { prepareStorageFileDownload } from './storage-location.model';
 
 type StorageBackupStatus = 'available' | 'missing' | 'unreachable' | 'unknown';
 type ExecutionLogLevel = 'info' | 'warn' | 'error' | 'debug' | 'success';
@@ -549,7 +550,9 @@ async function getStorageSnapshot(execution: {
 
 async function runRestoreExecutionInBackground(params: {
   restoreExecutionId: string;
-  sourceExecutionId: string;
+  sourceExecutionId?: string | null;
+  importedFilePath?: string | null;
+  importedFileName?: string | null;
   datasource: {
     id: string;
     name: string;
@@ -565,7 +568,8 @@ async function runRestoreExecutionInBackground(params: {
   const executionLogs: ExecutionLogEntry[] = [];
   const runtimeMetadata: Record<string, unknown> = {
     operation: 'restore',
-    source_execution_id: params.sourceExecutionId,
+    source_execution_id: params.sourceExecutionId ?? null,
+    imported_file_name: params.importedFileName ?? null,
     verification_mode: params.verificationMode,
     execution_logs: executionLogs,
   };
@@ -607,34 +611,44 @@ async function runRestoreExecutionInBackground(params: {
   let verificationDbDropper: (() => Promise<void>) | null = null;
   let verificationDbCloser: (() => Promise<void>) | null = null;
   let verificationDatabaseName: string | null = null;
+  let shouldDeleteImportedFile = false;
 
   try {
     await fs.mkdir(restoreRoot, { recursive: true });
     currentPhase = 'preparando ambiente';
     pushLog('info', `Restore iniciado para datasource '${params.datasource.name}'`, true);
 
-    const preferredStorageIds = params.candidates.map((item) => item.storage_location_id);
-    currentPhase = 'baixando e reconstruindo cadeia de backup';
-    const materialized = await materializeExecutionRawSnapshot({
-      executionId: params.sourceExecutionId,
-      outputDir: restoreRoot,
-      preferredStorageIds,
-      onLog: (line) => pushLog('debug', `[artifact] ${line}`, true),
-    });
-    restoreInputFile = materialized.rawFile;
-    if (materialized.sourceStorage) {
-      chosenStorage =
-        params.candidates.find((item) => item.storage_location_id === materialized.sourceStorage?.id)
-        ?? {
-          storage_location_id: materialized.sourceStorage.id,
-          storage_name: materialized.sourceStorage.name,
-          storage_type: null,
-          configured_status: 'healthy',
-          backup_path: null,
-          relative_path: materialized.sourceStorage.relativePath,
-          status: 'available',
-          message: null,
-        };
+    if (params.importedFilePath) {
+      currentPhase = 'carregando arquivo importado';
+      restoreInputFile = params.importedFilePath;
+      shouldDeleteImportedFile = true;
+      pushLog('info', `Arquivo importado recebido: ${params.importedFileName ?? path.basename(params.importedFilePath)}`, true);
+    } else if (params.sourceExecutionId) {
+      const preferredStorageIds = params.candidates.map((item) => item.storage_location_id);
+      currentPhase = 'baixando e reconstruindo cadeia de backup';
+      const materialized = await materializeExecutionRawSnapshot({
+        executionId: params.sourceExecutionId,
+        outputDir: restoreRoot,
+        preferredStorageIds,
+        onLog: (line) => pushLog('debug', `[artifact] ${line}`, true),
+      });
+      restoreInputFile = materialized.rawFile;
+      if (materialized.sourceStorage) {
+        chosenStorage =
+          params.candidates.find((item) => item.storage_location_id === materialized.sourceStorage?.id)
+          ?? {
+            storage_location_id: materialized.sourceStorage.id,
+            storage_name: materialized.sourceStorage.name,
+            storage_type: null,
+            configured_status: 'healthy',
+            backup_path: null,
+            relative_path: materialized.sourceStorage.relativePath,
+            status: 'available',
+            message: null,
+          };
+      }
+    } else {
+      throw new AppError('RESTORE_INVALID_METADATA', 422, 'Restore sem origem valida (backup ou arquivo importado)');
     }
 
     const datasourceType = String(params.datasource.type);
@@ -698,14 +712,20 @@ async function runRestoreExecutionInBackground(params: {
 
     const durationSeconds = Math.max(1, Math.floor((Date.now() - startedAtMs) / 1000));
     const resolvedStorage = chosenStorage ?? params.candidates[0];
-    if (!resolvedStorage) {
+    if (!resolvedStorage && !params.importedFilePath) {
       throw new AppError('BACKUP_STORAGE_UNAVAILABLE', 503, 'Nenhum storage disponivel para concluir restore');
     }
-    runtimeMetadata.source_storage = {
-      id: resolvedStorage.storage_location_id,
-      name: resolvedStorage.storage_name,
-      type: resolvedStorage.storage_type,
-    };
+    runtimeMetadata.source_storage = resolvedStorage
+      ? {
+          id: resolvedStorage.storage_location_id,
+          name: resolvedStorage.storage_name,
+          type: resolvedStorage.storage_type,
+        }
+      : {
+          id: null,
+          name: 'upload',
+          type: null,
+        };
     runtimeMetadata.drop_existing = params.dropExisting;
     runtimeMetadata.keep_verification_database = params.keepVerificationDatabase;
     if (params.verificationMode && verificationDatabaseName) {
@@ -731,7 +751,7 @@ async function runRestoreExecutionInBackground(params: {
         status: 'completed',
         finishedAt: new Date(),
         durationSeconds,
-        storageLocationId: resolvedStorage.storage_location_id,
+        ...(resolvedStorage && { storageLocationId: resolvedStorage.storage_location_id }),
         metadata: runtimeMetadata as unknown as Prisma.InputJsonValue,
       },
     });
@@ -755,6 +775,9 @@ async function runRestoreExecutionInBackground(params: {
     }
     if (verificationDbCloser) {
       await verificationDbCloser().catch(() => undefined);
+    }
+    if (shouldDeleteImportedFile && params.importedFilePath) {
+      await fs.rm(params.importedFilePath, { force: true }).catch(() => undefined);
     }
     if (heartbeat) clearInterval(heartbeat);
     await fs.rm(restoreRoot, { recursive: true, force: true }).catch(() => undefined);
@@ -795,6 +818,32 @@ export async function listBackupDatasources() {
       };
     })
     .filter((item): item is NonNullable<typeof item> => item !== null);
+}
+
+export async function listRestoreTargetDatasources() {
+  const datasources = await prisma.datasource.findMany({
+    where: {
+      type: { in: ['postgres', 'mysql', 'mariadb'] },
+    },
+    orderBy: { name: 'asc' },
+    select: {
+      id: true,
+      name: true,
+      type: true,
+      status: true,
+      enabled: true,
+      updatedAt: true,
+    },
+  });
+
+  return datasources.map((item) => ({
+    datasource_id: item.id,
+    datasource_name: item.name,
+    datasource_type: item.type,
+    datasource_status: item.status,
+    datasource_enabled: item.enabled,
+    updated_at: item.updatedAt.toISOString(),
+  }));
 }
 
 export async function listBackupsByDatasource(datasourceId: string) {
@@ -863,6 +912,51 @@ export async function listBackupsByDatasource(datasourceId: string) {
   };
 }
 
+export async function prepareBackupExecutionDownload(params: {
+  executionId: string;
+  storageLocationId?: string;
+}) {
+  const execution = await prisma.backupExecution.findUniqueOrThrow({
+    where: { id: params.executionId },
+    select: {
+      id: true,
+      status: true,
+      storageLocationId: true,
+      backupPath: true,
+      metadata: true,
+    },
+  });
+
+  if (execution.status !== 'completed') {
+    throw new AppError(
+      'BACKUP_NOT_DOWNLOADABLE',
+      409,
+      `Execucao '${execution.id}' com status '${execution.status}' nao pode ser baixada`,
+    );
+  }
+
+  const snapshot = await getStorageSnapshot(execution);
+  const requestedStorageId = params.storageLocationId?.trim();
+  const availableCandidates = snapshot.filter((item) => item.status === 'available' && Boolean(item.relative_path));
+
+  const selected =
+    requestedStorageId
+      ? availableCandidates.find((item) => item.storage_location_id === requestedStorageId)
+      : availableCandidates[0];
+
+  if (!selected || !selected.relative_path) {
+    throw new AppError(
+      'BACKUP_STORAGE_UNAVAILABLE',
+      503,
+      requestedStorageId
+        ? `Backup indisponivel no storage '${requestedStorageId}'`
+        : 'Nenhum storage disponivel para download deste backup',
+    );
+  }
+
+  return prepareStorageFileDownload(selected.storage_location_id, selected.relative_path);
+}
+
 function orderStorageCandidates(candidates: StorageSnapshotEntry[]) {
   const score = (value: StorageBackupStatus) => {
     if (value === 'available') return 0;
@@ -912,43 +1006,49 @@ export async function processRestoreExecutionNow(restoreExecutionId: string) {
     const metadata = asObject(restoreExecution.metadata);
     const restoreReq = asObject(metadata.restore_request);
     const sourceExecutionId = asString(restoreReq.source_execution_id);
-    if (!sourceExecutionId) {
-      throw new AppError('RESTORE_INVALID_METADATA', 422, 'Restore sem source_execution_id');
+    const importedFilePath = asString(restoreReq.imported_file_path);
+    const importedFileName = asString(restoreReq.imported_file_name);
+    if (!sourceExecutionId && !importedFilePath) {
+      throw new AppError('RESTORE_INVALID_METADATA', 422, 'Restore sem origem valida');
     }
-
-    const sourceExecution = await prisma.backupExecution.findUniqueOrThrow({
-      where: { id: sourceExecutionId },
-      include: {
-        datasource: {
-          select: { id: true, name: true, type: true },
-        },
-        job: {
-          select: { id: true, name: true },
-        },
-        storageLocation: {
-          select: { id: true, name: true, type: true, status: true },
-        },
-      },
-    });
 
     const requestedStorageId = asString(restoreReq.storage_location_id) ?? undefined;
     const verificationMode = restoreReq.verification_mode === true;
     const keepVerificationDatabase = restoreReq.keep_verification_database === true;
     const dropExisting = verificationMode ? false : restoreReq.drop_existing === true;
 
-    const snapshot = await getStorageSnapshot(sourceExecution);
-    const filtered = requestedStorageId
-      ? snapshot.filter((item) => item.storage_location_id === requestedStorageId)
-      : snapshot;
-    const orderedCandidates = orderStorageCandidates(filtered);
+    let orderedCandidates: StorageSnapshotEntry[] = [];
+    if (sourceExecutionId) {
+      const sourceExecution = await prisma.backupExecution.findUniqueOrThrow({
+        where: { id: sourceExecutionId },
+        include: {
+          datasource: {
+            select: { id: true, name: true, type: true },
+          },
+          job: {
+            select: { id: true, name: true },
+          },
+          storageLocation: {
+            select: { id: true, name: true, type: true, status: true },
+          },
+        },
+      });
 
-    if (orderedCandidates.length === 0) {
-      throw new AppError('BACKUP_STORAGE_UNAVAILABLE', 503, 'Nenhum storage disponivel para restore');
+      const snapshot = await getStorageSnapshot(sourceExecution);
+      const filtered = requestedStorageId
+        ? snapshot.filter((item) => item.storage_location_id === requestedStorageId)
+        : snapshot;
+      orderedCandidates = orderStorageCandidates(filtered);
+      if (orderedCandidates.length === 0) {
+        throw new AppError('BACKUP_STORAGE_UNAVAILABLE', 503, 'Nenhum storage disponivel para restore');
+      }
     }
 
     await runRestoreExecutionInBackground({
       restoreExecutionId,
       sourceExecutionId,
+      importedFilePath,
+      importedFileName,
       datasource: {
         id: restoreExecution.datasource.id,
         name: restoreExecution.datasource.name,
@@ -977,6 +1077,7 @@ export async function processRestoreExecutionNow(restoreExecutionId: string) {
 export async function restoreBackupExecution(params: {
   executionId: string;
   storageLocationId?: string;
+  targetDatasourceId?: string;
   dropExisting?: boolean;
   verificationMode?: boolean;
   keepVerificationDatabase?: boolean;
@@ -1008,6 +1109,23 @@ export async function restoreBackupExecution(params: {
     throw new AppError('RESTORE_NOT_SUPPORTED', 422, `Restore nao suportado para datasource '${datasourceType}'`);
   }
 
+  const targetDatasourceId = params.targetDatasourceId ?? execution.datasource.id;
+  const targetDatasource = await prisma.datasource.findUnique({
+    where: { id: targetDatasourceId },
+    select: { id: true, name: true, type: true },
+  });
+  if (!targetDatasource) {
+    throw new AppError('NOT_FOUND', 404, `Datasource de destino '${targetDatasourceId}' nao encontrado`);
+  }
+
+  if (targetDatasource.type !== execution.datasource.type) {
+    throw new AppError(
+      'RESTORE_TARGET_TYPE_MISMATCH',
+      422,
+      `Datasource de destino '${targetDatasource.name}' possui tipo '${targetDatasource.type}', incompativel com o backup '${execution.datasource.type}'`,
+    );
+  }
+
   const storageSnapshot = await getStorageSnapshot(execution);
   if (params.storageLocationId && !storageSnapshot.some((item) => item.storage_location_id === params.storageLocationId)) {
     throw new AppError(
@@ -1035,7 +1153,7 @@ export async function restoreBackupExecution(params: {
   const restoreExecution = await prisma.backupExecution.create({
     data: {
       jobId: execution.job.id,
-      datasourceId: execution.datasource.id,
+      datasourceId: targetDatasource.id,
       storageLocationId: params.storageLocationId ?? execution.storageLocationId,
       status: 'queued',
       backupType: execution.backupType,
@@ -1045,6 +1163,7 @@ export async function restoreBackupExecution(params: {
         restore_request: {
           source_execution_id: execution.id,
           storage_location_id: params.storageLocationId ?? null,
+          target_datasource_id: targetDatasource.id,
           drop_existing: dropExisting,
           verification_mode: verificationMode,
           keep_verification_database: keepVerificationDatabase,
@@ -1081,11 +1200,135 @@ export async function restoreBackupExecution(params: {
     message: verificationMode ? 'Restore verification enfileirado com sucesso' : 'Restore enfileirado com sucesso',
     execution_id: restoreExecution.id,
     source_execution_id: execution.id,
-    datasource_id: execution.datasource.id,
-    datasource_name: execution.datasource.name,
-    datasource_type: execution.datasource.type as DatasourceType,
+    datasource_id: targetDatasource.id,
+    datasource_name: targetDatasource.name,
+    datasource_type: targetDatasource.type as DatasourceType,
     verification_mode: verificationMode,
     status: 'queued',
+    started_at: createdAt.toISOString(),
+  };
+}
+
+export async function importAndRestoreBackupFile(params: {
+  fileBuffer: Buffer;
+  fileName: string;
+  targetDatasourceId: string;
+  dropExisting?: boolean;
+  verificationMode?: boolean;
+  keepVerificationDatabase?: boolean;
+}) {
+  const targetDatasource = await prisma.datasource.findUnique({
+    where: { id: params.targetDatasourceId },
+    select: { id: true, name: true, type: true },
+  });
+  if (!targetDatasource) {
+    throw new AppError('NOT_FOUND', 404, `Datasource de destino '${params.targetDatasourceId}' nao encontrado`);
+  }
+
+  const datasourceType = String(targetDatasource.type);
+  if (datasourceType !== 'postgres' && datasourceType !== 'mysql' && datasourceType !== 'mariadb') {
+    throw new AppError('RESTORE_NOT_SUPPORTED', 422, `Restore nao suportado para datasource '${datasourceType}'`);
+  }
+
+  const relatedJob = await prisma.backupJob.findFirst({
+    where: { datasourceId: targetDatasource.id },
+    orderBy: { createdAt: 'asc' },
+    select: { id: true, storageLocationId: true },
+  });
+  if (!relatedJob) {
+    throw new AppError(
+      'BACKUP_JOB_REQUIRED',
+      422,
+      'Para importar restore, crie ao menos um Backup Job para o datasource de destino',
+    );
+  }
+
+  const redisReady = await ensureRedisAvailable();
+  if (!redisReady) {
+    throw new AppError(
+      'SERVICE_UNAVAILABLE',
+      503,
+      'Redis indisponivel: restores estao temporariamente desativados',
+      { warning: 'Inicie/restaure o Redis para executar restores.' },
+    );
+  }
+
+  const safeName = path.basename(params.fileName || 'restore-import.bin').replace(/[^\w.\-]/g, '_');
+  const importRoot = path.join(
+    config.workers.tempDirectory,
+    'restore-import',
+    targetDatasource.id,
+    Date.now().toString(),
+  );
+  await fs.mkdir(importRoot, { recursive: true });
+  const importFilePath = path.join(importRoot, safeName || 'restore-import.bin');
+  await fs.writeFile(importFilePath, params.fileBuffer);
+
+  const verificationMode = params.verificationMode ?? false;
+  const keepVerificationDatabase = params.keepVerificationDatabase ?? false;
+  const dropExisting = verificationMode ? false : (params.dropExisting ?? true);
+  const createdAt = new Date();
+
+  const restoreExecution = await prisma.backupExecution.create({
+    data: {
+      jobId: relatedJob.id,
+      datasourceId: targetDatasource.id,
+      storageLocationId: relatedJob.storageLocationId,
+      status: 'queued',
+      backupType: 'full',
+      metadata: {
+        operation: 'restore',
+        source_execution_id: null,
+        restore_request: {
+          source_execution_id: null,
+          imported_file_path: importFilePath,
+          imported_file_name: safeName,
+          target_datasource_id: targetDatasource.id,
+          storage_location_id: null,
+          drop_existing: dropExisting,
+          verification_mode: verificationMode,
+          keep_verification_database: keepVerificationDatabase,
+        },
+        execution_logs: [
+          {
+            ts: createdAt.toISOString(),
+            level: 'info',
+            message: verificationMode
+              ? 'Restore verification por arquivo importado enfileirado'
+              : 'Restore por arquivo importado enfileirado',
+          },
+        ],
+      } as unknown as Prisma.InputJsonValue,
+    },
+  });
+
+  try {
+    await enqueueRestoreExecution(restoreExecution.id, 'manual');
+  } catch (err) {
+    await prisma.backupExecution.update({
+      where: { id: restoreExecution.id },
+      data: {
+        status: 'failed',
+        finishedAt: new Date(),
+        errorMessage: 'Falha ao enfileirar restore no Redis',
+      },
+    });
+    await fs.rm(importFilePath, { force: true }).catch(() => undefined);
+    logger.error({ err, executionId: restoreExecution.id }, 'Falha no enqueue de restore por arquivo importado');
+    throw new AppError('SERVICE_UNAVAILABLE', 503, 'Falha ao iniciar restore no momento');
+  }
+
+  return {
+    message: verificationMode
+      ? 'Restore verification por arquivo importado enfileirado com sucesso'
+      : 'Restore por arquivo importado enfileirado com sucesso',
+    execution_id: restoreExecution.id,
+    source_execution_id: null,
+    datasource_id: targetDatasource.id,
+    datasource_name: targetDatasource.name,
+    datasource_type: targetDatasource.type as DatasourceType,
+    verification_mode: verificationMode,
+    status: 'queued' as const,
     started_at: createdAt.toISOString(),
   };
 }

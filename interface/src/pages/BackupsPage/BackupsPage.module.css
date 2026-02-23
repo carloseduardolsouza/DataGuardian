@@ -315,6 +315,32 @@
   cursor: not-allowed;
 }
 
+.downloadBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-elevated);
+  color: var(--color-text);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semi);
+  padding: 6px var(--space-3);
+  cursor: pointer;
+  transition: background var(--transition-fast), border-color var(--transition-fast);
+  white-space: nowrap;
+}
+
+.downloadBtn:hover:enabled {
+  background: var(--color-surface);
+  border-color: var(--color-border-strong);
+}
+
+.downloadBtn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
 .placeholder {
   flex: 1;
   display: flex;
