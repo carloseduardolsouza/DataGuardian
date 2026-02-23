@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+ï»¿import { useCallback, useEffect, useMemo, useState } from 'react';
 import { healthApi } from '../../services/api';
 import type {
   ApiSystemHealth,
@@ -76,15 +76,6 @@ export default function HealthPage() {
       total: datasourceChecks.length,
     };
   }, [datasourceChecks]);
-
-  const storageSummary = useMemo(() => {
-    const ok = storageChecks.filter((item) => item.status === 'ok').length;
-    return {
-      ok,
-      total: storageChecks.length,
-    };
-  }, [storageChecks]);
-
   if (loading) {
     return (
       <div className={styles.centerState}>
@@ -108,7 +99,7 @@ export default function HealthPage() {
       <div className={styles.header}>
         <div>
           <h2 className={styles.title}>Monitoramento de Health</h2>
-          <p className={styles.subtitle}>Verificação automática de bancos e storages em segundo plano.</p>
+          <p className={styles.subtitle}>VerificaÃ§Ã£o automÃ¡tica de bancos e storages em segundo plano.</p>
         </div>
         <button className={styles.refreshBtn} onClick={() => void loadData(true)} disabled={refreshing}>
           {refreshing ? <SpinnerIcon width={14} height={14} /> : <ClockIcon width={14} height={14} />}
@@ -152,16 +143,16 @@ export default function HealthPage() {
               <DatabaseIcon width={16} height={16} />
               <span className={styles.summaryValue}>{system.stats.datasources_healthy}/{system.stats.datasources_total}</span>
             </div>
-            <span className={styles.summarySub}>Saudáveis</span>
+            <span className={styles.summarySub}>SaudÃ¡veis</span>
           </div>
 
           <div className={styles.summaryCard}>
             <span className={styles.summaryLabel}>Storages</span>
             <div className={styles.summaryValueRow}>
               <ServerIcon width={16} height={16} />
-              <span className={styles.summaryValue}>{storageSummary.total}/{storageSummary.ok}</span>
+              <span className={styles.summaryValue}>{system.stats.storages_total}/{system.stats.storages_accessible}</span>
             </div>
-            <span className={styles.summarySub}>Saudáveis</span>
+            <span className={styles.summarySub}>Cadastrados/AcessÃ­veis</span>
           </div>
         </div>
       )}
@@ -194,7 +185,7 @@ export default function HealthPage() {
                 <tr>
                   <th>Datasource</th>
                   <th>Status</th>
-                  <th>Latência</th>
+                  <th>LatÃªncia</th>
                   <th>Quando</th>
                 </tr>
               </thead>
@@ -224,7 +215,7 @@ export default function HealthPage() {
         <div className={styles.tableCard}>
           <div className={styles.tableHeader}>
             <h3 className={styles.sectionTitle}>Health dos Storages</h3>
-            <span className={styles.tableMeta}>{storageSummary.total}/{storageSummary.ok} OK</span>
+            <span className={styles.tableMeta}>{system?.stats.storages_total ?? 0}/{system?.stats.storages_accessible ?? 0} Cadastrados/AcessÃ­veis</span>
           </div>
           <div className={styles.tableWrap}>
             <table className={styles.table}>
@@ -232,7 +223,7 @@ export default function HealthPage() {
                 <tr>
                   <th>Storage</th>
                   <th>Status</th>
-                  <th>Latência</th>
+                  <th>LatÃªncia</th>
                   <th>Quando</th>
                 </tr>
               </thead>
@@ -262,6 +253,9 @@ export default function HealthPage() {
     </div>
   );
 }
+
+
+
 
 
 
