@@ -21,7 +21,9 @@
     "db:deploy": "prisma migrate deploy",
     "db:studio": "prisma studio",
     "db:seed": "tsx prisma/seed.ts",
-    "docker:build": "docker build -f docker/Dockerfile -t dataguardian:latest ."
+    "docker:build": "docker build -f docker/Dockerfile -t dataguardian:latest .",
+    "docker:publish": "node scripts/docker-publish.cjs",
+    "docker:up:all": "node scripts/docker-up-all.cjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.993.0",

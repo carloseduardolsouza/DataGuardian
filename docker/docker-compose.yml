@@ -7,7 +7,7 @@ services:
     environment:
       POSTGRES_DB: backup_manager
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: DataGuardian123!
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-DataGuardian123!}
     volumes:
       - postgres-data:/var/lib/postgresql/data
     ports:
@@ -52,7 +52,7 @@ services:
     container_name: data-guardian-app
     restart: unless-stopped
     env_file:
-      - ../.env
+      - ./.env
     environment:
       NODE_ENV: production
       DATABASE_URL: postgresql://postgres:${DB_PASSWORD:-DataGuardian123!}@postgres:5432/backup_manager
