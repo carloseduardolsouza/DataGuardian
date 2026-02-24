@@ -12,6 +12,7 @@ import styles from './SyncPage.module.css';
 
 type Direction = 'source_to_target' | 'target_to_source';
 type Frequency = 'daily' | 'weekly' | 'monthly';
+type SyncExecutionStatus = 'queued' | 'running' | 'completed' | 'failed' | 'cancelled' | 'unknown';
 
 const SUPPORTED_TYPES = new Set(['postgres', 'mysql', 'mariadb']);
 const MINUTES = [0, 15, 30, 45];
@@ -25,6 +26,14 @@ const WEEKDAY_OPTIONS = [
   { value: 6, label: 'Sabado' },
 ];
 const MONTHDAY_OPTIONS = Array.from({ length: 28 }, (_, idx) => idx + 1);
+const STATUS_LABELS: Record<SyncExecutionStatus, string> = {
+  queued: 'Na fila',
+  running: 'Executando',
+  completed: 'Concluido',
+  failed: 'Falhou',
+  cancelled: 'Cancelado',
+  unknown: 'Sem historico',
+};
 
 function parseScheduleCron(cron: string) {
   const [m = '0', h = '2', dom = '*', _mon = '*', dow = '*'] = cron.trim().split(/\s+/);
@@ -70,6 +79,13 @@ function formatScheduleLabel(cron: string, enabled: boolean) {
     return `Mensal (dia ${parsed.monthDay}) ${hh}:${mm} UTC`;
   }
   return `Diaria ${hh}:${mm} UTC`;
+}
+
+function getStatusKey(status: string | null | undefined): SyncExecutionStatus {
+  if (status === 'queued' || status === 'running' || status === 'completed' || status === 'failed' || status === 'cancelled') {
+    return status;
+  }
+  return 'unknown';
 }
 
 interface CreateFormState {
@@ -231,211 +247,233 @@ export default function SyncPage({ permissions }: { permissions?: string[] }) {
 
   return (
     <div className={styles.page}>
-      <div className={styles.header}>
-        <h2 className={styles.title}>Sincronizacao de Bancos (Worker Separado)</h2>
-        <p className={styles.sub}>Gestao dedicada via tabela propria `database_sync_jobs` e worker `db-sync`.</p>
-      </div>
-
-      <section className={styles.card}>
-        <h3 className={styles.cardTitle}>Novo Sync Job</h3>
-        <div className={styles.formGrid}>
-          <label className={styles.field}>
-            <span>Nome</span>
-            <input
-              value={form.name}
-              onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
-              placeholder="Ex: Sync Producao -> Teste"
-            />
-          </label>
-
-          <label className={styles.field}>
-            <span>Origem</span>
-            <select
-              value={form.sourceDatasourceId}
-              onChange={(e) => setForm((prev) => ({ ...prev, sourceDatasourceId: e.target.value }))}
-            >
-              <option value="">Selecione...</option>
-              {supportedDatasources.map((item) => (
-                <option key={item.id} value={item.id}>{item.name} ({item.type})</option>
-              ))}
-            </select>
-          </label>
-
-          <label className={styles.field}>
-            <span>Destino</span>
-            <select
-              value={form.targetDatasourceId}
-              onChange={(e) => setForm((prev) => ({ ...prev, targetDatasourceId: e.target.value }))}
-            >
-              <option value="">Selecione...</option>
-              {targetCandidates.map((item) => (
-                <option key={item.id} value={item.id}>{item.name} ({item.type})</option>
-              ))}
-            </select>
-          </label>
-
-          <label className={styles.field}>
-            <span>Storage</span>
-            <select
-              value={form.storageLocationId}
-              onChange={(e) => setForm((prev) => ({ ...prev, storageLocationId: e.target.value }))}
-            >
-              <option value="">Selecione...</option>
-              {storages.map((item) => (
-                <option key={item.id} value={item.id}>{item.name}</option>
-              ))}
-            </select>
-          </label>
-
-          <label className={styles.field}>
-            <span>Direcao</span>
-            <select
-              value={form.direction}
-              onChange={(e) => setForm((prev) => ({ ...prev, direction: e.target.value as Direction }))}
-            >
-              <option value="source_to_target">Origem {'->'} Destino</option>
-              <option value="target_to_source">Destino {'->'} Origem</option>
-            </select>
-          </label>
-
-          <label className={styles.field}>
-            <span>Frequencia</span>
-            <select
-              value={form.frequency}
-              disabled={!form.recurring}
-              onChange={(e) => setForm((prev) => ({ ...prev, frequency: e.target.value as Frequency }))}
-            >
-              <option value="daily">Diaria</option>
-              <option value="weekly">Semanal</option>
-              <option value="monthly">Mensal</option>
-            </select>
-          </label>
-
-          {form.frequency === 'weekly' && (
-            <label className={styles.field}>
-              <span>Dia da semana</span>
-              <select
-                value={form.weekDay}
-                disabled={!form.recurring}
-                onChange={(e) => setForm((prev) => ({ ...prev, weekDay: Number(e.target.value) }))}
-              >
-                {WEEKDAY_OPTIONS.map((item) => (
-                  <option key={item.value} value={item.value}>{item.label}</option>
-                ))}
-              </select>
-            </label>
-          )}
-
-          {form.frequency === 'monthly' && (
-            <label className={styles.field}>
-              <span>Dia do mes</span>
-              <select
-                value={form.monthDay}
-                disabled={!form.recurring}
-                onChange={(e) => setForm((prev) => ({ ...prev, monthDay: Number(e.target.value) }))}
-              >
-                {MONTHDAY_OPTIONS.map((value) => (
-                  <option key={value} value={value}>Dia {value}</option>
-                ))}
-              </select>
-            </label>
-          )}
-
-          <label className={styles.field}>
-            <span>Horario (UTC)</span>
-            <div className={styles.timeRow}>
-              <select
-                value={form.hour}
-                disabled={!form.recurring}
-                onChange={(e) => setForm((prev) => ({ ...prev, hour: Number(e.target.value) }))}
-              >
-                {Array.from({ length: 24 }, (_, value) => (
-                  <option key={value} value={value}>{String(value).padStart(2, '0')}</option>
-                ))}
-              </select>
-              <span>:</span>
-              <select
-                value={form.minute}
-                disabled={!form.recurring}
-                onChange={(e) => setForm((prev) => ({ ...prev, minute: Number(e.target.value) }))}
-              >
-                {MINUTES.map((value) => (
-                  <option key={value} value={value}>{String(value).padStart(2, '0')}</option>
-                ))}
-              </select>
-            </div>
-          </label>
-        </div>
-
-        <div className={styles.flags}>
-          <label><input type="checkbox" checked={form.dropExisting} onChange={(e) => setForm((prev) => ({ ...prev, dropExisting: e.target.checked }))} /><span>Drop existing no restore</span></label>
-          <label><input type="checkbox" checked={form.recurring} onChange={(e) => setForm((prev) => ({ ...prev, recurring: e.target.checked }))} /><span>Recorrente (execucao automatica)</span></label>
-          <label><input type="checkbox" checked={form.recurring ? form.runOnManual : true} disabled={!form.recurring} onChange={(e) => setForm((prev) => ({ ...prev, runOnManual: e.target.checked }))} /><span>Permitir execucao manual</span></label>
-        </div>
-
-        <div className={styles.footer}>
-          <span className={styles.hint}>
-            {form.recurring
-              ? `Cron: ${buildCron({ frequency: form.frequency, hour: form.hour, minute: form.minute, weekDay: form.weekDay, monthDay: form.monthDay })}`
-              : 'Nao recorrente: executa somente manualmente (sem agendamento automatico).'}
-          </span>
-          <button className={styles.saveBtn} onClick={() => void createSyncJob()} disabled={saving || !canWrite}>
-            {saving ? 'Criando...' : 'Criar Sync Job'}
-          </button>
-        </div>
-      </section>
 
       {error && <div className={styles.error}>{error}</div>}
 
-      <section className={styles.card}>
-        <h3 className={styles.cardTitle}>Sync Jobs Cadastrados</h3>
-        {loading ? (
-          <div className={styles.empty}>Carregando...</div>
-        ) : jobs.length === 0 ? (
-          <div className={styles.empty}>Nenhum sync job cadastrado.</div>
-        ) : (
-          <div className={styles.tableWrap}>
-            <table className={styles.table}>
-              <thead>
-                <tr>
-                  <th>Job</th>
-                  <th>Fluxo</th>
-                  <th>Agendamento</th>
-                  <th>Ultima execucao</th>
-                  <th>Status</th>
-                  <th />
-                </tr>
-              </thead>
-              <tbody>
-                {jobs.map((job) => {
-                  return (
-                    <tr key={job.id}>
-                      <td>
-                        <strong>{job.name}</strong>
-                      </td>
-                      <td>
-                        {job.source_datasource?.name ?? job.source_datasource_id} {'->'} {job.target_datasource?.name ?? job.target_datasource_id}
-                      </td>
-                      <td>{formatScheduleLabel(job.schedule_cron, job.enabled)}</td>
-                      <td>{job.last_execution_at ? new Date(job.last_execution_at).toLocaleString('pt-BR') : '-'}</td>
-                      <td>{job.last_sync_execution?.status ?? '-'}</td>
-                      <td>
-                        <div className={styles.rowActions}>
-                          <button disabled={!canWrite} onClick={() => void toggleEnabled(job)}>{job.enabled ? 'Desativar' : 'Ativar'}</button>
-                          <button className={styles.actionRun} disabled={runningId === job.id || !canRun} onClick={() => void runNow(job)}>
-                            {runningId === job.id ? 'Executando...' : 'Executar'}
-                          </button>
-                          <button className={styles.actionDanger} disabled={!canWrite} onClick={() => void removeJob(job)}>Remover</button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+      <div className={styles.content}>
+        <section className={styles.card}>
+          <h3 className={styles.cardTitle}>Novo Sync Job</h3>
+          <div className={styles.formGrid}>
+            <label className={styles.field}>
+              <span className={styles.fieldLabel}>Nome</span>
+              <input
+                className={styles.input}
+                value={form.name}
+                onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
+                placeholder="Ex: Sync Producao -> Teste"
+              />
+            </label>
+
+            <label className={styles.field}>
+              <span className={styles.fieldLabel}>Origem</span>
+              <select
+                className={styles.select}
+                value={form.sourceDatasourceId}
+                onChange={(e) => setForm((prev) => ({ ...prev, sourceDatasourceId: e.target.value }))}
+              >
+                <option value="">Selecione...</option>
+                {supportedDatasources.map((item) => (
+                  <option key={item.id} value={item.id}>{item.name} ({item.type})</option>
+                ))}
+              </select>
+            </label>
+
+            <label className={styles.field}>
+              <span className={styles.fieldLabel}>Destino</span>
+              <select
+                className={styles.select}
+                value={form.targetDatasourceId}
+                onChange={(e) => setForm((prev) => ({ ...prev, targetDatasourceId: e.target.value }))}
+              >
+                <option value="">Selecione...</option>
+                {targetCandidates.map((item) => (
+                  <option key={item.id} value={item.id}>{item.name} ({item.type})</option>
+                ))}
+              </select>
+            </label>
+
+            <label className={styles.field}>
+              <span className={styles.fieldLabel}>Storage</span>
+              <select
+                className={styles.select}
+                value={form.storageLocationId}
+                onChange={(e) => setForm((prev) => ({ ...prev, storageLocationId: e.target.value }))}
+              >
+                <option value="">Selecione...</option>
+                {storages.map((item) => (
+                  <option key={item.id} value={item.id}>{item.name}</option>
+                ))}
+              </select>
+            </label>
+
+            <label className={styles.field}>
+              <span className={styles.fieldLabel}>Direcao</span>
+              <select
+                className={styles.select}
+                value={form.direction}
+                onChange={(e) => setForm((prev) => ({ ...prev, direction: e.target.value as Direction }))}
+              >
+                <option value="source_to_target">Origem {'->'} Destino</option>
+                <option value="target_to_source">Destino {'->'} Origem</option>
+              </select>
+            </label>
+
+            <label className={styles.field}>
+              <span className={styles.fieldLabel}>Frequencia</span>
+              <select
+                className={styles.select}
+                value={form.frequency}
+                disabled={!form.recurring}
+                onChange={(e) => setForm((prev) => ({ ...prev, frequency: e.target.value as Frequency }))}
+              >
+                <option value="daily">Diaria</option>
+                <option value="weekly">Semanal</option>
+                <option value="monthly">Mensal</option>
+              </select>
+            </label>
+
+            {form.frequency === 'weekly' && (
+              <label className={styles.field}>
+                <span className={styles.fieldLabel}>Dia da semana</span>
+                <select
+                  className={styles.select}
+                  value={form.weekDay}
+                  disabled={!form.recurring}
+                  onChange={(e) => setForm((prev) => ({ ...prev, weekDay: Number(e.target.value) }))}
+                >
+                  {WEEKDAY_OPTIONS.map((item) => (
+                    <option key={item.value} value={item.value}>{item.label}</option>
+                  ))}
+                </select>
+              </label>
+            )}
+
+            {form.frequency === 'monthly' && (
+              <label className={styles.field}>
+                <span className={styles.fieldLabel}>Dia do mes</span>
+                <select
+                  className={styles.select}
+                  value={form.monthDay}
+                  disabled={!form.recurring}
+                  onChange={(e) => setForm((prev) => ({ ...prev, monthDay: Number(e.target.value) }))}
+                >
+                  {MONTHDAY_OPTIONS.map((value) => (
+                    <option key={value} value={value}>Dia {value}</option>
+                  ))}
+                </select>
+              </label>
+            )}
+
+            <label className={styles.field}>
+              <span className={styles.fieldLabel}>Horario (UTC)</span>
+              <div className={styles.timeRow}>
+                <select
+                  className={styles.select}
+                  value={form.hour}
+                  disabled={!form.recurring}
+                  onChange={(e) => setForm((prev) => ({ ...prev, hour: Number(e.target.value) }))}
+                >
+                  {Array.from({ length: 24 }, (_, value) => (
+                    <option key={value} value={value}>{String(value).padStart(2, '0')}</option>
+                  ))}
+                </select>
+                <span className={styles.timeSep}>:</span>
+                <select
+                  className={styles.select}
+                  value={form.minute}
+                  disabled={!form.recurring}
+                  onChange={(e) => setForm((prev) => ({ ...prev, minute: Number(e.target.value) }))}
+                >
+                  {MINUTES.map((value) => (
+                    <option key={value} value={value}>{String(value).padStart(2, '0')}</option>
+                  ))}
+                </select>
+              </div>
+            </label>
           </div>
-        )}
-      </section>
+
+          <div className={styles.flags}>
+            <label className={styles.checkItem}>
+              <input className={styles.checkbox} type="checkbox" checked={form.dropExisting} onChange={(e) => setForm((prev) => ({ ...prev, dropExisting: e.target.checked }))} />
+              <span>Drop existing no restore</span>
+            </label>
+            <label className={styles.checkItem}>
+              <input className={styles.checkbox} type="checkbox" checked={form.recurring} onChange={(e) => setForm((prev) => ({ ...prev, recurring: e.target.checked }))} />
+              <span>Recorrente (execucao automatica)</span>
+            </label>
+            <label className={styles.checkItem}>
+              <input className={styles.checkbox} type="checkbox" checked={form.recurring ? form.runOnManual : true} disabled={!form.recurring} onChange={(e) => setForm((prev) => ({ ...prev, runOnManual: e.target.checked }))} />
+              <span>Permitir execucao manual</span>
+            </label>
+          </div>
+
+          <div className={styles.footer}>
+            <span className={styles.hint}>
+              {form.recurring
+                ? `Cron: ${buildCron({ frequency: form.frequency, hour: form.hour, minute: form.minute, weekDay: form.weekDay, monthDay: form.monthDay })}`
+                : 'Nao recorrente: executa somente manualmente (sem agendamento automatico).'}
+            </span>
+            <button className={styles.saveBtn} onClick={() => void createSyncJob()} disabled={saving || !canWrite}>
+              {saving ? 'Criando...' : 'Criar Sync Job'}
+            </button>
+          </div>
+        </section>
+
+        <section className={styles.card}>
+          <h3 className={styles.cardTitle}>Sync Jobs Cadastrados</h3>
+          {loading ? (
+            <div className={styles.empty}>Carregando...</div>
+          ) : jobs.length === 0 ? (
+            <div className={styles.empty}>Nenhum sync job cadastrado.</div>
+          ) : (
+            <div className={styles.tableWrap}>
+              <table className={styles.table}>
+                <thead>
+                  <tr>
+                    <th>Job</th>
+                    <th>Fluxo</th>
+                    <th>Agendamento</th>
+                    <th>Ultima execucao</th>
+                    <th>Status</th>
+                    <th />
+                  </tr>
+                </thead>
+                <tbody>
+                  {jobs.map((job) => {
+                    const statusKey = getStatusKey(job.last_sync_execution?.status);
+                    return (
+                      <tr key={job.id}>
+                        <td>
+                          <strong className={styles.checkItem}>{job.name}</strong>
+                        </td>
+                        <td>
+                          <span className={styles.checkItem} >{job.source_datasource?.name ?? job.source_datasource_id} {'->'} {job.target_datasource?.name ?? job.target_datasource_id}</span>
+                        </td>
+                        <td> <span className={styles.checkItem}>{formatScheduleLabel(job.schedule_cron, job.enabled)}</span></td>
+                        <td> <span className={styles.checkItem}>{job.last_execution_at ? new Date(job.last_execution_at).toLocaleString('pt-BR') : '-'}</span></td>
+                        <td>
+                          <span className={`${styles.statusBadge} ${styles[`status_${statusKey}`]}`}>
+                            {STATUS_LABELS[statusKey]}
+                          </span>
+                        </td>
+                        <td>
+                          <div className={styles.rowActions}>
+                            <button disabled={!canWrite} onClick={() => void toggleEnabled(job)}>{job.enabled ? 'Desativar' : 'Ativar'}</button>
+                            <button className={styles.actionRun} disabled={runningId === job.id || !canRun} onClick={() => void runNow(job)}>
+                              {runningId === job.id ? 'Executando...' : 'Executar'}
+                            </button>
+                            <button className={styles.actionDanger} disabled={!canWrite} onClick={() => void removeJob(job)}>Remover</button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+      </div>
     </div>
   );
 }

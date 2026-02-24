@@ -30,11 +30,16 @@ import { getPrometheusMetricsText } from './models/metrics.model';
 
 export function createApp() {
   const app = express();
+  const corsOrigins = config.cors.origins
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+  const allowAnyOrigin = corsOrigins.includes('*');
 
   app.use(helmet());
   app.use(
     cors({
-      origin: config.cors.origins === '*' ? '*' : config.cors.origins.split(','),
+      origin: allowAnyOrigin ? true : corsOrigins,
       credentials: true,
     }),
   );
@@ -75,17 +80,25 @@ export function createApp() {
   app.use('/api/audit-logs', auditLogsRouter);
   app.use('/api/access', requirePermission(PERMISSIONS.ACCESS_MANAGE), accessRouter);
 
-  const frontendDistPath = path.join(process.cwd(), 'public');
-  const frontendIndexPath = path.join(frontendDistPath, 'index.html');
-  const hasFrontendBuild = existsSync(frontendIndexPath);
+  const frontendCandidates = [
+    path.join(process.cwd(), 'public'),
+    path.join(process.cwd(), 'interface', 'dist'),
+  ];
+  const frontendDistPath = frontendCandidates.find((candidate) =>
+    existsSync(path.join(candidate, 'index.html')),
+  );
+  const frontendIndexPath = frontendDistPath ? path.join(frontendDistPath, 'index.html') : null;
+  const hasFrontendBuild = Boolean(frontendDistPath && frontendIndexPath && existsSync(frontendIndexPath));
 
-  if (hasFrontendBuild) {
+  if (hasFrontendBuild && frontendDistPath && frontendIndexPath) {
     app.use(express.static(frontendDistPath));
 
     app.get('*', (req: Request, res: Response, next) => {
       if (req.path.startsWith('/api/')) return next();
       if (req.path === '/api') return next();
       if (req.path === '/health' || req.path === '/metrics') return next();
+      if (req.path.startsWith('/assets/')) return next();
+      if (/\.[a-zA-Z0-9]+$/.test(req.path)) return next();
       res.sendFile(frontendIndexPath);
     });
   }

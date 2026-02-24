@@ -1,6 +1,7 @@
 ﻿# Deployment - DataGuardian
 
 Guia alinhado ao compose em `docker/docker-compose.yml`.
+O servico `app` usa imagem publicada no Docker Hub (`carlossouzadev/dataguardian:latest`).
 
 ## Servicos
 
@@ -17,12 +18,20 @@ Guia alinhado ao compose em `docker/docker-compose.yml`.
 docker compose -f docker/docker-compose.yml up -d
 ```
 
+Para forcar pull da imagem mais recente da aplicacao:
+
+```bash
+docker compose -f docker/docker-compose.yml pull app
+docker compose -f docker/docker-compose.yml up -d app
+```
+
 ## Variaveis importantes (`.env`)
 
 - `DATABASE_URL`
 - `REDIS_URL`
 - `REDIS_PASSWORD`
 - `PORT`
+- `HOST` (usar `0.0.0.0` para expor no container/rede)
 - `LOG_LEVEL`
 - `ALLOWED_ORIGINS`
 - `MAX_CONCURRENT_BACKUPS`
@@ -38,6 +47,14 @@ docker compose -f docker/docker-compose.yml up -d
 - `GET /health` (liveness simples)
 - `GET /api/health` (detalhado, protegido)
 - `GET /metrics` (Prometheus)
+
+## Acesso via IP da maquina
+
+Para acessar de outro dispositivo na rede (ex.: `http://192.168.0.10:3000`):
+
+- mantenha `HOST=0.0.0.0`
+- inclua o origin correto em `ALLOWED_ORIGINS` quando nao usar `*`
+  - exemplo: `ALLOWED_ORIGINS=http://192.168.0.10:3000,http://localhost:3000`
 
 ## Redis indisponivel em producao
 

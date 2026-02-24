@@ -59,10 +59,11 @@ async function bootstrap() {
   }
 
   const app = createApp();
+  const host = config.host;
   const port = config.port;
 
-  const server = app.listen(port, () => {
-    logger.info(`API REST disponível em http://localhost:${port}`);
+  const server = app.listen(port, host, () => {
+    logger.info(`API REST disponível em http://${host}:${port}`);
     logger.info(`Ambiente: ${config.env}`);
   });
 
