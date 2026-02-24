@@ -288,15 +288,28 @@ export async function resolveBinaryPath(
     }
   }
 
-  if (await commandExists(commandPath)) {
+  if (
+    await commandExists(commandPath)
+    && (
+      !isPostgresCommand
+      || preferredPostgresMajor === undefined
+      || await hasExpectedPostgresMajor(commandPath, preferredPostgresMajor)
+    )
+  ) {
     return commandPath;
   }
 
   if (allowAutoInstall) {
-    const installed = await tryAutoInstallBinary(command, onLog);
+    const installed = await tryAutoInstallBinary(command, onLog, { preferredPostgresMajor });
     if (installed) {
       return resolveBinaryPath(command, false, onLog, options);
     }
+  }
+
+  if (isPostgresCommand && preferredPostgresMajor !== undefined) {
+    throw new Error(
+      `Nenhum binario '${command}' compativel com PostgreSQL ${preferredPostgresMajor} foi encontrado no PATH`,
+    );
   }
 
   return commandPath;
@@ -308,11 +321,12 @@ export async function spawnCommandToFile(params: {
   env?: NodeJS.ProcessEnv;
   outputFile: string;
   preferredPostgresMajor?: number;
+  allowAutoInstall?: boolean;
   callbacks?: EngineRunCallbacks;
 }) {
   const commandPath = await resolveBinaryPath(
     params.command,
-    true,
+    params.allowAutoInstall ?? true,
     (line) => params.callbacks?.onEngineLog?.(`[installer] ${line}`),
     { preferredPostgresMajor: params.preferredPostgresMajor },
   );
