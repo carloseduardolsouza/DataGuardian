@@ -39,7 +39,7 @@ const composeBaseArgs = ['compose', '--env-file', 'docker/.env', '-f', composeFi
 ensureEnvFile();
 
 console.log('Building app image...');
-run('docker', [...composeBaseArgs, 'build', 'app']);
+run('docker', [...composeBaseArgs, 'build', '--pull', 'app']);
 
 console.log('Starting containers...');
 run('docker', [
@@ -47,6 +47,7 @@ run('docker', [
   'up',
   '-d',
   '--wait',
+  '--force-recreate',
   'postgres',
   'redis',
   'evolution-postgres',

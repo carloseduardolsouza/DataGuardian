@@ -1,8 +1,10 @@
-FROM node:20-alpine AS builder
+FROM node:20-bookworm-slim AS builder
 
 WORKDIR /app
 
-RUN apk add --no-cache openssl
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends openssl ca-certificates wget \
+  && rm -rf /var/lib/apt/lists/*
 
 COPY package*.json ./
 COPY interface/package*.json interface/
@@ -19,13 +21,15 @@ COPY interface ./interface
 RUN npm run db:generate
 RUN npm run build
 
-FROM node:20-alpine AS runner
+FROM node:20-bookworm-slim AS runner
 
 WORKDIR /app
 
 ENV NODE_ENV=production
 
-RUN apk add --no-cache openssl
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends openssl ca-certificates wget \
+  && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /app/package*.json ./
 COPY --from=builder /app/interface/package*.json interface/
@@ -38,4 +42,4 @@ COPY --from=builder /app/interface/dist ./public
 
 EXPOSE 3000
 
-CMD ["node", "dist/index.js"]
+CMD ["sh", "-c", "npm run db:deploy && node dist/index.js"]
