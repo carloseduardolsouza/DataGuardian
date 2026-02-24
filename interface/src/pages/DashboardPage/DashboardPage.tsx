@@ -137,7 +137,7 @@ export default function DashboardPage({
               onClick={onToggleTheme}
               title={theme === 'dark' ? 'Mudar para tema claro' : 'Mudar para tema escuro'}
             >
-              {theme === 'dark' ? <SunIcon /> : <MoonIcon />}
+              {theme === 'dark' ? <SunIcon className={styles.iconGlyph} /> : <MoonIcon className={styles.iconGlyph} />}
             </button>
           </div>
         </header>
@@ -301,15 +301,19 @@ function DashboardContent() {
   }, [data]);
 
   if (loading && !data) {
-    return <div className={styles.section} style={{ padding: '20px' }}>Carregando dashboard...</div>;
+    return (
+      <div className={styles.section}>
+        <div className={styles.loadingState}>Carregando dashboard...</div>
+      </div>
+    );
   }
 
   return (
     <>
       {error && (
-        <div className={styles.section} style={{ padding: '12px 16px', marginBottom: '16px' }}>
+        <div className={styles.errorBox}>
           <span className={styles.textMuted}>{error}</span>
-          <button className={styles.sectionAction} onClick={() => void loadOverview()} style={{ marginLeft: 12 }}>
+          <button className={styles.sectionAction} onClick={() => void loadOverview()}>
             Tentar novamente
           </button>
         </div>
@@ -439,22 +443,12 @@ function DashboardContent() {
 
 function EmptyPage({ page }: { page: NavKey }) {
   return (
-    <div
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        height: '60vh',
-        gap: '12px',
-        color: 'var(--color-text-muted)',
-      }}
-    >
+    <div className={styles.emptyPage}>
       <EmptyPageIcon />
-      <p style={{ fontSize: 'var(--font-size-lg)', fontWeight: 600, color: 'var(--color-text)' }}>
+      <p className={styles.emptyPageTitle}>
         {PAGE_TITLES[page].title}
       </p>
-      <p style={{ fontSize: 'var(--font-size-sm)' }}>
+      <p className={styles.emptyPageSub}>
         Esta secao sera implementada em breve.
       </p>
     </div>
