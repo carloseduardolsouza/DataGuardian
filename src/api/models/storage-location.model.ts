@@ -1,8 +1,9 @@
 import { Prisma, StorageLocationType, StorageLocationStatus } from '@prisma/client';
-import { promises as fs } from 'node:fs';
+import { createWriteStream, promises as fs } from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
 import * as net from 'node:net';
+import archiver from 'archiver';
 import { prisma } from '../../lib/prisma';
 import { AppError } from '../middlewares/error-handler';
 import { createStorageAdapter } from '../../core/storage/storage-factory';
@@ -500,6 +501,50 @@ function withPosixJoin(...parts: string[]) {
     .join('/');
 }
 
+async function isLocalDirectoryPath(
+  storageType: StorageLocationType,
+  cfg: JsonMap,
+  targetPath: string,
+) {
+  if (storageType !== 'local') return false;
+
+  const root = normalizeLocalStoragePath(String(cfg.path ?? ''));
+  const fullPath = path.join(root, ...targetPath.split('/'));
+  try {
+    const stat = await fs.stat(fullPath);
+    return stat.isDirectory();
+  } catch {
+    return false;
+  }
+}
+
+function safeArchiveName(name: string) {
+  const cleaned = name
+    .replace(/[<>:"/\\|?*\x00-\x1F]/g, '_')
+    .trim();
+  return cleaned || 'folder';
+}
+
+async function createZipFromDirectory(sourceDir: string, destinationZipPath: string) {
+  await new Promise<void>((resolve, reject) => {
+    const output = createWriteStream(destinationZipPath);
+    const archive = archiver('zip', { zlib: { level: 9 } });
+
+    const onError = (err: Error) => {
+      output.destroy();
+      reject(err);
+    };
+
+    output.once('close', () => resolve());
+    output.once('error', onError);
+    archive.once('error', onError);
+
+    archive.pipe(output);
+    archive.directory(sourceDir, path.basename(sourceDir));
+    void archive.finalize();
+  });
+}
+
 // Model functions
 
 export async function listStorageLocations(
@@ -880,22 +925,14 @@ export async function prepareStorageFileDownload(id: string, rawPath: string) {
 
   const adapter = createStorageAdapter(storage.type, storage.config);
   const fileExists = await adapter.exists(targetPath);
+  const descendants = (await adapter.list(targetPath))
+    .map((item) => normalizeStorageRelativePath(item))
+    .filter((item) => item.startsWith(`${targetPath}/`));
+  const isLocalDirectory = await isLocalDirectoryPath(storage.type, normalizeConfig(storage.config), targetPath);
+  const isDirectory = descendants.length > 0 || isLocalDirectory;
 
-  if (!fileExists) {
-    const descendants = await adapter.list(targetPath);
-    const hasChildren = descendants
-      .map((item) => normalizeStorageRelativePath(item))
-      .some((item) => item.startsWith(`${targetPath}/`));
-
-    if (hasChildren) {
-      throw new AppError(
-        'STORAGE_FOLDER_DOWNLOAD_NOT_SUPPORTED',
-        422,
-        'Download de pasta ainda nao e suportado pelo explorer',
-      );
-    }
-
-    throw new AppError('STORAGE_PATH_NOT_FOUND', 404, `Arquivo nao encontrado: '${targetPath}'`);
+  if (!fileExists && !isDirectory) {
+    throw new AppError('STORAGE_PATH_NOT_FOUND', 404, `Arquivo ou pasta nao encontrado: '${targetPath}'`);
   }
 
   const tempRoot = path.join(
@@ -906,13 +943,44 @@ export async function prepareStorageFileDownload(id: string, rawPath: string) {
   );
   await fs.mkdir(tempRoot, { recursive: true });
 
-  const fileName = path.posix.basename(targetPath);
-  const localFilePath = path.join(tempRoot, fileName);
-  await adapter.download(targetPath, localFilePath);
+  try {
+    if (fileExists && !isDirectory) {
+      const fileName = path.posix.basename(targetPath);
+      const localFilePath = path.join(tempRoot, fileName);
+      await adapter.download(targetPath, localFilePath);
 
-  return {
-    file_path: localFilePath,
-    file_name: fileName,
-    cleanup_dir: tempRoot,
-  };
+      return {
+        file_path: localFilePath,
+        file_name: fileName,
+        cleanup_dir: tempRoot,
+      };
+    }
+    const files = descendants;
+
+    const folderName = safeArchiveName(path.posix.basename(targetPath));
+    const extractedFolderPath = path.join(tempRoot, folderName);
+    await fs.mkdir(extractedFolderPath, { recursive: true });
+
+    for (const filePath of files) {
+      const relativeSuffix = filePath.slice(targetPath.length).replace(/^\/+/, '');
+      if (!relativeSuffix) continue;
+
+      const localDestinationPath = path.join(extractedFolderPath, ...relativeSuffix.split('/'));
+      await fs.mkdir(path.dirname(localDestinationPath), { recursive: true });
+      await adapter.download(filePath, localDestinationPath);
+    }
+
+    const zipFileName = `${folderName}.zip`;
+    const zipPath = path.join(tempRoot, zipFileName);
+    await createZipFromDirectory(extractedFolderPath, zipPath);
+
+    return {
+      file_path: zipPath,
+      file_name: zipFileName,
+      cleanup_dir: tempRoot,
+    };
+  } catch (err) {
+    await fs.rm(tempRoot, { recursive: true, force: true }).catch(() => undefined);
+    throw err;
+  }
 }

@@ -31,30 +31,6 @@ type WhatsappEvolutionConfig = {
   important_only?: boolean;
 };
 
-const SEVERITY_EMOJI: Record<NotificationSeverity, string> = {
-  info: 'ℹ️',
-  warning: '⚠️',
-  critical: '🚨',
-};
-
-const TYPE_EMOJI: Record<NotificationType, string> = {
-  backup_success: '✅',
-  backup_failed: '❌',
-  connection_lost: '🔌',
-  connection_restored: '🟢',
-  storage_full: '🧱',
-  storage_unreachable: '📦',
-  health_degraded: '🩺',
-  cleanup_completed: '🧹',
-};
-
-const ERROR_NOTIFICATION_TYPES = new Set<NotificationType>([
-  'backup_failed',
-  'connection_lost',
-  'storage_unreachable',
-  'health_degraded',
-]);
-
 function asObject(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? value as Record<string, unknown>
@@ -69,15 +45,6 @@ function asStringArray(value: unknown) {
   return Array.isArray(value)
     ? value.map((v) => asString(v)).filter(Boolean)
     : [];
-}
-
-function asBoolean(value: unknown, fallback = false) {
-  if (typeof value === 'boolean') return value;
-  if (typeof value === 'string') {
-    if (value.toLowerCase() === 'true') return true;
-    if (value.toLowerCase() === 'false') return false;
-  }
-  return fallback;
 }
 
 async function readSystemSetting(key: string) {
@@ -100,18 +67,6 @@ async function readDispatchConfig() {
   };
 }
 
-function isImportantNotification(input: CreateNotificationInput) {
-  return input.severity === 'critical' || input.severity === 'warning';
-}
-
-function isErrorNotification(input: CreateNotificationInput) {
-  if (input.severity === 'critical') return true;
-  if (ERROR_NOTIFICATION_TYPES.has(input.type)) return true;
-
-  const text = `${input.title} ${input.message}`.toLowerCase();
-  return /(erro|error|falha|failed|failure)/.test(text);
-}
-
 function humanizeType(type: NotificationType) {
   return type
     .split('_')
@@ -119,27 +74,56 @@ function humanizeType(type: NotificationType) {
     .join(' ');
 }
 
+function normalizeInline(value: string) {
+  return value.replace(/\s+/g, ' ').trim();
+}
+
+function truncateText(value: string, max = 180) {
+  if (value.length <= max) return value;
+  return `${value.slice(0, Math.max(0, max - 3)).trim()}...`;
+}
+
+function firstNonEmptyLine(value: string) {
+  const lines = value
+    .split(/\r?\n/)
+    .map((line) => normalizeInline(line))
+    .filter(Boolean);
+  return lines[0] ?? '';
+}
+
+function severityLabel(severity: NotificationSeverity) {
+  if (severity === 'critical') return 'CRITICO';
+  if (severity === 'warning') return 'ATENCAO';
+  return 'INFO';
+}
+
+function entityLabel(entityType: NotificationEntityType) {
+  if (entityType === 'backup_job') return 'Job de backup';
+  if (entityType === 'storage_location') return 'Storage';
+  if (entityType === 'datasource') return 'Datasource';
+  return 'Sistema';
+}
+
 function buildWhatsappText(
   input: CreateNotificationInput,
   rendered: { title: string; message: string },
 ) {
-  const severityEmoji = SEVERITY_EMOJI[input.severity] ?? '🔔';
-  const typeEmoji = TYPE_EMOJI[input.type] ?? '📣';
-  const title = rendered.title.trim() || input.title;
-  const message = rendered.message.trim() || input.message;
-  const typeLabel = humanizeType(input.type);
   const when = new Date().toLocaleString('pt-BR', { hour12: false });
+  const title = truncateText(normalizeInline(rendered.title || input.title), 100);
+
+  const renderedMessage = normalizeInline(firstNonEmptyLine(rendered.message));
+  const fallbackMessage = normalizeInline(firstNonEmptyLine(input.message));
+  const summary = truncateText(renderedMessage || fallbackMessage || 'Sem detalhes adicionais.', 200);
 
   return [
-    `${severityEmoji} *DataGuardian | Alerta* ${typeEmoji}`,
-    '',
-    `*${title}*`,
-    message,
-    '',
-    `• Tipo: ${typeLabel}`,
-    `• Severidade: ${input.severity.toUpperCase()}`,
-    `• Entidade: ${input.entityType} (${input.entityId})`,
-    `• Horário: ${when}`,
+    'DataGuardian - Nova notificacao',
+    `Status: ${severityLabel(input.severity)}`,
+    `Evento: ${humanizeType(input.type)}`,
+    `Titulo: ${title}`,
+    `Resumo: ${summary}`,
+    `Origem: ${entityLabel(input.entityType)} (${input.entityId})`,
+    `Horario: ${when}`,
+    'Veja mais detalhes na aba Notificacoes.',
   ].join('\n');
 }
 
@@ -179,7 +163,6 @@ async function dispatchWhatsappNotification(input: CreateNotificationInput) {
   const apiKey = asString(cfg.whatsapp.api_key);
   const instance = asString(cfg.whatsapp.instance);
   const recipients = asStringArray(cfg.whatsapp.to);
-  const importantOnly = asBoolean(cfg.whatsapp.important_only, true);
 
   if (!apiUrl || !apiKey || !instance || recipients.length === 0) {
     logger.warn(
@@ -192,17 +175,6 @@ async function dispatchWhatsappNotification(input: CreateNotificationInput) {
         recipients_count: recipients.length,
       },
       '[WHATSAPP] Envio ignorado: configuracao incompleta',
-    );
-    return;
-  }
-  if (importantOnly && !isImportantNotification(input) && !isErrorNotification(input)) {
-    logger.info(
-      {
-        type: input.type,
-        severity: input.severity,
-        entityId: input.entityId,
-      },
-      '[WHATSAPP] Envio ignorado: filtro important_only',
     );
     return;
   }

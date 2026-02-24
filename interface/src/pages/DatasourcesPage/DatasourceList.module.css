@@ -99,6 +99,39 @@
   border: 1px solid var(--color-border-subtle);
 }
 
+.summaryBadgeWrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  outline: none;
+}
+
+.summaryTooltip {
+  position: absolute;
+  left: 0;
+  top: calc(100% + 8px);
+  width: 240px;
+  padding: 8px 10px;
+  border-radius: var(--radius-md);
+  background: var(--color-text);
+  color: var(--color-surface);
+  font-size: var(--font-size-xs);
+  line-height: 1.4;
+  box-shadow: var(--shadow-md);
+  z-index: 20;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-4px);
+  transition: opacity var(--transition-fast), transform var(--transition-fast), visibility var(--transition-fast);
+}
+
+.summaryBadgeWrap:hover .summaryTooltip,
+.summaryBadgeWrap:focus-visible .summaryTooltip {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+
 /* ── Lista ────────────────────────────────────── */
 .list {
   flex: 1;

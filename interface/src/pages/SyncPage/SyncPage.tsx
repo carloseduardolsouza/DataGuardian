@@ -11,22 +11,65 @@ import { PERMISSIONS } from '../../constants/permissions';
 import styles from './SyncPage.module.css';
 
 type Direction = 'source_to_target' | 'target_to_source';
+type Frequency = 'daily' | 'weekly' | 'monthly';
 
 const SUPPORTED_TYPES = new Set(['postgres', 'mysql', 'mariadb']);
 const MINUTES = [0, 15, 30, 45];
+const WEEKDAY_OPTIONS = [
+  { value: 0, label: 'Domingo' },
+  { value: 1, label: 'Segunda' },
+  { value: 2, label: 'Terca' },
+  { value: 3, label: 'Quarta' },
+  { value: 4, label: 'Quinta' },
+  { value: 5, label: 'Sexta' },
+  { value: 6, label: 'Sabado' },
+];
+const MONTHDAY_OPTIONS = Array.from({ length: 28 }, (_, idx) => idx + 1);
 
-function parseDailyCron(cron: string) {
-  const [m = '0', h = '2'] = cron.split(' ');
+function parseScheduleCron(cron: string) {
+  const [m = '0', h = '2', dom = '*', _mon = '*', dow = '*'] = cron.trim().split(/\s+/);
   const minute = Number(m);
   const hour = Number(h);
+  const monthDay = Number(dom);
+  const weekDay = Number(dow);
+  let frequency: Frequency = 'daily';
+
+  if (dom !== '*' && dow === '*') frequency = 'monthly';
+  else if (dow !== '*' && dom === '*') frequency = 'weekly';
+
   return {
     hour: Number.isFinite(hour) && hour >= 0 && hour <= 23 ? hour : 2,
     minute: Number.isFinite(minute) && minute >= 0 && minute <= 59 ? minute : 0,
+    frequency,
+    monthDay: Number.isFinite(monthDay) && monthDay >= 1 && monthDay <= 28 ? monthDay : 1,
+    weekDay: Number.isFinite(weekDay) && weekDay >= 0 && weekDay <= 6 ? weekDay : 1,
   };
 }
 
-function buildDailyCron(hour: number, minute: number) {
-  return `${minute} ${hour} * * *`;
+function buildCron(params: { frequency: Frequency; hour: number; minute: number; weekDay: number; monthDay: number }) {
+  if (params.frequency === 'weekly') {
+    return `${params.minute} ${params.hour} * * ${params.weekDay}`;
+  }
+  if (params.frequency === 'monthly') {
+    return `${params.minute} ${params.hour} ${params.monthDay} * *`;
+  }
+  return `${params.minute} ${params.hour} * * *`;
+}
+
+function formatScheduleLabel(cron: string, enabled: boolean) {
+  if (!enabled) return 'Manual apenas (sem execucao automatica)';
+
+  const parsed = parseScheduleCron(cron);
+  const hh = String(parsed.hour).padStart(2, '0');
+  const mm = String(parsed.minute).padStart(2, '0');
+  if (parsed.frequency === 'weekly') {
+    const weekday = WEEKDAY_OPTIONS.find((item) => item.value === parsed.weekDay)?.label ?? 'Dia invalido';
+    return `Semanal (${weekday}) ${hh}:${mm} UTC`;
+  }
+  if (parsed.frequency === 'monthly') {
+    return `Mensal (dia ${parsed.monthDay}) ${hh}:${mm} UTC`;
+  }
+  return `Diaria ${hh}:${mm} UTC`;
 }
 
 interface CreateFormState {
@@ -37,9 +80,12 @@ interface CreateFormState {
   direction: Direction;
   dropExisting: boolean;
   runOnManual: boolean;
-  enabled: boolean;
+  recurring: boolean;
+  frequency: Frequency;
   hour: number;
   minute: number;
+  weekDay: number;
+  monthDay: number;
 }
 
 const INITIAL_FORM: CreateFormState = {
@@ -50,9 +96,12 @@ const INITIAL_FORM: CreateFormState = {
   direction: 'source_to_target',
   dropExisting: true,
   runOnManual: true,
-  enabled: true,
+  recurring: true,
+  frequency: 'daily',
   hour: 2,
   minute: 0,
+  weekDay: 1,
+  monthDay: 1,
 };
 
 export default function SyncPage({ permissions }: { permissions?: string[] }) {
@@ -119,17 +168,24 @@ export default function SyncPage({ permissions }: { permissions?: string[] }) {
     try {
       setSaving(true);
       setError(null);
+      const scheduleCron = buildCron({
+        frequency: form.frequency,
+        hour: form.hour,
+        minute: form.minute,
+        weekDay: form.weekDay,
+        monthDay: form.monthDay,
+      });
       await dbSyncJobsApi.create({
         name: form.name.trim(),
         source_datasource_id: form.sourceDatasourceId,
         target_datasource_id: form.targetDatasourceId,
         storage_location_id: form.storageLocationId,
-        schedule_cron: buildDailyCron(form.hour, form.minute),
+        schedule_cron: scheduleCron,
         schedule_timezone: 'UTC',
         overwrite_direction: form.direction,
         drop_existing: form.dropExisting,
-        run_on_manual: form.runOnManual,
-        enabled: form.enabled,
+        run_on_manual: form.recurring ? form.runOnManual : true,
+        enabled: form.recurring,
       });
       setForm(INITIAL_FORM);
       await loadAll();
@@ -243,10 +299,54 @@ export default function SyncPage({ permissions }: { permissions?: string[] }) {
           </label>
 
           <label className={styles.field}>
-            <span>Hora diaria (UTC)</span>
+            <span>Frequencia</span>
+            <select
+              value={form.frequency}
+              disabled={!form.recurring}
+              onChange={(e) => setForm((prev) => ({ ...prev, frequency: e.target.value as Frequency }))}
+            >
+              <option value="daily">Diaria</option>
+              <option value="weekly">Semanal</option>
+              <option value="monthly">Mensal</option>
+            </select>
+          </label>
+
+          {form.frequency === 'weekly' && (
+            <label className={styles.field}>
+              <span>Dia da semana</span>
+              <select
+                value={form.weekDay}
+                disabled={!form.recurring}
+                onChange={(e) => setForm((prev) => ({ ...prev, weekDay: Number(e.target.value) }))}
+              >
+                {WEEKDAY_OPTIONS.map((item) => (
+                  <option key={item.value} value={item.value}>{item.label}</option>
+                ))}
+              </select>
+            </label>
+          )}
+
+          {form.frequency === 'monthly' && (
+            <label className={styles.field}>
+              <span>Dia do mes</span>
+              <select
+                value={form.monthDay}
+                disabled={!form.recurring}
+                onChange={(e) => setForm((prev) => ({ ...prev, monthDay: Number(e.target.value) }))}
+              >
+                {MONTHDAY_OPTIONS.map((value) => (
+                  <option key={value} value={value}>Dia {value}</option>
+                ))}
+              </select>
+            </label>
+          )}
+
+          <label className={styles.field}>
+            <span>Horario (UTC)</span>
             <div className={styles.timeRow}>
               <select
                 value={form.hour}
+                disabled={!form.recurring}
                 onChange={(e) => setForm((prev) => ({ ...prev, hour: Number(e.target.value) }))}
               >
                 {Array.from({ length: 24 }, (_, value) => (
@@ -256,6 +356,7 @@ export default function SyncPage({ permissions }: { permissions?: string[] }) {
               <span>:</span>
               <select
                 value={form.minute}
+                disabled={!form.recurring}
                 onChange={(e) => setForm((prev) => ({ ...prev, minute: Number(e.target.value) }))}
               >
                 {MINUTES.map((value) => (
@@ -268,12 +369,16 @@ export default function SyncPage({ permissions }: { permissions?: string[] }) {
 
         <div className={styles.flags}>
           <label><input type="checkbox" checked={form.dropExisting} onChange={(e) => setForm((prev) => ({ ...prev, dropExisting: e.target.checked }))} /><span>Drop existing no restore</span></label>
-          <label><input type="checkbox" checked={form.runOnManual} onChange={(e) => setForm((prev) => ({ ...prev, runOnManual: e.target.checked }))} /><span>Executar tambem no manual</span></label>
-          <label><input type="checkbox" checked={form.enabled} onChange={(e) => setForm((prev) => ({ ...prev, enabled: e.target.checked }))} /><span>Habilitado</span></label>
+          <label><input type="checkbox" checked={form.recurring} onChange={(e) => setForm((prev) => ({ ...prev, recurring: e.target.checked }))} /><span>Recorrente (execucao automatica)</span></label>
+          <label><input type="checkbox" checked={form.recurring ? form.runOnManual : true} disabled={!form.recurring} onChange={(e) => setForm((prev) => ({ ...prev, runOnManual: e.target.checked }))} /><span>Permitir execucao manual</span></label>
         </div>
 
         <div className={styles.footer}>
-          <span className={styles.hint}>Cron: {buildDailyCron(form.hour, form.minute)}</span>
+          <span className={styles.hint}>
+            {form.recurring
+              ? `Cron: ${buildCron({ frequency: form.frequency, hour: form.hour, minute: form.minute, weekDay: form.weekDay, monthDay: form.monthDay })}`
+              : 'Nao recorrente: executa somente manualmente (sem agendamento automatico).'}
+          </span>
           <button className={styles.saveBtn} onClick={() => void createSyncJob()} disabled={saving || !canWrite}>
             {saving ? 'Criando...' : 'Criar Sync Job'}
           </button>
@@ -295,7 +400,7 @@ export default function SyncPage({ permissions }: { permissions?: string[] }) {
                 <tr>
                   <th>Job</th>
                   <th>Fluxo</th>
-                  <th>Cron</th>
+                  <th>Agendamento</th>
                   <th>Ultima execucao</th>
                   <th>Status</th>
                   <th />
@@ -303,7 +408,6 @@ export default function SyncPage({ permissions }: { permissions?: string[] }) {
               </thead>
               <tbody>
                 {jobs.map((job) => {
-                  const parsed = parseDailyCron(job.schedule_cron);
                   return (
                     <tr key={job.id}>
                       <td>
@@ -312,16 +416,16 @@ export default function SyncPage({ permissions }: { permissions?: string[] }) {
                       <td>
                         {job.source_datasource?.name ?? job.source_datasource_id} {'->'} {job.target_datasource?.name ?? job.target_datasource_id}
                       </td>
-                      <td>{String(parsed.hour).padStart(2, '0')}:{String(parsed.minute).padStart(2, '0')} UTC</td>
+                      <td>{formatScheduleLabel(job.schedule_cron, job.enabled)}</td>
                       <td>{job.last_execution_at ? new Date(job.last_execution_at).toLocaleString('pt-BR') : '-'}</td>
                       <td>{job.last_sync_execution?.status ?? '-'}</td>
                       <td>
                         <div className={styles.rowActions}>
                           <button disabled={!canWrite} onClick={() => void toggleEnabled(job)}>{job.enabled ? 'Desativar' : 'Ativar'}</button>
-                          <button disabled={runningId === job.id || !canRun} onClick={() => void runNow(job)}>
+                          <button className={styles.actionRun} disabled={runningId === job.id || !canRun} onClick={() => void runNow(job)}>
                             {runningId === job.id ? 'Executando...' : 'Executar'}
                           </button>
-                          <button disabled={!canWrite} onClick={() => void removeJob(job)}>Remover</button>
+                          <button className={styles.actionDanger} disabled={!canWrite} onClick={() => void removeJob(job)}>Remover</button>
                         </div>
                       </td>
                     </tr>

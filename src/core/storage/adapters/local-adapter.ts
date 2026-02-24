@@ -86,8 +86,8 @@ export class LocalStorageAdapter implements StorageAdapter {
   async exists(relativePath: string): Promise<boolean> {
     const fullPath = path.join(this.rootPath, ...relativePath.split('/'));
     try {
-      await fs.access(fullPath);
-      return true;
+      const stat = await fs.stat(fullPath);
+      return stat.isFile();
     } catch {
       return false;
     }

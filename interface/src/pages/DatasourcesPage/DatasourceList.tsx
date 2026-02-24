@@ -6,21 +6,32 @@ import styles from './DatasourceList.module.css';
 
 interface Props {
   datasources: ApiDatasource[];
-  selectedId:  string | null;
-  onSelect:    (ds: ApiDatasource) => void;
+  selectedId: string | null;
+  onSelect: (ds: ApiDatasource) => void;
   onContextMenu?: (ds: ApiDatasource, x: number, y: number) => void;
-  onAddNew?:   () => void;
-  onEdit?:     (ds: ApiDatasource) => void;
-  onDelete?:   (ds: ApiDatasource) => void;
-  loading?:    boolean;
-  error?:      string | null;
+  onAddNew?: () => void;
+  onEdit?: (ds: ApiDatasource) => void;
+  onDelete?: (ds: ApiDatasource) => void;
+  loading?: boolean;
+  error?: string | null;
 }
 
+type DatasourceStatus = 'healthy' | 'warning' | 'critical' | 'unknown';
+
 const STATUS_LABELS: Record<string, string> = {
-  healthy:  'Saudável',
-  warning:  'Atenção',
-  critical: 'Crítico',
-  unknown:  'Desconhecido',
+  healthy: 'Saudavel',
+  warning: 'Atencao',
+  critical: 'Critico',
+  unknown: 'Desconhecido',
+};
+
+const STATUS_ORDER: DatasourceStatus[] = ['healthy', 'warning', 'critical', 'unknown'];
+
+const STATUS_EXPLANATIONS: Record<DatasourceStatus, string> = {
+  healthy: 'Aparece quando o ultimo health check foi bem-sucedido e a conexao esta estavel.',
+  warning: 'Aparece quando ha degradacao parcial: latencia alta, falhas intermitentes ou limitacoes nao criticas.',
+  critical: 'Aparece quando a conexao falhou ou o datasource esta indisponivel para operacoes.',
+  unknown: 'Aparece quando ainda nao houve health check recente ou nao foi possivel determinar o estado.',
 };
 
 export default function DatasourceList({
@@ -29,11 +40,11 @@ export default function DatasourceList({
   const [search, setSearch] = useState('');
 
   const filtered = datasources.filter((ds) =>
-    ds.name.toLowerCase().includes(search.toLowerCase()) ||
-    ds.tags.some(t => t.toLowerCase().includes(search.toLowerCase())),
+    ds.name.toLowerCase().includes(search.toLowerCase())
+    || ds.tags.some((t) => t.toLowerCase().includes(search.toLowerCase())),
   );
 
-  const statusCounts = filtered.reduce<Record<'healthy' | 'warning' | 'critical' | 'unknown', number>>(
+  const statusCounts = filtered.reduce<Record<DatasourceStatus, number>>(
     (acc, ds) => {
       acc[ds.status] += 1;
       return acc;
@@ -43,7 +54,6 @@ export default function DatasourceList({
 
   return (
     <div className={styles.panel}>
-      {/* Cabeçalho */}
       <div className={styles.header}>
         <div className={styles.headerTop}>
           <span className={styles.title}>Datasources</span>
@@ -62,22 +72,19 @@ export default function DatasourceList({
           />
         </div>
         <div className={styles.statusSummary}>
-          <span className={`${styles.summaryBadge} ${styles.status_healthy}`}>
-            Saudavel: {statusCounts.healthy}
-          </span>
-          <span className={`${styles.summaryBadge} ${styles.status_warning}`}>
-            Atencao: {statusCounts.warning}
-          </span>
-          <span className={`${styles.summaryBadge} ${styles.status_critical}`}>
-            Critico: {statusCounts.critical}
-          </span>
-          <span className={`${styles.summaryBadge} ${styles.status_unknown}`}>
-            Desconhecido: {statusCounts.unknown}
-          </span>
+          {STATUS_ORDER.map((status) => (
+            <span key={status} className={styles.summaryBadgeWrap} tabIndex={0}>
+              <span className={`${styles.summaryBadge} ${styles[`status_${status}`]}`}>
+                {STATUS_LABELS[status]}: {statusCounts[status]}
+              </span>
+              <span className={styles.summaryTooltip} role="tooltip">
+                {STATUS_EXPLANATIONS[status]}
+              </span>
+            </span>
+          ))}
         </div>
       </div>
 
-      {/* Lista */}
       <div className={styles.list}>
         {loading && (
           <div className={styles.loadingState}>
@@ -107,7 +114,6 @@ export default function DatasourceList({
               onContextMenu(ds, event.clientX, event.clientY);
             }}
           >
-            {/* Topo */}
             <div className={styles.cardTop}>
               <div className={`${styles.typeIcon} ${styles[ds.type]}`}>
                 {DS_ABBR[ds.type]}
@@ -119,14 +125,12 @@ export default function DatasourceList({
               <span className={`${styles.statusDot} ${styles[ds.status]}`} title={STATUS_LABELS[ds.status]} />
             </div>
 
-            {/* Tags */}
             {ds.tags.length > 0 && (
               <div className={styles.tags}>
                 {ds.tags.map((t) => <span key={t} className={styles.tag}>{t}</span>)}
               </div>
             )}
 
-            {/* Rodapé */}
             <div className={styles.cardFooter}>
               <span className={`${styles.statusLabel} ${styles[`status_${ds.status}`]}`}>
                 {STATUS_LABELS[ds.status]}
@@ -154,5 +158,3 @@ export default function DatasourceList({
     </div>
   );
 }
-
-

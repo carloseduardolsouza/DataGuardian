@@ -12,7 +12,7 @@ export function getDefaultSettings(): Record<string, { value: unknown; descripti
   return {
     'notifications.whatsapp_enabled': {
       value: false,
-      description: 'Habilitar envio de notificacoes importantes via WhatsApp',
+      description: 'Habilitar envio de notificacoes via WhatsApp',
     },
     'notifications.whatsapp_evolution_config': {
       value: {
@@ -20,7 +20,7 @@ export function getDefaultSettings(): Record<string, { value: unknown; descripti
         api_key: '',
         instance: '',
         to: [],
-        important_only: true,
+        important_only: false,
       },
       description: 'Configuracao da Evolution API para notificacoes WhatsApp',
     },

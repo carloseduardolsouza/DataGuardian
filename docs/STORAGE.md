@@ -53,7 +53,7 @@ O manifest de artefatos tambem e salvo junto para suportar restore/retry-upload.
 ## Download no explorer
 
 - download de arquivo suportado
-- download de pasta nao suportado (`STORAGE_FOLDER_DOWNLOAD_NOT_SUPPORTED`)
+- download de pasta suportado (retornado como `.zip`)
 
 ## Boas praticas
 

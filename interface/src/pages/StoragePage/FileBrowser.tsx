@@ -162,7 +162,7 @@ export default function FileBrowser({ locationId, locationName }: Props) {
     try {
       await storageApi.downloadPath(locationId, targetPath);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Falha ao baixar arquivo');
+      setError(err instanceof Error ? err.message : 'Falha ao baixar item');
     }
   };
 
@@ -265,9 +265,14 @@ export default function FileBrowser({ locationId, locationName }: Props) {
                       </>
                     )}
                     {entry.kind === 'folder' && (
-                      <button className={styles.deleteBtn} title="Excluir pasta" onClick={() => void deletePaths([entry.path])}>
-                        <TrashIcon />
-                      </button>
+                      <>
+                        <button className={styles.downloadBtn} title="Baixar pasta" onClick={() => void downloadPath(entry.path)}>
+                          <ExportIcon width={12} height={12} />
+                        </button>
+                        <button className={styles.deleteBtn} title="Excluir pasta" onClick={() => void deletePaths([entry.path])}>
+                          <TrashIcon />
+                        </button>
+                      </>
                     )}
                   </td>
                 </tr>
@@ -278,7 +283,7 @@ export default function FileBrowser({ locationId, locationName }: Props) {
       </div>
 
       <div className={styles.statusBar}>
-        <span>{sorted.filter((e) => e.kind === 'folder').length} pasta(s) · {sorted.filter((e) => e.kind === 'file').length} arquivo(s)</span>
+        <span>{sorted.filter((e) => e.kind === 'folder').length} pasta(s) - {sorted.filter((e) => e.kind === 'file').length} arquivo(s)</span>
       </div>
 
       <ConfirmDialog
