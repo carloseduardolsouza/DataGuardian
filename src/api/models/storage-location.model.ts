@@ -7,7 +7,7 @@ import archiver from 'archiver';
 import { prisma } from '../../lib/prisma';
 import { AppError } from '../middlewares/error-handler';
 import { createStorageAdapter } from '../../core/storage/storage-factory';
-import { normalizeLocalStoragePath } from '../../utils/runtime';
+import { isRunningInContainer, normalizeLocalStoragePath } from '../../utils/runtime';
 import { config } from '../../utils/config';
 import {
   SENSITIVE_STORAGE_FIELDS,
@@ -86,6 +86,8 @@ type ConnectionTestResult = {
   available_space_gb: number | null;
   latency_ms: number;
 };
+
+const CONTAINER_LOCAL_STORAGE_ROOT = process.env.LOCAL_STORAGE_ROOT_PATH?.trim() || '/var/backups';
 
 function isPlainObject(value: unknown): value is JsonMap {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -204,6 +206,26 @@ function getBoolean(cfg: JsonMap, key: string, fallback = false) {
   return Boolean(raw);
 }
 
+function ensureLocalStoragePathAllowed(normalizedPath: string) {
+  if (!isRunningInContainer()) return;
+
+  const normalizedRoot = path.normalize(path.resolve(CONTAINER_LOCAL_STORAGE_ROOT));
+  const relative = path.relative(normalizedRoot, normalizedPath);
+  const pathInsideRoot = relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
+
+  if (!pathInsideRoot) {
+    throw new AppError(
+      'STORAGE_LOCAL_PATH_OUTSIDE_MOUNT',
+      422,
+      `Em Docker, o storage local deve ficar dentro de '${normalizedRoot}'. Configure um caminho sob esse diretorio para persistir no host.`,
+      {
+        required_root: normalizedRoot,
+        received_path: normalizedPath,
+      },
+    );
+  }
+}
+
 function normalizeStorageConfig(
   type: StorageLocationType,
   cfg: JsonMap,
@@ -213,6 +235,7 @@ function normalizeStorageConfig(
     case 'local': {
       const normalizedPathInput = getString(cfg, 'path', type, { fallback: existing?.path });
       const normalizedPath = normalizeLocalStoragePath(normalizedPathInput);
+      ensureLocalStoragePathAllowed(normalizedPath);
       const maxSize = getNumber(cfg, 'max_size_gb', type, {
         required: false,
         positive: true,

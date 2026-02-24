@@ -61,3 +61,11 @@ O manifest de artefatos tambem e salvo junto para suportar restore/retry-upload.
 - usar `replicate` para maior resiliencia
 - testar conexao antes de habilitar storage em producao
 - monitorar health de storage em `/api/health/storage`
+
+## Local em Docker
+
+Quando a aplicacao roda em Docker, o tipo `local` deve usar caminho dentro de:
+
+- `/var/backups`
+
+Esse caminho e montado para uma pasta do host (fora do container), garantindo persistencia dos backups mesmo apos update/recreate do container.

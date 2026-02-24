@@ -30,6 +30,7 @@ docker compose -f docker/docker-compose.yml up -d
 - `HEALTH_CHECK_INTERVAL_MS`
 - `CLEANUP_CRON`
 - `TEMP_DIRECTORY`
+- `LOCAL_STORAGE_HOST_PATH` (pasta do host montada em `/var/backups` no container app)
 - `EVOLUTION_API_GLOBAL_KEY`
 
 ## Health e metricas

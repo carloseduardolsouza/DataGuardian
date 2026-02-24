@@ -1,5 +1,6 @@
 import * as os from 'node:os';
 import * as path from 'node:path';
+import { existsSync } from 'node:fs';
 
 export type RuntimeOs = 'windows' | 'linux' | 'macos' | 'unknown';
 
@@ -17,6 +18,11 @@ export function getDefaultTempDirectory() {
     return path.join(base, 'DataGuardian', 'tmp');
   }
   return path.join(os.tmpdir(), 'dataguardian');
+}
+
+export function isRunningInContainer() {
+  if (process.env.DOCKER_CONTAINER?.trim().toLowerCase() === 'true') return true;
+  return existsSync('/.dockerenv');
 }
 
 export function normalizeLocalStoragePath(input: string) {
