@@ -38,8 +38,8 @@ const composeBaseArgs = ['compose', '--env-file', 'docker/.env', '-f', composeFi
 
 ensureEnvFile();
 
-console.log('Building app image...');
-run('docker', [...composeBaseArgs, 'build', '--pull', 'app']);
+console.log('Pulling app image from Docker Hub...');
+run('docker', [...composeBaseArgs, 'pull', 'app']);
 
 console.log('Starting containers...');
 run('docker', [

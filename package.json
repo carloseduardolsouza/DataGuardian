@@ -22,7 +22,7 @@
     "db:studio": "prisma studio",
     "db:seed": "tsx prisma/seed.ts",
     "docker:build": "docker build -f docker/Dockerfile -t dataguardian:latest .",
-    "docker:publish": "node scripts/docker-publish.cjs",
+    "docker:publish": "node scripts/docker-build-push.cjs",
     "docker:up:all": "node scripts/docker-up-all.cjs"
   },
   "dependencies": {

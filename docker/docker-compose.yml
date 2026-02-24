@@ -46,9 +46,7 @@ services:
 
   # Aplicacao (API + Workers)
   app:
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile
+    image: carlossouzadev/dataguardian:latest
     container_name: data-guardian-app
     restart: unless-stopped
     env_file:
