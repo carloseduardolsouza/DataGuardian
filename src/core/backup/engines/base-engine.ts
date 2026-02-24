@@ -67,7 +67,64 @@ async function commandExists(commandPath: string) {
   });
 }
 
-async function resolveWindowsBinaryPath(command: string) {
+function parseMajorVersionFromLabel(versionLabel: string) {
+  const majorMatch = versionLabel.match(/(\d{1,2})/);
+  if (!majorMatch) return null;
+  const parsed = Number.parseInt(majorMatch[1], 10);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function parsePostgresCliMajor(versionText: string) {
+  const postgresMatch = versionText.match(/postgresql\)\s+(\d{1,2})(?:\.\d+)?/i);
+  if (postgresMatch) {
+    const parsed = Number.parseInt(postgresMatch[1], 10);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  const genericMatch = versionText.match(/(\d{1,2})(?:\.\d+)?/);
+  if (!genericMatch) return null;
+  const parsed = Number.parseInt(genericMatch[1], 10);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+async function readCommandVersion(commandPath: string) {
+  return new Promise<string | null>((resolve) => {
+    const child = spawn(commandPath, ['--version'], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      windowsHide: true,
+    });
+
+    let output = '';
+
+    child.stdout.on('data', (chunk) => {
+      output += chunk.toString();
+    });
+    child.stderr.on('data', (chunk) => {
+      output += chunk.toString();
+    });
+
+    child.once('error', () => {
+      resolve(null);
+    });
+
+    child.once('close', (code) => {
+      if (code !== 0 && output.trim() === '') {
+        resolve(null);
+        return;
+      }
+      resolve(output.trim() || null);
+    });
+  });
+}
+
+async function hasExpectedPostgresMajor(commandPath: string, preferredMajor: number) {
+  const versionText = await readCommandVersion(commandPath);
+  if (!versionText) return false;
+  const major = parsePostgresCliMajor(versionText);
+  return major === preferredMajor;
+}
+
+async function resolveWindowsBinaryPath(command: string, preferredPostgresMajor?: number) {
   if (process.platform !== 'win32') {
     return command;
   }
@@ -101,7 +158,20 @@ async function resolveWindowsBinaryPath(command: string) {
       const postgresRoot = path.join(base, 'PostgreSQL');
       try {
         const versions = await fs.readdir(postgresRoot, { withFileTypes: true });
-        for (const dir of versions) {
+        const ordered = versions
+          .filter((dir) => dir.isDirectory())
+          .map((dir) => ({ dir, major: parseMajorVersionFromLabel(dir.name) }))
+          .sort((a, b) => {
+            if (preferredPostgresMajor !== undefined) {
+              const aPreferred = a.major === preferredPostgresMajor ? 1 : 0;
+              const bPreferred = b.major === preferredPostgresMajor ? 1 : 0;
+              if (aPreferred !== bPreferred) return bPreferred - aPreferred;
+            }
+            return (b.major ?? -1) - (a.major ?? -1);
+          });
+
+        for (const entry of ordered) {
+          const dir = entry.dir;
           if (!dir.isDirectory()) continue;
           const candidate = path.join(postgresRoot, dir.name, 'bin', exe);
           if (await existsFile(candidate)) return candidate;
@@ -115,7 +185,20 @@ async function resolveWindowsBinaryPath(command: string) {
       const postgresRoot = path.join(base, 'PostgreSQL');
       try {
         const versions = await fs.readdir(postgresRoot, { withFileTypes: true });
-        for (const dir of versions) {
+        const ordered = versions
+          .filter((dir) => dir.isDirectory())
+          .map((dir) => ({ dir, major: parseMajorVersionFromLabel(dir.name) }))
+          .sort((a, b) => {
+            if (preferredPostgresMajor !== undefined) {
+              const aPreferred = a.major === preferredPostgresMajor ? 1 : 0;
+              const bPreferred = b.major === preferredPostgresMajor ? 1 : 0;
+              if (aPreferred !== bPreferred) return bPreferred - aPreferred;
+            }
+            return (b.major ?? -1) - (a.major ?? -1);
+          });
+
+        for (const entry of ordered) {
+          const dir = entry.dir;
           if (!dir.isDirectory()) continue;
           const candidate = path.join(postgresRoot, dir.name, 'bin', exe);
           if (await existsFile(candidate)) return candidate;
@@ -165,12 +248,46 @@ async function resolveWindowsBinaryPath(command: string) {
   return command;
 }
 
+export interface ResolveBinaryPathOptions {
+  preferredPostgresMajor?: number;
+}
+
 export async function resolveBinaryPath(
   command: string,
   allowAutoInstall = true,
   onLog?: (line: string) => void,
+  options?: ResolveBinaryPathOptions,
 ) {
-  const commandPath = await resolveWindowsBinaryPath(command);
+  const preferredPostgresMajor = options?.preferredPostgresMajor;
+  const isPostgresCommand = command === 'pg_dump' || command === 'pg_restore';
+
+  const commandPath = await resolveWindowsBinaryPath(command, preferredPostgresMajor);
+  if (
+    isPostgresCommand
+    && preferredPostgresMajor !== undefined
+    && await commandExists(commandPath)
+    && await hasExpectedPostgresMajor(commandPath, preferredPostgresMajor)
+  ) {
+    return commandPath;
+  }
+
+  if (isPostgresCommand && preferredPostgresMajor !== undefined && process.platform !== 'win32') {
+    const linuxAndUnixCandidates = [
+      `${command}${preferredPostgresMajor}`,
+      `${command}-${preferredPostgresMajor}`,
+      `/usr/lib/postgresql/${preferredPostgresMajor}/bin/${command}`,
+      `/usr/pgsql-${preferredPostgresMajor}/bin/${command}`,
+      `/opt/homebrew/opt/libpq/bin/${command}`,
+      `/usr/local/opt/libpq/bin/${command}`,
+    ];
+
+    for (const candidate of linuxAndUnixCandidates) {
+      if (await commandExists(candidate) && await hasExpectedPostgresMajor(candidate, preferredPostgresMajor)) {
+        return candidate;
+      }
+    }
+  }
+
   if (await commandExists(commandPath)) {
     return commandPath;
   }
@@ -178,7 +295,7 @@ export async function resolveBinaryPath(
   if (allowAutoInstall) {
     const installed = await tryAutoInstallBinary(command, onLog);
     if (installed) {
-      return resolveBinaryPath(command, false, onLog);
+      return resolveBinaryPath(command, false, onLog, options);
     }
   }
 
@@ -190,12 +307,14 @@ export async function spawnCommandToFile(params: {
   args: string[];
   env?: NodeJS.ProcessEnv;
   outputFile: string;
+  preferredPostgresMajor?: number;
   callbacks?: EngineRunCallbacks;
 }) {
   const commandPath = await resolveBinaryPath(
     params.command,
     true,
     (line) => params.callbacks?.onEngineLog?.(`[installer] ${line}`),
+    { preferredPostgresMajor: params.preferredPostgresMajor },
   );
   await fs.mkdir(path.dirname(params.outputFile), { recursive: true });
 
