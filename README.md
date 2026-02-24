@@ -117,3 +117,4 @@ npm run dev
 - `docs/STORAGE.md`
 - `docs/MONITORING_AND_BACKUP_OPS.md`
 - `docs/IMPROVEMENTS.md`
+- `docs/RELEASES.md`

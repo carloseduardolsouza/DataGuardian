@@ -56,6 +56,16 @@ docker compose -f docker/docker-compose.yml build app
 docker compose -f docker/docker-compose.yml up -d app
 ```
 
+## Releases no GitHub
+
+Fluxo recomendado de versao e tags:
+
+- versionamento e changelog automaticos via GitHub Actions (`Release Please`)
+- tags semanticas no formato `vX.Y.Z`
+- publicacao automatica de imagem Docker via workflow em `.github/workflows/docker-publish.yml`
+
+Detalhes operacionais em `docs/RELEASES.md`.
+
 ## Migrations
 
 Em deploy, garantir migrations aplicadas:
