@@ -74,7 +74,7 @@ export interface StorageTypeOption {
 }
 
 export const STORAGE_TYPES: StorageTypeOption[] = [
-  { type: 'local',     label: 'Disco Local',   description: 'Diretorio no servidor onde a API esta rodando' },
+  { type: 'local',     label: 'Disco Local',   description: 'Diretorio local persistente (host mount em Docker)' },
   { type: 'ssh',       label: 'SSH / SFTP',    description: 'NAS ou servidor remoto via protocolo SSH' },
   { type: 's3',        label: 'Amazon S3',     description: 'AWS S3 ou compativel: Wasabi, DO Spaces, etc.' },
   { type: 'minio',     label: 'MinIO',         description: 'Object storage S3-compativel self-hosted' },

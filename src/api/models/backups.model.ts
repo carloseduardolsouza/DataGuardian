@@ -12,7 +12,7 @@ import { createStorageAdapter } from '../../core/storage/storage-factory';
 import { resolveBinaryPath } from '../../core/backup/engines/base-engine';
 import { logger } from '../../utils/logger';
 import { config } from '../../utils/config';
-import { normalizeLocalStoragePath } from '../../utils/runtime';
+import { resolveLocalStoragePath } from '../../utils/runtime';
 import { materializeExecutionRawSnapshot } from '../../core/backup/execution-artifacts';
 import { ensureRedisAvailable } from '../../queue/redis-client';
 import { enqueueRestoreExecution } from '../../queue/queues';
@@ -111,7 +111,7 @@ function inferRelativePathFromBackupPath(
     const localBase = asString(config.path);
     if (!localBase) return null;
 
-    const base = normalizeSlash(normalizeLocalStoragePath(localBase)).replace(/\/+$/, '');
+    const base = normalizeSlash(resolveLocalStoragePath(localBase)).replace(/\/+$/, '');
     if (normalized.startsWith(`${base}/`)) {
       return trimLeadingSlash(normalized.slice(base.length + 1));
     }

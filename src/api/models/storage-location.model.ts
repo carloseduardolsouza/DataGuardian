@@ -7,7 +7,7 @@ import archiver from 'archiver';
 import { prisma } from '../../lib/prisma';
 import { AppError } from '../middlewares/error-handler';
 import { createStorageAdapter } from '../../core/storage/storage-factory';
-import { isRunningInContainer, normalizeLocalStoragePath } from '../../utils/runtime';
+import { isRunningInContainer, normalizeLocalStoragePath, resolveLocalStoragePath } from '../../utils/runtime';
 import { config } from '../../utils/config';
 import {
   SENSITIVE_STORAGE_FIELDS,
@@ -88,6 +88,7 @@ type ConnectionTestResult = {
 };
 
 const CONTAINER_LOCAL_STORAGE_ROOT = process.env.LOCAL_STORAGE_ROOT_PATH?.trim() || '/var/backups';
+const CONTAINER_LOCAL_STORAGE_HOST_ROOT = process.env.LOCAL_STORAGE_HOST_PATH?.trim() || '';
 
 function isPlainObject(value: unknown): value is JsonMap {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -214,12 +215,16 @@ function ensureLocalStoragePathAllowed(normalizedPath: string) {
   const pathInsideRoot = relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
 
   if (!pathInsideRoot) {
+    const hostHint = CONTAINER_LOCAL_STORAGE_HOST_ROOT
+      ? ` (host mount: '${CONTAINER_LOCAL_STORAGE_HOST_ROOT}')`
+      : '';
     throw new AppError(
       'STORAGE_LOCAL_PATH_OUTSIDE_MOUNT',
       422,
-      `Em Docker, o storage local deve ficar dentro de '${normalizedRoot}'. Configure um caminho sob esse diretorio para persistir no host.`,
+      `Em Docker, o storage local deve ficar dentro de '${normalizedRoot}'${hostHint}. Configure um caminho dentro desse mount para persistir no host.`,
       {
         required_root: normalizedRoot,
+        host_root: CONTAINER_LOCAL_STORAGE_HOST_ROOT || null,
         received_path: normalizedPath,
       },
     );
@@ -234,7 +239,7 @@ function normalizeStorageConfig(
   switch (type) {
     case 'local': {
       const normalizedPathInput = getString(cfg, 'path', type, { fallback: existing?.path });
-      const normalizedPath = normalizeLocalStoragePath(normalizedPathInput);
+      const normalizedPath = resolveLocalStoragePath(normalizedPathInput);
       ensureLocalStoragePathAllowed(normalizedPath);
       const maxSize = getNumber(cfg, 'max_size_gb', type, {
         required: false,
@@ -531,7 +536,7 @@ async function isLocalDirectoryPath(
 ) {
   if (storageType !== 'local') return false;
 
-  const root = normalizeLocalStoragePath(String(cfg.path ?? ''));
+  const root = resolveLocalStoragePath(String(cfg.path ?? ''));
   const fullPath = path.join(root, ...targetPath.split('/'));
   try {
     const stat = await fs.stat(fullPath);
@@ -797,7 +802,7 @@ export async function browseStorageFiles(id: string, rawPath?: string) {
     let modifiedAt: string | null = null;
     if (storage.type === 'local') {
       try {
-        const root = normalizeLocalStoragePath(String(cfg.path ?? ''));
+        const root = resolveLocalStoragePath(String(cfg.path ?? ''));
         const fullPath = path.join(root, ...childPath.split('/'));
         const stat = await fs.stat(fullPath);
         sizeBytes = stat.isFile() ? stat.size : null;

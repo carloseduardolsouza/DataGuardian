@@ -398,8 +398,8 @@ export default function AddStorageModal({ onClose, onSave, editData }: Props) {
 
           {selectedType === 'local' && (
             <>
-              <FormField label="Caminho absoluto *" hint="Diretório no servidor onde os backups serão salvos">
-                <input className={formStyles.input} type="text" placeholder="/backups" value={form.localPath} onChange={set('localPath')} />
+              <FormField label="Caminho absoluto *" hint="Em Docker, informe um caminho do host dentro de LOCAL_STORAGE_HOST_PATH ou use /var/backups/...">
+                <input className={formStyles.input} type="text" placeholder="Ex.: C:/backups/cliente-a ou /var/backups/cliente-a" value={form.localPath} onChange={set('localPath')} />
               </FormField>
               <FormField label="Tamanho máximo (GB)" hint="Opcional. Ex: 500">
                 <input className={formStyles.input} type="number" min="1" value={form.localMaxSizeGb} onChange={set('localMaxSizeGb')} />

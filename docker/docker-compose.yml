@@ -50,6 +50,7 @@ services:
       NODE_ENV: production
       DOCKER_CONTAINER: "true"
       LOCAL_STORAGE_ROOT_PATH: /var/backups
+      LOCAL_STORAGE_HOST_PATH: ${LOCAL_STORAGE_HOST_PATH:-./backup-storage}
       DATABASE_URL: postgresql://postgres:${DB_PASSWORD:-DataGuardian123!}@postgres:5432/backup_manager
       REDIS_URL: ${REDIS_URL:-redis://:${REDIS_PASSWORD:-redis123}@redis:6379}
       HOST: ${HOST:-0.0.0.0}

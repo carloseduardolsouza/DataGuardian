@@ -40,6 +40,7 @@ docker compose -f docker/docker-compose.yml up -d app
 - `CLEANUP_CRON`
 - `TEMP_DIRECTORY`
 - `LOCAL_STORAGE_HOST_PATH` (pasta do host montada em `/var/backups` no container app)
+- `LOCAL_STORAGE_ROOT_PATH` (path interno no container usado para storage local; padrao `/var/backups`)
 - `EVOLUTION_API_GLOBAL_KEY`
 
 ## Health e metricas

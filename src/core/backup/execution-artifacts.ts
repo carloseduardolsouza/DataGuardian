@@ -3,7 +3,7 @@ import * as path from 'node:path';
 import { Prisma, StorageLocationType } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { createStorageAdapter } from '../storage/storage-factory';
-import { normalizeLocalStoragePath } from '../../utils/runtime';
+import { resolveLocalStoragePath } from '../../utils/runtime';
 import { applyDeltaArtifact } from './delta';
 import { decompressBackupFile } from './compressor';
 
@@ -50,7 +50,7 @@ function inferRelativePathFromBackupPath(
     const localBase = asString(config.path);
     if (!localBase) return null;
 
-    const base = normalizeSlash(normalizeLocalStoragePath(localBase)).replace(/\/+$/, '');
+    const base = normalizeSlash(resolveLocalStoragePath(localBase)).replace(/\/+$/, '');
     if (normalized.startsWith(`${base}/`)) {
       return trimLeadingSlash(normalized.slice(base.length + 1));
     }

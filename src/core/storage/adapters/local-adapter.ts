@@ -3,7 +3,7 @@ import * as path from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import { Transform } from 'node:stream';
 import type { StorageAdapter, StorageTestResult, UploadOptions, UploadResult } from './base-adapter';
-import { normalizeLocalStoragePath } from '../../../utils/runtime';
+import { resolveLocalStoragePath } from '../../../utils/runtime';
 
 export interface LocalAdapterConfig {
   path: string;
@@ -15,7 +15,7 @@ export class LocalStorageAdapter implements StorageAdapter {
   private readonly rootPath: string;
 
   constructor(private readonly config: LocalAdapterConfig) {
-    this.rootPath = normalizeLocalStoragePath(config.path);
+    this.rootPath = resolveLocalStoragePath(config.path);
   }
 
   async upload(localFilePath: string, relativePath: string, options?: UploadOptions): Promise<UploadResult> {

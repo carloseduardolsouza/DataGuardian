@@ -69,3 +69,6 @@ Quando a aplicacao roda em Docker, o tipo `local` deve usar caminho dentro de:
 - `/var/backups`
 
 Esse caminho e montado para uma pasta do host (fora do container), garantindo persistencia dos backups mesmo apos update/recreate do container.
+
+Voce tambem pode informar um caminho absoluto do host no cadastro (ex.: `C:/backups/dataguardian` ou `/opt/backups/dataguardian`), desde que esteja dentro de `LOCAL_STORAGE_HOST_PATH`.
+A API mapeia automaticamente para o path equivalente dentro do container (`LOCAL_STORAGE_ROOT_PATH`, padrao `/var/backups`).
