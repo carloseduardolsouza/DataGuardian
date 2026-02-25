@@ -39,7 +39,7 @@ export const ROUTE_PATHS: Record<NavKey, string> = {
   sync: '/sync',
   backups: '/backups',
   executions: '/executions',
-  health: '/health',
+  health: '/health-check',
   notifications: '/notifications',
   audit: '/audit',
   settings: '/settings',

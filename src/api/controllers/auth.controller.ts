@@ -12,11 +12,25 @@ import {
 } from '../../core/auth/auth.service';
 import { createAuditLog, extractAuditContextFromRequest } from '../models/audit-log.model';
 
-function cookieOptions() {
+function isSecureCookieEnabled(req: Request) {
+  const envValue = process.env.AUTH_COOKIE_SECURE?.trim().toLowerCase();
+  if (envValue === 'true' || envValue === '1') return true;
+  if (envValue === 'false' || envValue === '0') return false;
+
+  // Auto mode:
+  // - true in production only when request is HTTPS (direct or behind proxy).
+  // - false for plain HTTP (common in LAN/VPS without TLS termination).
+  if (config.env !== 'production') return false;
+  if (req.secure) return true;
+  const forwardedProto = req.get('x-forwarded-proto')?.split(',')[0]?.trim().toLowerCase();
+  return forwardedProto === 'https';
+}
+
+function cookieOptions(req: Request) {
   return {
     httpOnly: true,
     sameSite: 'lax' as const,
-    secure: config.env === 'production',
+    secure: isSecureCookieEnabled(req),
     path: '/',
     maxAge: SESSION_TTL_MS,
   };
@@ -63,7 +77,7 @@ export const AuthController = {
         resource_id: session.user.id,
         changes: { created_username: session.user.username },
       });
-      res.cookie(AUTH_COOKIE_NAME, session.token, cookieOptions());
+      res.cookie(AUTH_COOKIE_NAME, session.token, cookieOptions(req));
 
       res.status(201).json({
         message: 'Usuario inicial criado com sucesso',
@@ -84,7 +98,7 @@ export const AuthController = {
         resource_type: 'user',
         resource_id: session.user.id,
       });
-      res.cookie(AUTH_COOKIE_NAME, session.token, cookieOptions());
+      res.cookie(AUTH_COOKIE_NAME, session.token, cookieOptions(req));
 
       res.json({
         message: 'Login efetuado com sucesso',

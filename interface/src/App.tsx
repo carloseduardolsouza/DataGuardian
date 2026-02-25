@@ -179,7 +179,7 @@ export default function App() {
     const permission = PAGE_PERMISSIONS[page];
     return currentUser?.permissions?.includes(permission) ?? false;
   });
-  const defaultPage = allowedPages[0] ?? 'dashboard';
+  const defaultPage = allowedPages[0] ?? null;
 
   if (loadingAuth) {
     return (
@@ -227,9 +227,19 @@ export default function App() {
 
           {hasUser && isAuthenticated && (
             <>
-              <Route path="/" element={<Navigate to={ROUTE_PATHS[defaultPage]} replace />} />
-              <Route path="/login" element={<Navigate to={ROUTE_PATHS[defaultPage]} replace />} />
-              <Route path="/setup" element={<Navigate to={ROUTE_PATHS[defaultPage]} replace />} />
+              {defaultPage ? (
+                <>
+                  <Route path="/" element={<Navigate to={ROUTE_PATHS[defaultPage]} replace />} />
+                  <Route path="/login" element={<Navigate to={ROUTE_PATHS[defaultPage]} replace />} />
+                  <Route path="/setup" element={<Navigate to={ROUTE_PATHS[defaultPage]} replace />} />
+                </>
+              ) : (
+                <>
+                  <Route path="/" element={<NoPermissionPage theme={theme} onLogout={handleLogout} />} />
+                  <Route path="/login" element={<NoPermissionPage theme={theme} onLogout={handleLogout} />} />
+                  <Route path="/setup" element={<NoPermissionPage theme={theme} onLogout={handleLogout} />} />
+                </>
+              )}
               {allowedPages.map((page) => (
                 <Route
                   key={page}
@@ -247,11 +257,62 @@ export default function App() {
                   }
                 />
               ))}
-              <Route path="*" element={<Navigate to={ROUTE_PATHS[defaultPage]} replace />} />
+              {defaultPage
+                ? <Route path="*" element={<Navigate to={ROUTE_PATHS[defaultPage]} replace />} />
+                : <Route path="*" element={<NoPermissionPage theme={theme} onLogout={handleLogout} />} />}
             </>
           )}
         </Routes>
       </ToastProvider>
+    </div>
+  );
+}
+
+function NoPermissionPage({ theme, onLogout }: { theme: Theme; onLogout: () => void }) {
+  return (
+    <div
+      data-theme={theme}
+      style={{
+        minHeight: '100vh',
+        display: 'grid',
+        placeItems: 'center',
+        background: 'var(--color-bg)',
+        color: 'var(--color-text-muted)',
+        padding: 'var(--space-6)',
+      }}
+    >
+      <div
+        style={{
+          background: 'var(--color-surface)',
+          border: '1px solid var(--color-border)',
+          borderRadius: 'var(--radius-lg)',
+          padding: 'var(--space-6)',
+          maxWidth: 560,
+          width: '100%',
+          display: 'grid',
+          gap: 'var(--space-3)',
+          textAlign: 'center',
+        }}
+      >
+        <h2 style={{ margin: 0, color: 'var(--color-text)', fontSize: 'var(--font-size-lg)' }}>Sem permissoes de acesso</h2>
+        <p style={{ margin: 0, fontSize: 'var(--font-size-sm)' }}>
+          Seu usuario esta autenticado, mas nao possui permissoes para nenhuma pagina.
+        </p>
+        <button
+          onClick={() => void onLogout()}
+          style={{
+            justifySelf: 'center',
+            border: '1px solid var(--color-border)',
+            borderRadius: 'var(--radius-md)',
+            background: 'transparent',
+            color: 'var(--color-text)',
+            padding: '10px var(--space-4)',
+            cursor: 'pointer',
+          }}
+        >
+          Sair
+        </button>
+      </div>
     </div>
   );
 }

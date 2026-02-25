@@ -24,7 +24,10 @@ COPY config ./config
 COPY interface ./interface
 
 RUN npm run db:generate
-RUN npm run build
+RUN npm run build:api
+ENV VITE_ROUTER_MODE=browser
+RUN npm run build:ui
+RUN test -f /app/interface/dist/index.html
 
 FROM node:20-bookworm-slim AS runner
 
@@ -37,9 +40,7 @@ RUN apt-get update \
   && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /app/package*.json ./
-COPY --from=builder /app/interface/package*.json interface/
 COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/interface/node_modules ./interface/node_modules
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/config ./config

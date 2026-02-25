@@ -36,7 +36,17 @@ export function createApp() {
     .filter(Boolean);
   const allowAnyOrigin = corsOrigins.includes('*');
 
-  app.use(helmet());
+  app.use(
+    helmet({
+      contentSecurityPolicy: {
+        directives: {
+          // In HTTP deployments (common in LAN/VPS without reverse proxy TLS),
+          // forcing insecure requests to HTTPS breaks static asset loading.
+          'upgrade-insecure-requests': null,
+        },
+      },
+    }),
+  );
   app.use(
     cors({
       origin: allowAnyOrigin ? true : corsOrigins,
