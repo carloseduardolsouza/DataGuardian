@@ -12,12 +12,12 @@ export function requestLogger(req: Request, res: Response, next: NextFunction): 
 
     logger[level]({
       method:     req.method,
-      url:        req.url,
+      url:        req.originalUrl || req.url,
       status:     res.statusCode,
       durationMs,
       userAgent:  req.get('user-agent'),
       ip:         req.ip,
-    }, `${req.method} ${req.url} ${res.statusCode} — ${durationMs}ms`);
+    }, `${req.method} ${req.originalUrl || req.url} ${res.statusCode} — ${durationMs}ms`);
   });
 
   next();

@@ -23,7 +23,9 @@ import SettingsPage from '../SettingsPage/SettingsPage';
 import AccessPage from '../AccessPage/AccessPage';
 import NotificationsPage from '../NotificationsPage/NotificationsPage';
 import AuditPage from '../AuditPage/AuditPage';
+import ApprovalsPage from '../ApprovalsPage/ApprovalsPage';
 import { dashboardApi, type ApiDashboardOverview } from '../../services/api';
+import { PERMISSIONS } from '../../constants/permissions';
 import styles from './DashboardPage.module.css';
 
 interface Props {
@@ -51,6 +53,7 @@ const PAGE_TITLES: Record<NavKey, { title: string; sub: string }> = {
   health: { title: 'Health', sub: 'Monitoramento de saude' },
   notifications: { title: 'Notificacoes', sub: 'Central de alertas' },
   audit: { title: 'Auditoria', sub: 'Quem fez o que e quando' },
+  approvals: { title: 'Requisicoes Criticas', sub: 'Aprovacao administrativa de operacoes sensiveis' },
   access: { title: 'Usuarios e Roles', sub: 'Controle de acesso e permissoes (RBAC)' },
   settings: { title: 'Configuracoes', sub: 'Preferencias do sistema' },
 };
@@ -116,6 +119,7 @@ export default function DashboardPage({
   unreadNotifications = 0,
 }: Props) {
   const { title, sub } = PAGE_TITLES[activePage];
+  const isAdmin = permissions.includes(PERMISSIONS.ACCESS_MANAGE);
 
   return (
     <div className={styles.layout}>
@@ -154,6 +158,7 @@ export default function DashboardPage({
             || activePage === 'health'
             || activePage === 'notifications'
             || activePage === 'audit'
+            || activePage === 'approvals'
             || activePage === 'access'
             || activePage === 'settings'
               ? styles.contentFull
@@ -161,20 +166,21 @@ export default function DashboardPage({
           }
         >
           {activePage === 'dashboard' && <DashboardContent />}
-          {activePage === 'datasources' && <DatasourcesPage />}
-          {activePage === 'storage' && <StoragePage />}
-          {activePage === 'backup-jobs' && <BackupJobsPage />}
+          {activePage === 'datasources' && <DatasourcesPage isAdmin={isAdmin} />}
+          {activePage === 'storage' && <StoragePage isAdmin={isAdmin} />}
+          {activePage === 'backup-jobs' && <BackupJobsPage isAdmin={isAdmin} />}
           {activePage === 'sync' && <SyncPage permissions={permissions} />}
           {activePage === 'backups' && <BackupsPage permissions={permissions} />}
-          {activePage === 'executions' && <ExecutionsPage />}
+          {activePage === 'executions' && <ExecutionsPage isAdmin={isAdmin} />}
           {activePage === 'health' && <HealthPage />}
           {activePage === 'notifications' && (
             <NotificationsPage />
           )}
-          {activePage === 'audit' && <AuditPage />}
+          {activePage === 'audit' && <AuditPage isAdmin={isAdmin} />}
+          {activePage === 'approvals' && <ApprovalsPage />}
           {activePage === 'access' && <AccessPage />}
           {activePage === 'settings' && <SettingsPage canManageAccess={false} />}
-          {activePage !== 'dashboard' && activePage !== 'datasources' && activePage !== 'storage' && activePage !== 'backup-jobs' && activePage !== 'sync' && activePage !== 'backups' && activePage !== 'executions' && activePage !== 'health' && activePage !== 'notifications' && activePage !== 'audit' && activePage !== 'access' && activePage !== 'settings' && (
+          {activePage !== 'dashboard' && activePage !== 'datasources' && activePage !== 'storage' && activePage !== 'backup-jobs' && activePage !== 'sync' && activePage !== 'backups' && activePage !== 'executions' && activePage !== 'health' && activePage !== 'notifications' && activePage !== 'audit' && activePage !== 'approvals' && activePage !== 'access' && activePage !== 'settings' && (
             <EmptyPage page={activePage} />
           )}
         </main>

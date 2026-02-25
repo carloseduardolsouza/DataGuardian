@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { validate } from "../middlewares/validation";
 import { requirePermission } from "../middlewares/auth";
+import { requireCriticalApproval } from '../middlewares/critical-approval';
 import { StorageLocationController } from "../controllers/storage-location.controller";
 import { PERMISSIONS } from "../../core/auth/permissions";
 import {
@@ -57,7 +58,17 @@ storageLocationsRouter.put(
   validate(updateStorageLocationSchema),
   StorageLocationController.update,
 );
-storageLocationsRouter.delete("/:id", requirePermission(PERMISSIONS.STORAGE_WRITE), StorageLocationController.remove);
+storageLocationsRouter.delete(
+  "/:id",
+  requirePermission(PERMISSIONS.STORAGE_WRITE),
+  requireCriticalApproval({
+    action: 'storage.delete',
+    actionLabel: 'Excluir storage',
+    resourceType: 'storage_location',
+    resolveResourceId: (req) => String(req.params.id),
+  }),
+  StorageLocationController.remove,
+);
 storageLocationsRouter.post(
   "/:id/test",
   requirePermission(PERMISSIONS.STORAGE_WRITE),
@@ -73,6 +84,12 @@ storageLocationsRouter.delete(
   "/:id/files",
   requirePermission(PERMISSIONS.STORAGE_WRITE),
   validate(browseFilesQuerySchema, "query"),
+  requireCriticalApproval({
+    action: 'storage.path.delete',
+    actionLabel: 'Excluir caminho no storage',
+    resourceType: 'storage_location_path',
+    resolveResourceId: (req) => `${String(req.params.id)}:${String(req.query.path ?? '')}`,
+  }),
   StorageLocationController.deleteFile,
 );
 storageLocationsRouter.post(

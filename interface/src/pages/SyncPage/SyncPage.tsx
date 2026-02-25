@@ -9,6 +9,7 @@ import {
 } from '../../services/api';
 import { PERMISSIONS } from '../../constants/permissions';
 import Modal from '../../ui/overlay/Modal/Modal';
+import { useCriticalAction } from '../../hooks/useCriticalAction';
 import styles from './SyncPage.module.css';
 
 type Direction = 'source_to_target' | 'target_to_source';
@@ -122,6 +123,8 @@ const INITIAL_FORM: CreateFormState = {
 };
 
 export default function SyncPage({ permissions }: { permissions?: string[] }) {
+  const isAdmin = permissions?.includes(PERMISSIONS.ACCESS_MANAGE) ?? false;
+  const criticalAction = useCriticalAction({ isAdmin });
   const [jobs, setJobs] = useState<ApiDbSyncJob[]>([]);
   const [datasources, setDatasources] = useState<ApiDatasource[]>([]);
   const [storages, setStorages] = useState<ApiStorageLocation[]>([]);
@@ -230,8 +233,14 @@ export default function SyncPage({ permissions }: { permissions?: string[] }) {
     try {
       setRunningId(job.id);
       setError(null);
-      await dbSyncJobsApi.run(job.id);
-      await loadAll();
+      await criticalAction.run({
+        action: 'db_sync_job.run',
+        actionLabel: 'Executar sync job',
+        resourceType: 'db_sync_job',
+        resourceId: job.id,
+        execute: (auth) => dbSyncJobsApi.run(job.id, auth).then(() => undefined),
+        onSuccess: () => loadAll(),
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Falha ao executar sincronizacao');
     } finally {
@@ -242,8 +251,14 @@ export default function SyncPage({ permissions }: { permissions?: string[] }) {
   async function removeJob(job: ApiDbSyncJob) {
     try {
       setError(null);
-      await dbSyncJobsApi.remove(job.id);
-      await loadAll();
+      await criticalAction.run({
+        action: 'db_sync_job.delete',
+        actionLabel: 'Remover sync job',
+        resourceType: 'db_sync_job',
+        resourceId: job.id,
+        execute: (auth) => dbSyncJobsApi.remove(job.id, auth),
+        onSuccess: () => loadAll(),
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Falha ao remover sync job');
     }
@@ -515,6 +530,7 @@ export default function SyncPage({ permissions }: { permissions?: string[] }) {
           </div>
         </Modal>
       )}
+      {criticalAction.modal}
     </div>
   );
 }

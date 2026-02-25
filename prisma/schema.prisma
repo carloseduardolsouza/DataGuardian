@@ -74,6 +74,8 @@ enum NotificationType {
   storage_unreachable
   health_degraded
   cleanup_completed
+  approval_requested
+  approval_decided
 }
 
 enum NotificationSeverity {
@@ -106,6 +108,13 @@ enum SyncExecutionStatus {
   completed
   failed
   cancelled
+}
+
+enum CriticalApprovalStatus {
+  pending
+  approved
+  rejected
+  canceled
 }
 
 // ──────────────────────────────────────────
@@ -276,8 +285,36 @@ model User {
   sessions AuthSession[]
   roles    UserRole[]
   auditLogs AuditLog[]
+  requestedCriticalApprovals CriticalApprovalRequest[] @relation("CriticalApprovalRequester")
+  decidedCriticalApprovals   CriticalApprovalRequest[] @relation("CriticalApprovalDecider")
 
   @@map("users")
+}
+
+model CriticalApprovalRequest {
+  id             String                 @id @default(uuid())
+  action         String                 @db.VarChar(120)
+  actionLabel    String?                @map("action_label") @db.VarChar(180)
+  resourceType   String?                @map("resource_type") @db.VarChar(80)
+  resourceId     String?                @map("resource_id")
+  requestReason  String?                @map("request_reason") @db.VarChar(500)
+  payload        Json?
+  status         CriticalApprovalStatus @default(pending)
+  requesterUserId String                @map("requester_user_id")
+  decidedByUserId String?               @map("decided_by_user_id")
+  decisionReason String?                @map("decision_reason") @db.VarChar(500)
+  expiresAt      DateTime?              @map("expires_at")
+  consumedAt     DateTime?              @map("consumed_at")
+  createdAt      DateTime               @default(now()) @map("created_at")
+  decidedAt      DateTime?              @map("decided_at")
+
+  requesterUser User  @relation("CriticalApprovalRequester", fields: [requesterUserId], references: [id], onDelete: Cascade)
+  decidedByUser User? @relation("CriticalApprovalDecider", fields: [decidedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt(sort: Desc)])
+  @@index([requesterUserId, createdAt(sort: Desc)])
+  @@index([action, resourceType, resourceId])
+  @@map("critical_approval_requests")
 }
 
 model Role {

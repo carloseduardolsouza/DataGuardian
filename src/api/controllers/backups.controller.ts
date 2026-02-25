@@ -11,6 +11,15 @@ import { AppError } from '../middlewares/error-handler';
 import { PERMISSIONS } from '../../core/auth/permissions';
 import { promises as fs } from 'node:fs';
 
+function normalizeConfirmationPhrase(value: unknown) {
+  return String(value ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toUpperCase();
+}
+
 export const BackupsController = {
   async datasources(_req: Request, res: Response, next: NextFunction) {
     try {
@@ -63,10 +72,10 @@ export const BackupsController = {
   async restore(req: Request, res: Response, next: NextFunction) {
     try {
       const verificationMode = Boolean(req.body?.verification_mode);
-      const confirmationPhrase = String(req.body?.confirmation_phrase ?? '').trim();
+      const confirmationPhrase = normalizeConfirmationPhrase(req.body?.confirmation_phrase);
       const requiredPhrase = verificationMode ? 'VERIFICAR RESTORE' : 'RESTAURAR';
 
-      if (confirmationPhrase !== requiredPhrase) {
+      if (confirmationPhrase !== normalizeConfirmationPhrase(requiredPhrase)) {
         throw new AppError(
           'RESTORE_CONFIRMATION_REQUIRED',
           422,
@@ -104,9 +113,9 @@ export const BackupsController = {
   async importRestore(req: Request, res: Response, next: NextFunction) {
     try {
       const verificationMode = String(req.query?.verification_mode ?? 'false') === 'true';
-      const confirmationPhrase = String(req.query?.confirmation_phrase ?? '').trim();
+      const confirmationPhrase = normalizeConfirmationPhrase(req.query?.confirmation_phrase);
       const requiredPhrase = verificationMode ? 'VERIFICAR RESTORE' : 'RESTAURAR';
-      if (confirmationPhrase !== requiredPhrase) {
+      if (confirmationPhrase !== normalizeConfirmationPhrase(requiredPhrase)) {
         throw new AppError(
           'RESTORE_CONFIRMATION_REQUIRED',
           422,

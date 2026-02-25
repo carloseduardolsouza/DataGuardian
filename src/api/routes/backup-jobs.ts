@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { validate } from "../middlewares/validation";
 import { requirePermission } from "../middlewares/auth";
+import { requireCriticalApproval } from '../middlewares/critical-approval';
 import { BackupJobController } from "../controllers/backup-job.controller";
 import { PERMISSIONS } from "../../core/auth/permissions";
 import {
@@ -38,5 +39,25 @@ backupJobsRouter.put(
   validate(updateBackupJobSchema),
   BackupJobController.update,
 );
-backupJobsRouter.delete("/:id", requirePermission(PERMISSIONS.BACKUP_JOBS_WRITE), BackupJobController.remove);
-backupJobsRouter.post("/:id/run", requirePermission(PERMISSIONS.BACKUP_JOBS_RUN), BackupJobController.run);
+backupJobsRouter.delete(
+  "/:id",
+  requirePermission(PERMISSIONS.BACKUP_JOBS_WRITE),
+  requireCriticalApproval({
+    action: 'backup_job.delete',
+    actionLabel: 'Excluir job de backup',
+    resourceType: 'backup_job',
+    resolveResourceId: (req) => String(req.params.id),
+  }),
+  BackupJobController.remove,
+);
+backupJobsRouter.post(
+  "/:id/run",
+  requirePermission(PERMISSIONS.BACKUP_JOBS_RUN),
+  requireCriticalApproval({
+    action: 'backup_job.run',
+    actionLabel: 'Executar job de backup',
+    resourceType: 'backup_job',
+    resolveResourceId: (req) => String(req.params.id),
+  }),
+  BackupJobController.run,
+);

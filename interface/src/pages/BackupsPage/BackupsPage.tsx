@@ -22,6 +22,7 @@ import {
 import { ROUTE_PATHS } from '../../ui/navigation/Sidebar/Sidebar';
 import Modal from '../../ui/overlay/Modal/Modal';
 import { PERMISSIONS } from '../../constants/permissions';
+import { useCriticalAction } from '../../hooks/useCriticalAction';
 import styles from './BackupsPage.module.css';
 
 function formatBytes(value: number | string | null) {
@@ -64,6 +65,8 @@ interface Props {
 }
 
 export default function BackupsPage({ permissions = [] }: Props) {
+  const isAdmin = permissions.includes(PERMISSIONS.ACCESS_MANAGE);
+  const criticalAction = useCriticalAction({ isAdmin });
   const [isDesktop, setIsDesktop] = useState(() => window.innerWidth > 980);
   const navigate = useNavigate();
   const [datasources, setDatasources] = useState<ApiBackupDatasourceSummary[]>([]);
@@ -117,6 +120,11 @@ export default function BackupsPage({ permissions = [] }: Props) {
   const canRestore = permissions.includes(PERMISSIONS.BACKUPS_RESTORE);
   const canRunRestoreVerification = permissions.includes(PERMISSIONS.BACKUPS_RESTORE_VERIFY);
   const requiredPhrase = verificationMode ? 'VERIFICAR RESTORE' : 'RESTAURAR';
+  const selectedRestoreTarget = useMemo(
+    () => restoreTargets.find((item) => item.datasource_id === targetDatasourceId) ?? null,
+    [restoreTargets, targetDatasourceId],
+  );
+  const requiresExtraApproval = selectedRestoreTarget?.classification === 'production';
 
   const loadDatasources = async () => {
     try {
@@ -246,20 +254,49 @@ export default function BackupsPage({ permissions = [] }: Props) {
 
     const backup = restoreTarget;
     const storageLocationId = storageSelection[backup.execution_id] || undefined;
+    const restoreRequestPayload = {
+      storage_location_id: storageLocationId,
+      target_datasource_id: targetDatasourceId,
+      drop_existing: dropExisting,
+      verification_mode: verificationMode,
+      keep_verification_database: keepVerificationDatabase,
+      confirmation_phrase: confirmationPhrase.trim(),
+    };
+    const approvalPayload = {
+      backup_execution_id: backup.execution_id,
+      source_datasource_id: backup.datasource.id,
+      source_datasource_name: backup.datasource.name,
+      target_datasource_id: targetDatasourceId,
+      selected_storage_location_id: storageLocationId ?? null,
+      drop_existing: dropExisting,
+      verification_mode: verificationMode,
+      keep_verification_database: keepVerificationDatabase,
+      confirmation_phrase: confirmationPhrase.trim(),
+    };
 
     try {
       setRestoreRunning((prev) => ({ ...prev, [backup.execution_id]: true }));
-      const response = await backupsApi.restore(backup.execution_id, {
-        storage_location_id: storageLocationId,
-        target_datasource_id: targetDatasourceId,
-        drop_existing: dropExisting,
-        verification_mode: verificationMode,
-        keep_verification_database: keepVerificationDatabase,
-        confirmation_phrase: confirmationPhrase.trim(),
+      let executionId: string | null = null;
+      const done = await criticalAction.run({
+        action: 'backup.restore',
+        actionLabel: 'Executar restore de backup',
+        resourceType: 'backup_execution',
+        resourceId: backup.execution_id,
+        payload: approvalPayload,
+        requestApprovalFirst: !isAdmin || requiresExtraApproval,
+        execute: async (auth) => {
+          const response = await backupsApi.restore(
+            backup.execution_id,
+            restoreRequestPayload,
+            auth,
+          );
+          executionId = response.execution_id;
+        },
       });
+      if (!done || !executionId) return;
       setRestoreTarget(null);
       navigate(ROUTE_PATHS.executions, {
-        state: { openExecutionId: response.execution_id },
+        state: { openExecutionId: executionId },
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao iniciar restore');
@@ -527,6 +564,12 @@ export default function BackupsPage({ permissions = [] }: Props) {
               </label>
             )}
 
+            {requiresExtraApproval && (
+              <p className={styles.warningText}>
+                Este destino esta classificado como <strong>producao</strong>. Restore exige aprovacao critica/senha administrativa.
+              </p>
+            )}
+
             {verificationMode && (
               <label className={styles.checkboxRow}>
                 <input
@@ -550,6 +593,7 @@ export default function BackupsPage({ permissions = [] }: Props) {
           </div>
         </Modal>
       )}
+      {criticalAction.modal}
     </div>
   );
 }

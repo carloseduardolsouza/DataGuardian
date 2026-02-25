@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+﻿import { useEffect, useMemo, useRef, useState } from 'react';
 import { executionsApi } from '../../services/api';
 import type { ApiExecution, ApiExecutionLogEntry } from '../../services/api';
 import {
@@ -7,10 +7,12 @@ import {
 } from '../../ui/icons/Icons';
 import { LEVEL_LABELS, EXEC_STATUS_LABELS } from '../../constants';
 import ConfirmDialog from '../../ui/dialogs/ConfirmDialog/ConfirmDialog';
+import { useCriticalAction } from '../../hooks/useCriticalAction';
 import styles from './LogModal.module.css';
 
 interface Props {
   executionId: string;
+  isAdmin?: boolean;
   onClose: () => void;
   onChanged: () => Promise<void>;
 }
@@ -20,7 +22,7 @@ type LevelFilter = 'all' | ApiExecutionLogEntry['level'];
 const LEVEL_ORDER: ApiExecutionLogEntry['level'][] = ['error', 'warn', 'info', 'success', 'debug'];
 
 function formatDateTime(iso: string | null) {
-  if (!iso) return '—';
+  if (!iso) return 'â€”';
   return new Date(iso).toLocaleString('pt-BR', {
     day: '2-digit', month: '2-digit', year: '2-digit',
     hour: '2-digit', minute: '2-digit', second: '2-digit',
@@ -28,23 +30,24 @@ function formatDateTime(iso: string | null) {
 }
 
 function formatDuration(secs: number | null) {
-  if (secs === null) return '—';
+  if (secs === null) return 'â€”';
   if (secs < 60) return `${secs}s`;
   if (secs < 3600) return `${Math.floor(secs / 60)}m ${secs % 60}s`;
   return `${Math.floor(secs / 3600)}h ${Math.floor((secs % 3600) / 60)}m`;
 }
 
 function formatBytes(value: number | string | null) {
-  if (value === null) return '—';
+  if (value === null) return 'â€”';
   const bytes = typeof value === 'string' ? Number(value) : value;
-  if (!Number.isFinite(bytes) || bytes <= 0) return '—';
+  if (!Number.isFinite(bytes) || bytes <= 0) return 'â€”';
   const units = ['B', 'KB', 'MB', 'GB', 'TB'];
   const index = Math.min(units.length - 1, Math.floor(Math.log(bytes) / Math.log(1024)));
   const amount = bytes / 1024 ** index;
   return `${amount.toFixed(index === 0 ? 0 : 1)} ${units[index]}`;
 }
 
-export default function LogModal({ executionId, onClose, onChanged }: Props) {
+export default function LogModal({ executionId, isAdmin = false, onClose, onChanged }: Props) {
+  const criticalAction = useCriticalAction({ isAdmin });
   const [execution, setExecution] = useState<ApiExecution | null>(null);
   const [logs, setLogs] = useState<ApiExecutionLogEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -68,7 +71,7 @@ export default function LogModal({ executionId, onClose, onChanged }: Props) {
       setExecution(exec);
       setLogs(logsRes.logs ?? []);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erro ao carregar execução');
+      setError(err instanceof Error ? err.message : 'Erro ao carregar execuÃ§Ã£o');
     } finally {
       setLoading(false);
     }
@@ -129,7 +132,7 @@ export default function LogModal({ executionId, onClose, onChanged }: Props) {
       await onChanged();
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erro ao cancelar execução');
+      setError(err instanceof Error ? err.message : 'Erro ao cancelar execuÃ§Ã£o');
     } finally {
       setActing(null);
     }
@@ -139,12 +142,19 @@ export default function LogModal({ executionId, onClose, onChanged }: Props) {
     if (!execution) return;
     try {
       setActing('delete');
-      await executionsApi.remove(execution.id);
+      const done = await criticalAction.run({
+        action: 'execution.delete',
+        actionLabel: 'Excluir execução',
+        resourceType: 'execution',
+        resourceId: execution.id,
+        execute: (auth) => executionsApi.remove(execution.id, auth),
+      });
+      if (!done) return;
       await onChanged();
       setShowDeleteConfirm(false);
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erro ao remover execução');
+      setError(err instanceof Error ? err.message : 'Erro ao remover execuÃ§Ã£o');
       setActing(null);
     }
   }
@@ -163,17 +173,17 @@ export default function LogModal({ executionId, onClose, onChanged }: Props) {
         <div className={styles.header}>
           <div className={styles.headerLeft}>
             <div className={styles.execId}>{execution?.id ?? executionId}</div>
-            <h2 className={styles.title}>{execution?.job?.name ?? 'Execução'}</h2>
+            <h2 className={styles.title}>{execution?.job?.name ?? 'ExecuÃ§Ã£o'}</h2>
             <div className={styles.meta}>
               <span className={`${styles.statusPill} ${styles[execution?.status ?? 'queued']}`}>
                 {execution ? EXEC_STATUS_LABELS[execution.status] : 'Carregando'}
               </span>
               {execution?.datasource?.name && <span className={styles.metaItem}>{execution.datasource.name}</span>}
-              <span className={styles.metaDot}>·</span>
+              <span className={styles.metaDot}>Â·</span>
               <span className={styles.metaItem}>{formatDateTime(execution?.started_at ?? null)}</span>
-              <span className={styles.metaDot}>·</span>
+              <span className={styles.metaDot}>Â·</span>
               <span className={styles.metaItem}>{formatDuration(execution?.duration_seconds ?? null)}</span>
-              <span className={styles.metaDot}>·</span>
+              <span className={styles.metaDot}>Â·</span>
               <span className={styles.metaItem}>{formatBytes(execution?.compressed_size_bytes ?? execution?.size_bytes ?? null)}</span>
             </div>
           </div>
@@ -290,9 +300,11 @@ export default function LogModal({ executionId, onClose, onChanged }: Props) {
         }}
         onConfirm={() => void handleDelete()}
       />
+      {criticalAction.modal}
     </div>
   );
 }
+
 
 
 

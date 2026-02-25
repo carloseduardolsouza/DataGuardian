@@ -39,6 +39,8 @@ const notificationTemplateQuerySchema = z.object({
     'storage_unreachable',
     'health_degraded',
     'cleanup_completed',
+    'approval_requested',
+    'approval_decided',
   ]).optional(),
 });
 const createNotificationTemplateSchema = z.object({
@@ -52,6 +54,8 @@ const createNotificationTemplateSchema = z.object({
     'storage_unreachable',
     'health_degraded',
     'cleanup_completed',
+    'approval_requested',
+    'approval_decided',
   ]),
   version: z.number().int().positive().optional(),
   enabled: z.boolean().optional(),

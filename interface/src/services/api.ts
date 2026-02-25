@@ -4,6 +4,7 @@ import { notifyError } from '../ui/feedback/Toast/notify';
 
 export type DatasourceType   = 'postgres' | 'mysql' | 'mariadb' | 'mongodb' | 'sqlserver' | 'sqlite' | 'files';
 export type DatasourceStatus = 'healthy' | 'warning' | 'critical' | 'unknown';
+export type DatasourceClassification = 'production' | 'staging' | 'homolog' | 'test' | 'development' | 'critical';
 export type StorageLocationType   = 'local' | 's3' | 'ssh' | 'minio' | 'backblaze';
 export type StorageLocationStatus = 'healthy' | 'full' | 'unreachable';
 
@@ -14,6 +15,7 @@ export interface ApiDatasource {
   status: DatasourceStatus;
   enabled: boolean;
   tags: string[];
+  classification: DatasourceClassification | null;
   last_health_check_at: string | null;
   created_at: string;
   updated_at: string;
@@ -331,7 +333,17 @@ export interface ApiWhatsappEvolutionStatus {
 
 export interface ApiNotification {
   id: string;
-  type: 'backup_success' | 'backup_failed' | 'connection_lost' | 'connection_restored' | 'storage_full' | 'storage_unreachable' | 'health_degraded' | 'cleanup_completed';
+  type:
+    | 'backup_success'
+    | 'backup_failed'
+    | 'connection_lost'
+    | 'connection_restored'
+    | 'storage_full'
+    | 'storage_unreachable'
+    | 'health_degraded'
+    | 'cleanup_completed'
+    | 'approval_requested'
+    | 'approval_decided';
   severity: 'info' | 'warning' | 'critical';
   entity_type: 'datasource' | 'backup_job' | 'storage_location' | 'system';
   entity_id: string;
@@ -524,6 +536,7 @@ export interface ApiRestoreTargetDatasource {
   datasource_type: DatasourceType;
   datasource_status: DatasourceStatus;
   datasource_enabled: boolean;
+  classification: DatasourceClassification | null;
   updated_at: string;
 }
 
@@ -600,11 +613,81 @@ export interface ApiAuditLog {
   created_at: string;
 }
 
+export type CriticalApprovalAction =
+  | 'datasource.delete'
+  | 'storage.delete'
+  | 'storage.path.delete'
+  | 'backup_job.delete'
+  | 'backup_job.run'
+  | 'db_sync_job.delete'
+  | 'db_sync_job.run'
+  | 'execution.delete'
+  | 'backup.restore'
+  | 'backup.import_restore'
+  | 'audit_logs.cleanup';
+
+export type CriticalApprovalStatus = 'pending' | 'approved' | 'rejected' | 'canceled';
+
+export interface ApiCriticalApprovalRequest {
+  id: string;
+  action: CriticalApprovalAction;
+  action_label: string | null;
+  resource_type: string | null;
+  resource_id: string | null;
+  request_reason: string | null;
+  payload: Record<string, unknown> | null;
+  status: CriticalApprovalStatus;
+  requester_user_id: string;
+  requester_user: { id: string; username: string; full_name: string | null } | null;
+  decided_by_user_id: string | null;
+  decided_by_user: { id: string; username: string; full_name: string | null } | null;
+  decision_reason: string | null;
+  expires_at: string | null;
+  consumed_at: string | null;
+  created_at: string;
+  decided_at: string | null;
+}
+
+interface ApiErrorPayload {
+  message?: string;
+  error?: string;
+  details?: unknown;
+}
+
+export class ApiRequestError extends Error {
+  status: number;
+  error: string | null;
+  details: unknown;
+
+  constructor(message: string, status: number, error: string | null, details: unknown) {
+    super(message);
+    this.name = 'ApiRequestError';
+    this.status = status;
+    this.error = error;
+    this.details = details;
+  }
+}
+
 // Ã¢â€â‚¬Ã¢â€â‚¬ Base request Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
 const BASE = '/api';
 
-async function request<T>(url: string, options?: RequestInit): Promise<T> {
+type RequestOptions = RequestInit & { skipErrorToast?: boolean };
+
+export interface CriticalAuthHeaders {
+  admin_password?: string;
+  approval_request_id?: string;
+}
+
+function buildCriticalHeaders(auth?: CriticalAuthHeaders): Record<string, string> {
+  const headers: Record<string, string> = {};
+  if (!auth) return headers;
+  if (auth.admin_password?.trim()) headers['x-admin-password'] = auth.admin_password.trim();
+  if (auth.approval_request_id?.trim()) headers['x-critical-approval-id'] = auth.approval_request_id.trim();
+  return headers;
+}
+
+async function request<T>(url: string, options?: RequestOptions): Promise<T> {
   let res: Response;
 
   try {
@@ -615,18 +698,19 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
     });
   } catch {
     const message = 'Falha de conexao com o servidor';
-    notifyError(message);
-    throw new Error(message);
+    if (!options?.skipErrorToast) notifyError(message);
+    throw new ApiRequestError(message, 0, 'NETWORK_ERROR', null);
   }
 
   if (!res.ok) {
-    const err = await res.json().catch(() => ({ message: 'Erro desconhecido' }));
+    const err = (await res.json().catch(() => ({ message: 'Erro desconhecido' }))) as ApiErrorPayload;
     const message = err.message || `Erro HTTP ${res.status}`;
+    const error = typeof err.error === 'string' ? err.error : null;
     if (res.status === 401 && typeof window !== 'undefined') {
       window.dispatchEvent(new Event('dg:unauthorized'));
     }
-    notifyError(message);
-    throw new Error(message);
+    if (!options?.skipErrorToast) notifyError(message);
+    throw new ApiRequestError(message, res.status, error, err.details ?? null);
   }
 
   if (res.status === 204) return undefined as T;
@@ -665,8 +749,11 @@ export const datasourceApi = {
       body: JSON.stringify(data),
     }),
 
-  remove: (id: string) =>
-    request<void>(`/datasources/${id}`, { method: 'DELETE' }),
+  remove: (id: string, auth?: CriticalAuthHeaders) =>
+    request<void>(`/datasources/${id}`, {
+      method: 'DELETE',
+      headers: buildCriticalHeaders(auth),
+    }),
 
   test: (id: string) =>
     request<{ status: string; latency_ms: number | null; error?: string; message?: string }>(
@@ -726,8 +813,11 @@ export const storageApi = {
       body: JSON.stringify(data),
     }),
 
-  remove: (id: string) =>
-    request<void>(`/storage-locations/${id}`, { method: 'DELETE' }),
+  remove: (id: string, auth?: CriticalAuthHeaders) =>
+    request<void>(`/storage-locations/${id}`, {
+      method: 'DELETE',
+      headers: buildCriticalHeaders(auth),
+    }),
 
   test: (id: string) =>
     request<{ status: string; available_space_gb?: number; latency_ms: number | null }>(
@@ -750,10 +840,13 @@ export const storageApi = {
   browseFiles: (id: string, path = '') =>
     request<ApiStorageBrowseResponse>(`/storage-locations/${id}/files?path=${encodeURIComponent(path)}`),
 
-  deletePath: (id: string, path: string) =>
+  deletePath: (id: string, path: string, auth?: CriticalAuthHeaders) =>
     request<{ message: string; deleted_paths: string[] }>(
       `/storage-locations/${id}/files?path=${encodeURIComponent(path)}`,
-      { method: 'DELETE' },
+      {
+        method: 'DELETE',
+        headers: buildCriticalHeaders(auth),
+      },
     ),
 
   copyPath: (id: string, sourcePath: string, destinationPath: string) =>
@@ -796,8 +889,28 @@ export const storageApi = {
 // Ã¢â€â‚¬Ã¢â€â‚¬ Health API Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
 export const healthApi = {
-  system: () =>
-    request<ApiSystemHealth>('/health'),
+  system: async () => {
+    const res = await fetch(`${BASE}/health`, {
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+    });
+
+    if (res.ok) {
+      return res.json() as Promise<ApiSystemHealth>;
+    }
+
+    // Backward-compat: some backend builds return 503 when health is degraded.
+    if (res.status === 503) {
+      const payload = (await res.json().catch(() => null)) as ApiSystemHealth | null;
+      if (payload?.status === 'degraded') return payload;
+    }
+
+    const err = (await res.json().catch(() => ({ message: 'Erro desconhecido' }))) as ApiErrorPayload;
+    const message = err.message || `Erro HTTP ${res.status}`;
+    const error = typeof err.error === 'string' ? err.error : null;
+    notifyError(message);
+    throw new ApiRequestError(message, res.status, error, err.details ?? null);
+  },
 
   datasources: () =>
     request<PaginatedResponse<ApiDatasourceHealthEntry>>('/health/datasources?limit=100'),
@@ -828,9 +941,11 @@ export const backupsApi = {
       keep_verification_database?: boolean;
       confirmation_phrase?: string;
     },
+    auth?: CriticalAuthHeaders,
   ) =>
     request<ApiRestoreExecutionResponse>(`/backups/${executionId}/restore`, {
       method: 'POST',
+      headers: buildCriticalHeaders(auth),
       body: JSON.stringify(data ?? {}),
     }),
 
@@ -874,6 +989,7 @@ export const backupsApi = {
     verification_mode?: boolean;
     keep_verification_database?: boolean;
     confirmation_phrase: string;
+    auth?: CriticalAuthHeaders;
   }) => {
     const qs = new URLSearchParams();
     qs.set('target_datasource_id', params.target_datasource_id);
@@ -889,15 +1005,16 @@ export const backupsApi = {
       headers: {
         'Content-Type': 'application/octet-stream',
         'x-file-name': encodeURIComponent(params.file.name),
+        ...buildCriticalHeaders(params.auth),
       },
       body: await params.file.arrayBuffer(),
     });
 
     if (!res.ok) {
-      const err = await res.json().catch(() => ({ message: 'Falha ao importar arquivo para restore' }));
+      const err = (await res.json().catch(() => ({ message: 'Falha ao importar arquivo para restore' }))) as ApiErrorPayload;
       const message = err.message || `Erro HTTP ${res.status}`;
       notifyError(message);
-      throw new Error(message);
+      throw new ApiRequestError(message, res.status, typeof err.error === 'string' ? err.error : null, err.details ?? null);
     }
 
     return res.json() as Promise<ApiRestoreExecutionResponse>;
@@ -1039,12 +1156,16 @@ export const backupJobsApi = {
       body: JSON.stringify(data),
     }),
 
-  remove: (id: string) =>
-    request<void>(`/backup-jobs/${id}`, { method: 'DELETE' }),
+  remove: (id: string, auth?: CriticalAuthHeaders) =>
+    request<void>(`/backup-jobs/${id}`, {
+      method: 'DELETE',
+      headers: buildCriticalHeaders(auth),
+    }),
 
-  run: (id: string) =>
+  run: (id: string, auth?: CriticalAuthHeaders) =>
     request<{ execution_id: string; message: string; status: string }>(`/backup-jobs/${id}/run`, {
       method: 'POST',
+      headers: buildCriticalHeaders(auth),
     }),
 };
 
@@ -1094,16 +1215,20 @@ export const dbSyncJobsApi = {
       body: JSON.stringify(data),
     }),
 
-  run: (id: string) =>
+  run: (id: string, auth?: CriticalAuthHeaders) =>
     request<{ sync_job_id: string; sync_execution_id: string; status: string; message: string }>(`/db-sync-jobs/${id}/run`, {
       method: 'POST',
+      headers: buildCriticalHeaders(auth),
     }),
 
   executions: (id: string) =>
     request<{ data: ApiDbSyncExecution[] }>(`/db-sync-jobs/${id}/executions`),
 
-  remove: (id: string) =>
-    request<void>(`/db-sync-jobs/${id}`, { method: 'DELETE' }),
+  remove: (id: string, auth?: CriticalAuthHeaders) =>
+    request<void>(`/db-sync-jobs/${id}`, {
+      method: 'DELETE',
+      headers: buildCriticalHeaders(auth),
+    }),
 };
 
 // Ã¢â€â‚¬Ã¢â€â‚¬ Executions API Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
@@ -1148,8 +1273,11 @@ export const executionsApi = {
       method: 'POST',
     }),
 
-  remove: (id: string) =>
-    request<void>(`/executions/${id}`, { method: 'DELETE' }),
+  remove: (id: string, auth?: CriticalAuthHeaders) =>
+    request<void>(`/executions/${id}`, {
+      method: 'DELETE',
+      headers: buildCriticalHeaders(auth),
+    }),
 };
 
 export const notificationsApi = {
@@ -1202,12 +1330,67 @@ export const auditApi = {
     return request<PaginatedResponse<ApiAuditLog>>(`/audit-logs${query ? `?${query}` : ''}`);
   },
 
-  cleanByPeriod: (params: { from?: string; to?: string }) => {
+  cleanByPeriod: (params: { from?: string; to?: string }, auth?: CriticalAuthHeaders) => {
     return request<{ message: string; deleted_count: number }>('/audit-logs/cleanup', {
       method: 'POST',
+      headers: buildCriticalHeaders(auth),
       body: JSON.stringify(params),
     });
   },
+};
+
+export const criticalApprovalsApi = {
+  createRequest: (data: {
+    action: CriticalApprovalAction;
+    action_label?: string;
+    resource_type?: string;
+    resource_id?: string;
+    request_reason?: string;
+    payload?: Record<string, unknown>;
+  }) =>
+    request<ApiCriticalApprovalRequest>('/critical-approvals/requests', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  listMine: (params?: { page?: number; limit?: number; status?: CriticalApprovalStatus; action?: CriticalApprovalAction }) => {
+    const qs = new URLSearchParams();
+    if (params?.page) qs.set('page', String(params.page));
+    if (params?.limit) qs.set('limit', String(params.limit));
+    if (params?.status) qs.set('status', params.status);
+    if (params?.action) qs.set('action', params.action);
+    const query = qs.toString();
+    return request<PaginatedResponse<ApiCriticalApprovalRequest>>(`/critical-approvals/requests/mine${query ? `?${query}` : ''}`);
+  },
+
+  list: (params?: {
+    page?: number;
+    limit?: number;
+    status?: CriticalApprovalStatus;
+    action?: CriticalApprovalAction;
+    requester_user_id?: string;
+  }) => {
+    const qs = new URLSearchParams();
+    if (params?.page) qs.set('page', String(params.page));
+    if (params?.limit) qs.set('limit', String(params.limit));
+    if (params?.status) qs.set('status', params.status);
+    if (params?.action) qs.set('action', params.action);
+    if (params?.requester_user_id) qs.set('requester_user_id', params.requester_user_id);
+    const query = qs.toString();
+    return request<PaginatedResponse<ApiCriticalApprovalRequest>>(`/critical-approvals/requests${query ? `?${query}` : ''}`);
+  },
+
+  approve: (id: string, data?: { decision_reason?: string; expires_minutes?: number }) =>
+    request<ApiCriticalApprovalRequest>(`/critical-approvals/requests/${id}/approve`, {
+      method: 'POST',
+      body: JSON.stringify(data ?? {}),
+    }),
+
+  reject: (id: string, data?: { decision_reason?: string }) =>
+    request<ApiCriticalApprovalRequest>(`/critical-approvals/requests/${id}/reject`, {
+      method: 'POST',
+      body: JSON.stringify(data ?? {}),
+    }),
 };
 
 // Ã¢â€â‚¬Ã¢â€â‚¬ System Settings API Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬

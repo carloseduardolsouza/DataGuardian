@@ -1,7 +1,11 @@
 import { Prisma, DatasourceType, DatasourceStatus } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { AppError } from '../middlewares/error-handler';
-import { maskCredentials } from '../../utils/config';
+import { maskCredentials, bigIntToSafe } from '../../utils/config';
+import {
+  normalizeDatasourceTags,
+  resolveDatasourceClassification,
+} from '../../core/datasource/classification';
 import {
   introspectPostgres,
   testPostgresConnection,
@@ -28,13 +32,15 @@ export function formatDatasource(ds: {
   createdAt: Date;
   updatedAt: Date;
 }) {
+  const normalizedTags = normalizeDatasourceTags(ds.tags);
   return {
     id:                   ds.id,
     name:                 ds.name,
     type:                 ds.type,
     status:               ds.status,
     enabled:              ds.enabled,
-    tags:                 ds.tags,
+    tags:                 normalizedTags,
+    classification:       resolveDatasourceClassification(normalizedTags),
     last_health_check_at: ds.lastHealthCheckAt?.toISOString() ?? null,
     created_at:           ds.createdAt.toISOString(),
     updated_at:           ds.updatedAt.toISOString(),
@@ -84,9 +90,36 @@ export interface CreateDatasourceTableData {
 }
 
 type JsonMap = Record<string, unknown>;
+type QueryResponse = {
+  columns: string[];
+  rows: Record<string, unknown>[];
+  rowCount: number;
+  executionTime: number;
+  message?: string;
+};
 
 function isPlainObject(value: unknown): value is JsonMap {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function toJsonSafeValue(value: unknown): unknown {
+  if (typeof value === 'bigint') return bigIntToSafe(value);
+  if (Array.isArray(value)) return value.map((item) => toJsonSafeValue(item));
+  if (value && typeof value === 'object') {
+    const mapped: Record<string, unknown> = {};
+    for (const [key, nested] of Object.entries(value as Record<string, unknown>)) {
+      mapped[key] = toJsonSafeValue(nested);
+    }
+    return mapped;
+  }
+  return value;
+}
+
+function normalizeQueryResponse(result: QueryResponse): QueryResponse {
+  return {
+    ...result,
+    rows: result.rows.map((row) => toJsonSafeValue(row) as Record<string, unknown>),
+  };
 }
 
 function asStringField(
@@ -439,6 +472,7 @@ export async function listDatasources(
 }
 
 export async function createDatasource(data: CreateDatasourceData) {
+  const normalizedTags = normalizeDatasourceTags(data.tags ?? []);
   const datasource = await prisma.datasource.create({
     data: {
       name:             data.name,
@@ -446,7 +480,7 @@ export async function createDatasource(data: CreateDatasourceData) {
       connectionConfig: data.connection_config as Prisma.InputJsonValue,
       status:           'unknown',
       enabled:          data.enabled,
-      tags:             data.tags,
+      tags:             normalizedTags,
     },
   });
 
@@ -484,7 +518,7 @@ export async function updateDatasource(id: string, data: UpdateDatasourceData) {
       ...(data.name              !== undefined && { name: data.name }),
       ...(data.connection_config !== undefined && { connectionConfig: mergedConnectionConfig as Prisma.InputJsonValue }),
       ...(data.enabled           !== undefined && { enabled: data.enabled }),
-      ...(data.tags              !== undefined && { tags: data.tags }),
+      ...(data.tags              !== undefined && { tags: normalizeDatasourceTags(data.tags) }),
     },
   });
 
@@ -560,11 +594,13 @@ export async function executeDatasourceQuery(id: string, sql: string) {
 
   try {
     if (datasourceType === 'postgres') {
-      return executePostgresQuery(buildPostgresConfig(cfg), sql);
+      const result = await executePostgresQuery(buildPostgresConfig(cfg), sql);
+      return normalizeQueryResponse(result);
     }
 
     if (datasourceType === 'mysql' || datasourceType === 'mariadb') {
-      return executeMysqlQuery(buildMysqlLikeConfig(cfg, datasourceType), sql);
+      const result = await executeMysqlQuery(buildMysqlLikeConfig(cfg, datasourceType), sql);
+      return normalizeQueryResponse(result);
     }
 
     throw new AppError(

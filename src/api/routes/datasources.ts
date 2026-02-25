@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { validate } from '../middlewares/validation';
 import { requirePermission } from '../middlewares/auth';
+import { requireCriticalApproval } from '../middlewares/critical-approval';
 import { DatasourceController } from '../controllers/datasource.controller';
 import { createDatasourceSchema, updateDatasourceSchema } from '../../types/datasource.types';
 import { PERMISSIONS } from '../../core/auth/permissions';
@@ -33,12 +34,26 @@ const createDatasourceTableSchema = z.object({
   ).min(1),
 });
 
+const executeDatasourceQuerySchema = z.object({
+  sql: z.string().trim().min(1),
+});
+
 datasourcesRouter.get('/', requirePermission(PERMISSIONS.DATASOURCES_READ), validate(listDatasourceQuerySchema, 'query'), DatasourceController.list);
 datasourcesRouter.post('/', requirePermission(PERMISSIONS.DATASOURCES_WRITE), validate(createDatasourceSchema), DatasourceController.create);
 datasourcesRouter.get('/:id', requirePermission(PERMISSIONS.DATASOURCES_READ), DatasourceController.findById);
 datasourcesRouter.put('/:id', requirePermission(PERMISSIONS.DATASOURCES_WRITE), validate(updateDatasourceSchema), DatasourceController.update);
-datasourcesRouter.delete('/:id', requirePermission(PERMISSIONS.DATASOURCES_WRITE), DatasourceController.remove);
+datasourcesRouter.delete(
+  '/:id',
+  requirePermission(PERMISSIONS.DATASOURCES_WRITE),
+  requireCriticalApproval({
+    action: 'datasource.delete',
+    actionLabel: 'Excluir datasource',
+    resourceType: 'datasource',
+    resolveResourceId: (req) => String(req.params.id),
+  }),
+  DatasourceController.remove,
+);
 datasourcesRouter.post('/:id/test', requirePermission(PERMISSIONS.DATASOURCES_QUERY), DatasourceController.testConnection);
 datasourcesRouter.get('/:id/schema', requirePermission(PERMISSIONS.DATASOURCES_READ), DatasourceController.getSchema);
-datasourcesRouter.post('/:id/query', requirePermission(PERMISSIONS.DATASOURCES_QUERY), DatasourceController.executeQuery);
+datasourcesRouter.post('/:id/query', requirePermission(PERMISSIONS.DATASOURCES_QUERY), validate(executeDatasourceQuerySchema), DatasourceController.executeQuery);
 datasourcesRouter.post('/:id/tables', requirePermission(PERMISSIONS.DATASOURCES_QUERY), validate(createDatasourceTableSchema), DatasourceController.createTable);

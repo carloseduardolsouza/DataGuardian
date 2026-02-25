@@ -15,6 +15,7 @@ import {
   LogIcon,
   SettingsIcon,
   UsersIcon,
+  ApprovalIcon,
   LogoutIcon,
 } from '../../icons/Icons';
 import { PERMISSIONS } from '../../../constants/permissions';
@@ -30,6 +31,7 @@ export type NavKey =
   | 'health'
   | 'notifications'
   | 'audit'
+  | 'approvals'
   | 'access'
   | 'settings';
 
@@ -44,6 +46,7 @@ export const ROUTE_PATHS: Record<NavKey, string> = {
   health: '/health-check',
   notifications: '/notifications',
   audit: '/audit',
+  approvals: '/critical-approvals',
   access: '/access-control',
   settings: '/settings',
 };
@@ -80,6 +83,7 @@ const systemNav: NavItem[] = [
   { key: 'health', label: 'Health', icon: <HealthIcon />, permission: PERMISSIONS.HEALTH_READ },
   { key: 'notifications', label: 'Notificacoes', icon: <BellIcon />, permission: PERMISSIONS.NOTIFICATIONS_READ },
   { key: 'audit', label: 'Auditoria', icon: <LogIcon />, permission: PERMISSIONS.AUDIT_READ },
+  { key: 'approvals', label: 'Requisicoes Criticas', icon: <ApprovalIcon />, permission: PERMISSIONS.ACCESS_MANAGE },
   { key: 'access', label: 'Usuarios e Roles', icon: <UsersIcon />, permission: PERMISSIONS.ACCESS_MANAGE },
   { key: 'settings', label: 'Configuracoes', icon: <SettingsIcon />, permission: PERMISSIONS.SYSTEM_READ },
 ];

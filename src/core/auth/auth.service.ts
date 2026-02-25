@@ -64,6 +64,15 @@ async function verifyPassword(password: string, storedHash: string) {
   return timingSafeEqual(derived, expected);
 }
 
+export async function verifyUserPassword(userId: string, password: string) {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { passwordHash: true, isActive: true },
+  });
+  if (!user || !user.isActive) return false;
+  return verifyPassword(password, user.passwordHash);
+}
+
 async function getLegacyUserConfig() {
   const setting = await prisma.systemSetting.findUnique({ where: { key: USER_SETTING_KEY } });
   return parseLegacyStoredUser(setting?.value);

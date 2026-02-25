@@ -9,7 +9,9 @@ export const HealthController = {
   async getSystemStatus(_req: Request, res: Response, next: NextFunction) {
     try {
       const health = await getSystemHealth();
-      res.status(health.status === 'ok' ? 200 : 503).json(health);
+      // The UI consumes this endpoint even when dependencies are degraded.
+      // Keep HTTP 200 and expose readiness via payload.status.
+      res.status(200).json(health);
     } catch (err) {
       next(err);
     }

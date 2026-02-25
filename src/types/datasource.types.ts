@@ -95,13 +95,34 @@ const connectionSchemaByType: Record<DatasourceTypeValue, z.ZodTypeAny> = {
   files:     filesConfigSchema,
 };
 
+function normalizeTag(tag: string) {
+  return tag
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase();
+}
+
+const tagsSchema = z.array(z.string())
+  .transform((tags) => {
+    const unique = new Set<string>();
+    const normalized: string[] = [];
+    for (const tag of tags) {
+      const value = normalizeTag(tag);
+      if (!value || unique.has(value)) continue;
+      unique.add(value);
+      normalized.push(value);
+    }
+    return normalized;
+  });
+
 export const createDatasourceSchema = z
   .object({
     name:              z.string().min(1).max(255),
     type:              z.enum(datasourceTypeValues),
     connection_config: z.record(z.unknown()),
     enabled:           z.boolean().default(true),
-    tags:              z.array(z.string()).default([]),
+    tags:              tagsSchema.default([]),
   })
   .superRefine((data, ctx) => {
     const result = connectionSchemaByType[data.type].safeParse(data.connection_config);
@@ -118,7 +139,7 @@ export const updateDatasourceSchema = z.object({
   name:              z.string().min(1).max(255).optional(),
   connection_config: z.record(z.unknown()).optional(),
   enabled:           z.boolean().optional(),
-  tags:              z.array(z.string()).optional(),
+  tags:              tagsSchema.optional(),
 });
 
 export type CreateDatasourceInput = z.infer<typeof createDatasourceSchema>;

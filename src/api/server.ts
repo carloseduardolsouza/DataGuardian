@@ -22,6 +22,7 @@ import { dashboardRouter } from './routes/dashboard';
 import { backupsRouter } from './routes/backups';
 import { accessRouter } from './routes/access';
 import { auditLogsRouter } from './routes/audit-logs';
+import { criticalApprovalsRouter } from './routes/critical-approvals';
 import { integrationsRouter } from './routes/integrations';
 import { requireAuth, requirePermission } from './middlewares/auth';
 import { PERMISSIONS } from '../core/auth/permissions';
@@ -88,6 +89,7 @@ export function createApp() {
   app.use('/api/dashboard', dashboardRouter);
   app.use('/api/backups', backupsRouter);
   app.use('/api/audit-logs', auditLogsRouter);
+  app.use('/api/critical-approvals', criticalApprovalsRouter);
   app.use('/api/access', requirePermission(PERMISSIONS.ACCESS_MANAGE), accessRouter);
 
   const frontendCandidates = [

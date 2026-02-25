@@ -81,11 +81,7 @@ export const DatasourceController = {
   async executeQuery(req: Request, res: Response, next: NextFunction) {
     try {
       const { sql } = req.body as { sql: string };
-      if (!sql || !String(sql).trim()) {
-        res.status(400).json({ message: 'O campo "sql" é obrigatório.' });
-        return;
-      }
-      const result = await executeDatasourceQuery(String(req.params.id), String(sql));
+      const result = await executeDatasourceQuery(String(req.params.id), sql);
       res.json(result);
     } catch (err) {
       next(err);

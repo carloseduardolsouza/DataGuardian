@@ -42,6 +42,7 @@ interface FormState {
   sourcePath: string;
   includePatterns: string;
   excludePatterns: string;
+  classification: '' | 'production' | 'staging' | 'homolog' | 'test' | 'development' | 'critical';
   tags: string[];
 }
 
@@ -58,16 +59,67 @@ const INITIAL_FORM: FormState = {
   sourcePath: '',
   includePatterns: '',
   excludePatterns: '',
+  classification: '',
   tags: [],
 };
 
+const CLASSIFICATION_OPTIONS: Array<{ value: FormState['classification']; label: string }> = [
+  { value: '', label: 'Nao classificado' },
+  { value: 'production', label: 'Producao' },
+  { value: 'staging', label: 'Staging' },
+  { value: 'homolog', label: 'Homologacao' },
+  { value: 'test', label: 'Teste / QA' },
+  { value: 'development', label: 'Desenvolvimento' },
+  { value: 'critical', label: 'Critico' },
+];
+
+const CLASSIFICATION_ALIASES: Record<string, FormState['classification']> = {
+  production: 'production',
+  prod: 'production',
+  producao: 'production',
+  staging: 'staging',
+  stage: 'staging',
+  homolog: 'homolog',
+  hml: 'homolog',
+  homologacao: 'homolog',
+  test: 'test',
+  testing: 'test',
+  teste: 'test',
+  qa: 'test',
+  development: 'development',
+  dev: 'development',
+  critical: 'critical',
+  critico: 'critical',
+  critica: 'critical',
+};
+
+function normalizeText(value: string) {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase();
+}
+
+function resolveClassification(tags: string[]): FormState['classification'] {
+  for (const tag of tags) {
+    const key = normalizeText(tag);
+    const mapped = CLASSIFICATION_ALIASES[key];
+    if (mapped) return mapped;
+  }
+  return '';
+}
+
 function initFormFromEdit(ds: ApiDatasourceDetail): FormState {
   const cfg = ds.connection_config;
+  const classification = resolveClassification(ds.tags);
+  const cleanedTags = ds.tags.filter((tag) => !CLASSIFICATION_ALIASES[normalizeText(tag)]);
 
   return {
     name: ds.name,
     enabled: ds.enabled,
-    tags: [...ds.tags],
+    classification,
+    tags: cleanedTags,
     host: String(cfg.host ?? ''),
     port: String(cfg.port ?? ''),
     database: String(cfg.database ?? ''),
@@ -242,14 +294,14 @@ export default function AddDatasourceModal({ onClose, onSave, editData }: Props)
           name: form.name,
           connection_config: connectionConfig,
           enabled: form.enabled,
-          tags: form.tags,
+          tags: [...(form.classification ? [form.classification] : []), ...form.tags],
         }
       : {
           name: form.name,
           type: selectedType,
           connection_config: connectionConfig,
           enabled: form.enabled,
-          tags: form.tags,
+          tags: [...(form.classification ? [form.classification] : []), ...form.tags],
         };
 
     try {
@@ -368,6 +420,16 @@ export default function AddDatasourceModal({ onClose, onSave, editData }: Props)
             <input type="checkbox" checked={form.enabled} onChange={setCheck('enabled')} />
             <span>Datasource habilitado</span>
           </label>
+
+          <FormField label="Classificacao">
+            <select className={formStyles.input} value={form.classification} onChange={set('classification')}>
+              {CLASSIFICATION_OPTIONS.map((option) => (
+                <option key={option.value || 'none'} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </FormField>
 
           <div className={formStyles.divider} />
 

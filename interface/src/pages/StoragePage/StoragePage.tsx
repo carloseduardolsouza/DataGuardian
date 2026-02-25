@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { storageApi } from '../../services/api';
 import type { ApiStorageLocation, ApiStorageLocationDetail } from '../../services/api';
 import { useResizableWidth } from '../../hooks/useResizableWidth';
+import { useCriticalAction } from '../../hooks/useCriticalAction';
 import StorageList     from './StorageList';
 import AddStorageModal from './AddStorageModal';
 import FileBrowser     from './FileBrowser';
@@ -137,7 +138,8 @@ function StorageDetail({
 
 // ── Main Page ─────────────────────────────────────────────────────
 
-export default function StoragePage() {
+export default function StoragePage({ isAdmin = false }: { isAdmin?: boolean }) {
+  const criticalAction = useCriticalAction({ isAdmin });
   const [isDesktop, setIsDesktop] = useState(() => window.innerWidth > 980);
   const [locations, setLocations]         = useState<ApiStorageLocation[]>([]);
   const [loading, setLoading]             = useState(true);
@@ -228,7 +230,14 @@ export default function StoragePage() {
     if (!deleteTarget) return;
     try {
       setDeleting(true);
-      await storageApi.remove(deleteTarget.id);
+      const done = await criticalAction.run({
+        action: 'storage.delete',
+        actionLabel: 'Remover storage',
+        resourceType: 'storage',
+        resourceId: deleteTarget.id,
+        execute: (auth) => storageApi.remove(deleteTarget.id, auth),
+      });
+      if (!done) return;
       setLocations(prev => prev.filter(l => l.id !== deleteTarget.id));
       if (selectedLoc?.id === deleteTarget.id) { setSelectedLoc(null); setDetail(null); }
       setDeleteTarget(null);
@@ -237,7 +246,7 @@ export default function StoragePage() {
     } finally {
       setDeleting(false);
     }
-  }, [deleteTarget, selectedLoc?.id]);
+  }, [deleteTarget, selectedLoc?.id, criticalAction]);
 
   // ── Save (create / update) ──────────────────────────────────────
 
@@ -358,6 +367,7 @@ export default function StoragePage() {
                 <FileBrowser
                   locationId={selectedLoc.id}
                   locationName={selectedLoc.name}
+                  isAdmin={isAdmin}
                 />
               ) : (
                 <StorageDetail
@@ -398,6 +408,7 @@ export default function StoragePage() {
         }}
         onConfirm={() => void confirmDelete()}
       />
+      {criticalAction.modal}
     </div>
   );
 }

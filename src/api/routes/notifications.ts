@@ -22,6 +22,8 @@ const listQuerySchema = z.object({
       "storage_unreachable",
       "health_degraded",
       "cleanup_completed",
+      "approval_requested",
+      "approval_decided",
     ])
     .optional(),
 });

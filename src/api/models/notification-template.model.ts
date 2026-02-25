@@ -14,6 +14,8 @@ const ALL_NOTIFICATION_TYPES: NotificationType[] = [
   'storage_unreachable',
   'health_degraded',
   'cleanup_completed',
+  'approval_requested',
+  'approval_decided',
 ];
 
 const ALL_ALERT_CHANNELS: AlertChannel[] = ['whatsapp'];

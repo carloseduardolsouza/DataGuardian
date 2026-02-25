@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ApiStorageBrowserEntry } from '../../services/api';
 import { storageApi } from '../../services/api';
+import { useCriticalAction } from '../../hooks/useCriticalAction';
 import { CopyIcon, ExportIcon, TrashIcon } from '../../ui/icons/Icons';
 import ConfirmDialog from '../../ui/dialogs/ConfirmDialog/ConfirmDialog';
 import styles from './FileBrowser.module.css';
@@ -8,6 +9,7 @@ import styles from './FileBrowser.module.css';
 interface Props {
   locationId: string;
   locationName: string;
+  isAdmin?: boolean;
 }
 
 function formatBytes(bytes: number | null) {
@@ -31,7 +33,8 @@ function formatDate(iso: string | null) {
   });
 }
 
-export default function FileBrowser({ locationId, locationName }: Props) {
+export default function FileBrowser({ locationId, locationName, isAdmin = false }: Props) {
+  const criticalAction = useCriticalAction({ isAdmin });
   const [cwd, setCwd] = useState('');
   const [rootLabel, setRootLabel] = useState(locationName);
   const [entries, setEntries] = useState<ApiStorageBrowserEntry[]>([]);
@@ -135,7 +138,17 @@ export default function FileBrowser({ locationId, locationName }: Props) {
     if (pendingDeletePaths.length === 0) return;
     try {
       setDeleting(true);
-      await Promise.all(pendingDeletePaths.map((targetPath) => storageApi.deletePath(locationId, targetPath)));
+      for (const targetPath of pendingDeletePaths) {
+        const done = await criticalAction.run({
+          action: 'storage.path.delete',
+          actionLabel: 'Excluir arquivo/pasta do storage',
+          resourceType: 'storage',
+          resourceId: locationId,
+          payload: { path: targetPath },
+          execute: (auth) => storageApi.deletePath(locationId, targetPath, auth).then(() => undefined),
+        });
+        if (!done) return;
+      }
       setSelected(new Set());
       setRefreshTick((v) => v + 1);
       setPendingDeletePaths([]);
@@ -299,6 +312,7 @@ export default function FileBrowser({ locationId, locationName }: Props) {
         }}
         onConfirm={() => void confirmDeletePaths()}
       />
+      {criticalAction.modal}
     </div>
   );
 }
@@ -321,8 +335,6 @@ function RefreshIcon() {
 function FolderEmptyIcon() {
   return <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z" /></svg>;
 }
-
-
 
 
 

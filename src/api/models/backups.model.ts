@@ -17,6 +17,7 @@ import { materializeExecutionRawSnapshot } from '../../core/backup/execution-art
 import { ensureRedisAvailable } from '../../queue/redis-client';
 import { enqueueRestoreExecution } from '../../queue/queues';
 import { prepareStorageFileDownload } from './storage-location.model';
+import { resolveDatasourceClassification } from '../../core/datasource/classification';
 
 type StorageBackupStatus = 'available' | 'missing' | 'unreachable' | 'unknown';
 type ExecutionLogLevel = 'info' | 'warn' | 'error' | 'debug' | 'success';
@@ -832,6 +833,7 @@ export async function listRestoreTargetDatasources() {
       type: true,
       status: true,
       enabled: true,
+      tags: true,
       updatedAt: true,
     },
   });
@@ -842,6 +844,7 @@ export async function listRestoreTargetDatasources() {
     datasource_type: item.type,
     datasource_status: item.status,
     datasource_enabled: item.enabled,
+    classification: resolveDatasourceClassification(item.tags ?? []),
     updated_at: item.updatedAt.toISOString(),
   }));
 }

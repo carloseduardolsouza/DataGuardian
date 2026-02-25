@@ -3,6 +3,7 @@ import { backupJobsApi, datasourceApi, storageApi } from '../../services/api';
 import type { ApiBackupJob, ApiDatasource, ApiStorageLocation } from '../../services/api';
 import JobFormModal from './JobFormModal';
 import ConfirmDialog from '../../ui/dialogs/ConfirmDialog/ConfirmDialog';
+import { useCriticalAction } from '../../hooks/useCriticalAction';
 import styles from './BackupJobsPage.module.css';
 
 import StatusBadge from '../../ui/data-display/StatusBadge/StatusBadge';
@@ -64,7 +65,8 @@ function resolveStorageNames(job: ApiBackupJob, storages: ApiStorageLocation[]) 
   });
 }
 
-export default function BackupJobsPage() {
+export default function BackupJobsPage({ isAdmin = false }: { isAdmin?: boolean }) {
+  const criticalAction = useCriticalAction({ isAdmin });
   const [jobs, setJobs] = useState<ApiBackupJob[]>([]);
   const [datasources, setDatasources] = useState<ApiDatasource[]>([]);
   const [storages, setStorages] = useState<ApiStorageLocation[]>([]);
@@ -140,7 +142,14 @@ export default function BackupJobsPage() {
     }));
 
     try {
-      await backupJobsApi.run(jobId);
+      const started = await criticalAction.run({
+        action: 'backup_job.run',
+        actionLabel: 'Executar backup job',
+        resourceType: 'backup_job',
+        resourceId: jobId,
+        execute: (auth) => backupJobsApi.run(jobId, auth).then(() => undefined),
+      });
+      if (!started) return;
 
       for (let i = 0; i < 20; i += 1) {
         await new Promise((resolve) => setTimeout(resolve, 1000));
@@ -171,9 +180,17 @@ export default function BackupJobsPage() {
     if (!deleteTarget) return;
     try {
       setDeleting(true);
-      await backupJobsApi.remove(deleteTarget.id);
-      await loadAll();
-      setDeleteTarget(null);
+      await criticalAction.run({
+        action: 'backup_job.delete',
+        actionLabel: 'Remover backup job',
+        resourceType: 'backup_job',
+        resourceId: deleteTarget.id,
+        execute: (auth) => backupJobsApi.remove(deleteTarget.id, auth),
+        onSuccess: async () => {
+          await loadAll();
+          setDeleteTarget(null);
+        },
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao remover job.');
     } finally {
@@ -366,6 +383,7 @@ export default function BackupJobsPage() {
         }}
         onConfirm={() => void confirmRemoveJob()}
       />
+      {criticalAction.modal}
     </div>
   );
 }

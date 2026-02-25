@@ -1,6 +1,7 @@
 ﻿import { Router } from 'express';
 import { validate } from '../middlewares/validation';
 import { requirePermission } from '../middlewares/auth';
+import { requireCriticalApproval } from '../middlewares/critical-approval';
 import { PERMISSIONS } from '../../core/auth/permissions';
 import { DbSyncJobsController } from '../controllers/db-sync-jobs.controller';
 import {
@@ -32,6 +33,26 @@ dbSyncJobsRouter.put(
   validate(updateDbSyncJobSchema),
   DbSyncJobsController.update,
 );
-dbSyncJobsRouter.delete('/:id', requirePermission(PERMISSIONS.DB_SYNC_JOBS_WRITE), DbSyncJobsController.remove);
-dbSyncJobsRouter.post('/:id/run', requirePermission(PERMISSIONS.DB_SYNC_JOBS_RUN), DbSyncJobsController.runNow);
+dbSyncJobsRouter.delete(
+  '/:id',
+  requirePermission(PERMISSIONS.DB_SYNC_JOBS_WRITE),
+  requireCriticalApproval({
+    action: 'db_sync_job.delete',
+    actionLabel: 'Excluir job de sincronizacao',
+    resourceType: 'db_sync_job',
+    resolveResourceId: (req) => String(req.params.id),
+  }),
+  DbSyncJobsController.remove,
+);
+dbSyncJobsRouter.post(
+  '/:id/run',
+  requirePermission(PERMISSIONS.DB_SYNC_JOBS_RUN),
+  requireCriticalApproval({
+    action: 'db_sync_job.run',
+    actionLabel: 'Executar sincronizacao',
+    resourceType: 'db_sync_job',
+    resolveResourceId: (req) => String(req.params.id),
+  }),
+  DbSyncJobsController.runNow,
+);
 dbSyncJobsRouter.get('/:id/executions', requirePermission(PERMISSIONS.DB_SYNC_JOBS_READ), DbSyncJobsController.executions);

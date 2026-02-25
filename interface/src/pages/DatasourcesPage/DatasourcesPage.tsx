@@ -10,6 +10,7 @@ import type {
   ApiSchemaTable,
 } from '../../services/api';
 import { useResizableWidth } from '../../hooks/useResizableWidth';
+import { useCriticalAction } from '../../hooks/useCriticalAction';
 import DatasourceList from './DatasourceList';
 import AddDatasourceModal from './AddDatasourceModal';
 import CreateTableModal from './CreateTableModal';
@@ -185,6 +186,11 @@ function DatasourceDetail({
             <span className={`${styles.statusBadge} ${styles[`status_${datasource.status}`]}`}>
               {STATUS_LABELS[datasource.status]}
             </span>
+            {datasource.classification && (
+              <span className={styles.disabledBadge}>
+                {`Classificacao: ${datasource.classification}`}
+              </span>
+            )}
             {!datasource.enabled && <span className={styles.disabledBadge}>Desabilitado</span>}
           </div>
         </div>
@@ -291,7 +297,8 @@ function DatasourceDetail({
   );
 }
 
-export default function DatasourcesPage() {
+export default function DatasourcesPage({ isAdmin = false }: { isAdmin?: boolean }) {
+  const criticalAction = useCriticalAction({ isAdmin });
   const navigate = useNavigate();
   const [isDesktop, setIsDesktop] = useState(() => window.innerWidth > 1200);
   const [datasources, setDatasources] = useState<ApiDatasource[]>([]);
@@ -534,7 +541,14 @@ export default function DatasourcesPage() {
     if (!deleteTarget) return;
     try {
       setDeleting(true);
-      await datasourceApi.remove(deleteTarget.id);
+      const done = await criticalAction.run({
+        action: 'datasource.delete',
+        actionLabel: 'Remover datasource',
+        resourceType: 'datasource',
+        resourceId: deleteTarget.id,
+        execute: (auth) => datasourceApi.remove(deleteTarget.id, auth),
+      });
+      if (!done) return;
 
       setDatasources((prev) => {
         const next = prev.filter((d) => d.id !== deleteTarget.id);
@@ -558,7 +572,7 @@ export default function DatasourcesPage() {
     } finally {
       setDeleting(false);
     }
-  }, [deleteTarget, handleSelect, selectedDs?.id]);
+  }, [deleteTarget, handleSelect, selectedDs?.id, criticalAction]);
 
   const handleSave = useCallback(
     async (data: unknown, editId?: string) => {
@@ -669,17 +683,37 @@ export default function DatasourcesPage() {
     try {
       setRestoreSubmitting(true);
       setError(null);
-      const response = await backupsApi.restore(selectedBackupExecutionId, {
-        storage_location_id: storageLocationId,
-        target_datasource_id: restoreTargetDatasource.id,
-        drop_existing: restoreDropExisting,
-        verification_mode: restoreVerificationMode,
-        keep_verification_database: restoreKeepVerificationDatabase,
-        confirmation_phrase: restoreConfirmationPhrase.trim(),
+      let executionId: string | null = null;
+      const done = await criticalAction.run({
+        action: 'backup.restore',
+        actionLabel: 'Executar restore de backup',
+        resourceType: 'backup_execution',
+        resourceId: selectedBackupExecutionId,
+        payload: {
+          target_datasource_id: restoreTargetDatasource.id,
+          verification_mode: restoreVerificationMode,
+        },
+        requestApprovalFirst: !isAdmin || restoreTargetDatasource.classification === 'production',
+        execute: async (auth) => {
+          const response = await backupsApi.restore(
+            selectedBackupExecutionId,
+            {
+              storage_location_id: storageLocationId,
+              target_datasource_id: restoreTargetDatasource.id,
+              drop_existing: restoreDropExisting,
+              verification_mode: restoreVerificationMode,
+              keep_verification_database: restoreKeepVerificationDatabase,
+              confirmation_phrase: restoreConfirmationPhrase.trim(),
+            },
+            auth,
+          );
+          executionId = response.execution_id;
+        },
       });
+      if (!done || !executionId) return;
       closeRestoreModal();
       navigate(ROUTE_PATHS.executions, {
-        state: { openExecutionId: response.execution_id },
+        state: { openExecutionId: executionId },
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao iniciar restore');
@@ -703,17 +737,34 @@ export default function DatasourcesPage() {
     try {
       setImportSubmitting(true);
       setError(null);
-      const response = await backupsApi.importAndRestore({
-        file: importFile,
-        target_datasource_id: importTargetDatasource.id,
-        drop_existing: importDropExisting,
-        verification_mode: importVerificationMode,
-        keep_verification_database: importKeepVerificationDatabase,
-        confirmation_phrase: importConfirmationPhrase.trim(),
+      let executionId: string | null = null;
+      const done = await criticalAction.run({
+        action: 'backup.import_restore',
+        actionLabel: 'Importar arquivo e restaurar backup',
+        resourceType: 'datasource',
+        resourceId: importTargetDatasource.id,
+        payload: {
+          file_name: importFile.name,
+          verification_mode: importVerificationMode,
+        },
+        requestApprovalFirst: !isAdmin || importTargetDatasource.classification === 'production',
+        execute: async (auth) => {
+          const response = await backupsApi.importAndRestore({
+            file: importFile,
+            target_datasource_id: importTargetDatasource.id,
+            drop_existing: importDropExisting,
+            verification_mode: importVerificationMode,
+            keep_verification_database: importKeepVerificationDatabase,
+            confirmation_phrase: importConfirmationPhrase.trim(),
+            auth,
+          });
+          executionId = response.execution_id;
+        },
       });
+      if (!done || !executionId) return;
       closeImportModal();
       navigate(ROUTE_PATHS.executions, {
-        state: { openExecutionId: response.execution_id },
+        state: { openExecutionId: executionId },
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao importar arquivo e iniciar restore');
@@ -1040,6 +1091,11 @@ export default function DatasourcesPage() {
             <p className={styles.warningText}>
               Acao irreversivel. Confirme digitando <strong>{restoreRequiredPhrase}</strong>.
             </p>
+            {restoreTargetDatasource.classification === 'production' && (
+              <p className={styles.warningText}>
+                Destino classificado como <strong>producao</strong>: restore exige aprovacao critica/senha administrativa.
+              </p>
+            )}
             <label className={styles.field}>
               CONFIRMACAO
               <input
@@ -1137,6 +1193,11 @@ export default function DatasourcesPage() {
             <p className={styles.warningText}>
               Acao irreversivel. Confirme digitando <strong>{importRequiredPhrase}</strong>.
             </p>
+            {importTargetDatasource.classification === 'production' && (
+              <p className={styles.warningText}>
+                Destino classificado como <strong>producao</strong>: import restore exige aprovacao critica/senha administrativa.
+              </p>
+            )}
             <label className={styles.field}>
               CONFIRMACAO
               <input
@@ -1149,6 +1210,7 @@ export default function DatasourcesPage() {
           </div>
         </Modal>
       )}
+      {criticalAction.modal}
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import { SpinnerIcon, SearchIcon, LogIcon, TrashIcon } from '../../ui/icons/Icons';
 import { auditApi, type ApiAuditLog } from '../../services/api';
+import { useCriticalAction } from '../../hooks/useCriticalAction';
 import Modal from '../../ui/overlay/Modal/Modal';
 import styles from './AuditPage.module.css';
 
@@ -58,7 +59,8 @@ function defaultCleanupToValue() {
   return toLocalDatetimeValue(cutoff);
 }
 
-export default function AuditPage() {
+export default function AuditPage({ isAdmin = false }: { isAdmin?: boolean }) {
+  const criticalAction = useCriticalAction({ isAdmin });
   const [items, setItems] = useState<ApiAuditLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -182,14 +184,29 @@ export default function AuditPage() {
       setError(null);
       setSuccess(null);
 
-      const response = await auditApi.cleanByPeriod({
-        from: cleanupFrom ? new Date(cleanupFrom).toISOString() : undefined,
-        to: cleanupTo ? new Date(cleanupTo).toISOString() : undefined,
+      let deletedCount = 0;
+      const done = await criticalAction.run({
+        action: 'audit_logs.cleanup',
+        actionLabel: 'Limpar historico de auditoria',
+        resourceType: 'audit_logs',
+        resourceId: 'cleanup',
+        payload: {
+          from: cleanupFrom ? new Date(cleanupFrom).toISOString() : null,
+          to: cleanupTo ? new Date(cleanupTo).toISOString() : null,
+        },
+        execute: async (auth) => {
+          const response = await auditApi.cleanByPeriod({
+            from: cleanupFrom ? new Date(cleanupFrom).toISOString() : undefined,
+            to: cleanupTo ? new Date(cleanupTo).toISOString() : undefined,
+          }, auth);
+          deletedCount = response.deleted_count;
+        },
       });
+      if (!done) return;
 
       const targetPage = 1;
       setPage(targetPage);
-      setSuccess(`${response.deleted_count} registro(s) removido(s) da auditoria.`);
+      setSuccess(`${deletedCount} registro(s) removido(s) da auditoria.`);
       setIsCleanupModalOpen(false);
       await load(targetPage);
     } catch (err) {
@@ -373,6 +390,7 @@ export default function AuditPage() {
           </div>
         </Modal>
       )}
+      {criticalAction.modal}
     </div>
   );
 }

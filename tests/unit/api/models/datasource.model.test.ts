@@ -24,6 +24,7 @@ describe('datasource model', () => {
       status: 'healthy',
       enabled: true,
       tags: ['prod'],
+      classification: 'production',
       last_health_check_at: '2026-02-21T10:00:00.000Z',
       created_at: '2026-02-21T10:00:00.000Z',
       updated_at: '2026-02-22T10:00:00.000Z',
