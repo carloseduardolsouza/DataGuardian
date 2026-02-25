@@ -1,6 +1,6 @@
 import { prisma } from '../../lib/prisma';
 import { getWorkersSnapshot } from '../../workers/worker-registry';
-import { isRedisAvailable } from '../../queue/redis-client';
+import { ensureRedisAvailable } from '../../queue/redis-client';
 
 export interface HealthHistoryFilters {
   datasource_id?: string;
@@ -47,8 +47,18 @@ export async function getSystemHealth() {
   ]);
 
   const workers = getWorkersSnapshot();
-  const redisStatus = isRedisAvailable() ? 'ok' : 'error';
-  const hasWorkerError = Object.values(workers).some((worker) => worker.status === 'error');
+  const redisAvailable = await ensureRedisAvailable();
+  const redisStatus = redisAvailable ? 'ok' : 'error';
+  const queueDependentWorkers = new Set(['backup', 'restore', 'scheduler', 'db_sync']);
+  const effectiveWorkers = Object.fromEntries(
+    Object.entries(workers).map(([name, state]) => {
+      if (!redisAvailable && queueDependentWorkers.has(name)) {
+        return [name, { ...state, status: 'stopped' as const }];
+      }
+      return [name, state];
+    }),
+  ) as typeof workers;
+  const hasWorkerError = Object.values(effectiveWorkers).some((worker) => worker.status === 'error');
   const overallStatus =
     dbStatus === 'error' || redisStatus === 'error' || hasWorkerError ? 'degraded' : 'ok';
 
@@ -60,12 +70,12 @@ export async function getSystemHealth() {
       database: dbStatus,
       redis: redisStatus,
       workers: {
-        backup: workers.backup.status,
-        restore: workers.restore.status,
-        scheduler: workers.scheduler.status,
-        db_sync: workers.db_sync.status,
-        health: workers.health.status,
-        cleanup: workers.cleanup.status,
+        backup: effectiveWorkers.backup.status,
+        restore: effectiveWorkers.restore.status,
+        scheduler: effectiveWorkers.scheduler.status,
+        db_sync: effectiveWorkers.db_sync.status,
+        health: effectiveWorkers.health.status,
+        cleanup: effectiveWorkers.cleanup.status,
       },
     },
     stats: {
@@ -80,12 +90,12 @@ export async function getSystemHealth() {
       executions_failed_today: failedToday,
     },
     worker_details: {
-      backup: workers.backup,
-      restore: workers.restore,
-      scheduler: workers.scheduler,
-      db_sync: workers.db_sync,
-      health: workers.health,
-      cleanup: workers.cleanup,
+      backup: effectiveWorkers.backup,
+      restore: effectiveWorkers.restore,
+      scheduler: effectiveWorkers.scheduler,
+      db_sync: effectiveWorkers.db_sync,
+      health: effectiveWorkers.health,
+      cleanup: effectiveWorkers.cleanup,
     },
   };
 }

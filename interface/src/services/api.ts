@@ -1203,12 +1203,9 @@ export const auditApi = {
   },
 
   cleanByPeriod: (params: { from?: string; to?: string }) => {
-    const qs = new URLSearchParams();
-    if (params.from) qs.set('from', params.from);
-    if (params.to) qs.set('to', params.to);
-    const query = qs.toString();
-    return request<{ message: string; deleted_count: number }>(`/audit-logs${query ? `?${query}` : ''}`, {
-      method: 'DELETE',
+    return request<{ message: string; deleted_count: number }>('/audit-logs/cleanup', {
+      method: 'POST',
+      body: JSON.stringify(params),
     });
   },
 };

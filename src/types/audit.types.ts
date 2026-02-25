@@ -16,3 +16,10 @@ export const auditLogsDeleteQuerySchema = z.object({
 }).refine((value) => Boolean(value.from || value.to), {
   message: "Informe ao menos 'from' ou 'to' para limpar o historico.",
 });
+
+export const auditLogsCleanupBodySchema = z.object({
+  from: z.string().datetime().optional(),
+  to: z.string().datetime().optional(),
+}).refine((value) => Boolean(value.from || value.to), {
+  message: "Informe ao menos 'from' ou 'to' para limpar o historico.",
+});

@@ -39,10 +39,14 @@ export const AuditLogController = {
         from?: string;
         to?: string;
       };
+      const body = req.body as {
+        from?: string;
+        to?: string;
+      } | undefined;
 
       const result = await deleteAuditLogsByPeriod({
-        from: query.from,
-        to: query.to,
+        from: query.from ?? body?.from,
+        to: query.to ?? body?.to,
       });
 
       res.json({

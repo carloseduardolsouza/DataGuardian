@@ -1,7 +1,7 @@
 import { ExecutionStatus } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { getWorkersSnapshot } from '../../workers/worker-registry';
-import { isRedisAvailable } from '../../queue/redis-client';
+import { ensureRedisAvailable } from '../../queue/redis-client';
 import { getSystemMonitorSnapshot } from '../../core/performance/system-monitor';
 import { getThreadPoolStats } from '../../core/performance/thread-pool';
 
@@ -51,7 +51,17 @@ function statusLevel(status: string) {
 
 export async function getDashboardOverview() {
   const workers = getWorkersSnapshot();
-  const redisStatus = isRedisAvailable() ? 'ok' : 'error';
+  const redisAvailable = await ensureRedisAvailable();
+  const redisStatus = redisAvailable ? 'ok' : 'error';
+  const queueDependentWorkers = new Set(['backup', 'restore', 'scheduler', 'db_sync']);
+  const effectiveWorkers = Object.fromEntries(
+    Object.entries(workers).map(([name, state]) => {
+      if (!redisAvailable && queueDependentWorkers.has(name)) {
+        return [name, { ...state, status: 'stopped' as const }];
+      }
+      return [name, state];
+    }),
+  ) as typeof workers;
   const system = getSystemMonitorSnapshot();
   const threadPool = getThreadPoolStats();
 
@@ -218,12 +228,12 @@ export async function getDashboardOverview() {
       database: databaseStatus,
       redis: redisStatus,
       workers: {
-        backup: workers.backup.status,
-        restore: workers.restore.status,
-        scheduler: workers.scheduler.status,
-        db_sync: workers.db_sync.status,
-        health: workers.health.status,
-        cleanup: workers.cleanup.status,
+        backup: effectiveWorkers.backup.status,
+        restore: effectiveWorkers.restore.status,
+        scheduler: effectiveWorkers.scheduler.status,
+        db_sync: effectiveWorkers.db_sync.status,
+        health: effectiveWorkers.health.status,
+        cleanup: effectiveWorkers.cleanup.status,
       },
     },
     performance: {
