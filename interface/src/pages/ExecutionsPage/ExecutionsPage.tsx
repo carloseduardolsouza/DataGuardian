@@ -358,11 +358,8 @@ export default function ExecutionsPage() {
         </div>
       </div>
 
-      {error && (
-        <div style={{ padding: '8px 24px', color: 'var(--color-danger)', fontSize: 'var(--font-size-sm)' }}>
-          {error}
-        </div>
-      )}
+      {error && <div className={styles.errorBanner}>{error}</div>}
+
 
       <div className={styles.tableWrap}>
         {loading ? (

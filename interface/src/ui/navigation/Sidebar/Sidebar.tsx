@@ -14,6 +14,7 @@ import {
   BellIcon,
   LogIcon,
   SettingsIcon,
+  UsersIcon,
   LogoutIcon,
 } from '../../icons/Icons';
 import { PERMISSIONS } from '../../../constants/permissions';
@@ -29,6 +30,7 @@ export type NavKey =
   | 'health'
   | 'notifications'
   | 'audit'
+  | 'access'
   | 'settings';
 
 export const ROUTE_PATHS: Record<NavKey, string> = {
@@ -42,6 +44,7 @@ export const ROUTE_PATHS: Record<NavKey, string> = {
   health: '/health-check',
   notifications: '/notifications',
   audit: '/audit',
+  access: '/access-control',
   settings: '/settings',
 };
 
@@ -77,6 +80,7 @@ const systemNav: NavItem[] = [
   { key: 'health', label: 'Health', icon: <HealthIcon />, permission: PERMISSIONS.HEALTH_READ },
   { key: 'notifications', label: 'Notificacoes', icon: <BellIcon />, permission: PERMISSIONS.NOTIFICATIONS_READ },
   { key: 'audit', label: 'Auditoria', icon: <LogIcon />, permission: PERMISSIONS.AUDIT_READ },
+  { key: 'access', label: 'Usuarios e Roles', icon: <UsersIcon />, permission: PERMISSIONS.ACCESS_MANAGE },
   { key: 'settings', label: 'Configuracoes', icon: <SettingsIcon />, permission: PERMISSIONS.SYSTEM_READ },
 ];
 
@@ -114,7 +118,9 @@ function readCollapsedState() {
 export default function Sidebar({ active, onLogout, unreadNotifications = 0, currentUser }: Props) {
   const [width, setWidth] = useState<number>(readStoredSidebarWidth);
   const [collapsed, setCollapsed] = useState<boolean>(readCollapsedState);
+  const [userPanelOpen, setUserPanelOpen] = useState(false);
   const dragRef = useRef<{ pointerId: number; startX: number; startWidth: number } | null>(null);
+  const userPanelRef = useRef<HTMLDivElement | null>(null);
   const currentUsername = currentUser?.username || 'Usuario';
   const currentRole = currentUser?.roles?.[0] || 'sem role';
   const permissions = new Set(currentUser?.permissions ?? []);
@@ -133,6 +139,32 @@ export default function Sidebar({ active, onLogout, unreadNotifications = 0, cur
       // noop
     }
   }, [collapsed, width]);
+
+  useEffect(() => {
+    if (!userPanelOpen) return;
+
+    const onPointerDown = (event: PointerEvent) => {
+      if (!userPanelRef.current) return;
+      const target = event.target as Node | null;
+      if (target && userPanelRef.current.contains(target)) return;
+      setUserPanelOpen(false);
+    };
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setUserPanelOpen(false);
+    };
+
+    window.addEventListener('pointerdown', onPointerDown);
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      window.removeEventListener('pointerdown', onPointerDown);
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [userPanelOpen]);
+
+  useEffect(() => {
+    setUserPanelOpen(false);
+  }, [collapsed]);
 
   useEffect(() => {
     const onPointerMove = (event: PointerEvent) => {
@@ -169,6 +201,10 @@ export default function Sidebar({ active, onLogout, unreadNotifications = 0, cur
 
   const avatar = currentUsername.trim().charAt(0).toUpperCase() || 'U';
   const sidebarWidth = collapsed ? SIDEBAR_COLLAPSED_WIDTH : width;
+  const roleNames = currentUser?.roles?.length ? currentUser.roles.join(', ') : 'Sem roles';
+  const permissionsList = currentUser?.permissions ?? [];
+  const permissionPreview = permissionsList.slice(0, 4);
+
   return (
     <aside className={`${styles.sidebar} ${collapsed ? styles.collapsed : ''}`} style={{ width: sidebarWidth }}>
       <div className={styles.header}>
@@ -196,6 +232,7 @@ export default function Sidebar({ active, onLogout, unreadNotifications = 0, cur
               to={ROUTE_PATHS[item.key]}
               className={`${styles.navItem}${active === item.key ? ` ${styles.active}` : ''}`}
               title={collapsed ? item.label : undefined}
+              onClick={() => setUserPanelOpen(false)}
             >
               <span className={styles.navIcon}>{item.icon}</span>
               {!collapsed && item.label}
@@ -211,6 +248,7 @@ export default function Sidebar({ active, onLogout, unreadNotifications = 0, cur
               to={ROUTE_PATHS[item.key]}
               className={`${styles.navItem}${active === item.key ? ` ${styles.active}` : ''}`}
               title={collapsed ? item.label : undefined}
+              onClick={() => setUserPanelOpen(false)}
             >
               <span className={styles.navIcon}>{item.icon}</span>
               {!collapsed && item.label}
@@ -223,16 +261,60 @@ export default function Sidebar({ active, onLogout, unreadNotifications = 0, cur
       </nav>
 
       <div className={styles.footer}>
-        <div className={styles.userRow}>
-          <div className={styles.avatar}>{avatar}</div>
-          {!collapsed && (
-            <div className={styles.userInfo}>
-              <p className={styles.userName}>{currentUsername}</p>
-              <p className={styles.userRole}>{currentRole}</p>
+        <div className={styles.userMenu} ref={userPanelRef}>
+          <button
+            type="button"
+            className={`${styles.userRow} ${userPanelOpen ? styles.userRowOpen : ''}`}
+            aria-expanded={userPanelOpen}
+            aria-label="Abrir detalhes do usuario"
+            onClick={() => setUserPanelOpen((prev) => !prev)}
+          >
+            <div className={styles.avatar}>{avatar}</div>
+            {!collapsed && (
+              <div className={styles.userInfo}>
+                <p className={styles.userName}>{currentUsername}</p>
+                <p className={styles.userRole}>{currentRole}</p>
+              </div>
+            )}
+            <span className={`${styles.userChevron} ${userPanelOpen ? styles.userChevronOpen : ''}`}>v</span>
+          </button>
+
+          {userPanelOpen && (
+            <div className={`${styles.userPanel} ${collapsed ? styles.userPanelCollapsed : ''}`}>
+              <div className={styles.userPanelHeader}>Conta</div>
+              <div className={styles.userPanelRow}>
+                <span className={styles.userPanelLabel}>Usuario</span>
+                <span className={styles.userPanelValue}>{currentUsername}</span>
+              </div>
+              <div className={styles.userPanelRow}>
+                <span className={styles.userPanelLabel}>Roles</span>
+                <span className={styles.userPanelValue}>{roleNames}</span>
+              </div>
+              <div className={styles.userPanelRow}>
+                <span className={styles.userPanelLabel}>Permissoes</span>
+                <span className={styles.userPanelValue}>{permissionsList.length}</span>
+              </div>
+              {permissionPreview.length > 0 && (
+                <div className={styles.userPanelPermissions}>
+                  {permissionPreview.map((permission) => (
+                    <span key={permission} className={styles.permissionChip}>{permission}</span>
+                  ))}
+                  {permissionsList.length > permissionPreview.length && (
+                    <span className={styles.permissionChip}>+{permissionsList.length - permissionPreview.length}</span>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>
-        <button className={styles.logoutBtn} onClick={onLogout} title={collapsed ? 'Sair' : undefined}>
+        <button
+          className={styles.logoutBtn}
+          onClick={() => {
+            setUserPanelOpen(false);
+            onLogout();
+          }}
+          title={collapsed ? 'Sair' : undefined}
+        >
           <LogoutIcon />
           {!collapsed && 'Sair'}
         </button>

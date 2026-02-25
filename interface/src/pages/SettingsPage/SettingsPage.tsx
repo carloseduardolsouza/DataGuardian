@@ -22,6 +22,7 @@ type WhatsappEvolutionConfig = {
 
 interface Props {
   canManageAccess?: boolean;
+  viewMode?: 'full' | 'access-only';
 }
 
 const FRIENDLY_PERMISSION: Record<string, { label: string; description: string }> = {
@@ -91,8 +92,9 @@ function getPermissionDisplay(permission: ApiAccessPermission) {
   };
 }
 
-export default function SettingsPage({ canManageAccess = false }: Props) {
-  const [loading, setLoading] = useState(true);
+export default function SettingsPage({ canManageAccess = false, viewMode = 'full' }: Props) {
+  const isAccessOnly = viewMode === 'access-only';
+  const [loading, setLoading] = useState(!isAccessOnly);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -206,12 +208,14 @@ export default function SettingsPage({ canManageAccess = false }: Props) {
   }
 
   useEffect(() => {
-    void loadSettings();
-    void loadTemplates();
+    if (!isAccessOnly) {
+      void loadSettings();
+      void loadTemplates();
+    }
     if (canManageAccess) {
       void loadAccess();
     }
-  }, [canManageAccess]);
+  }, [canManageAccess, isAccessOnly]);
 
   useEffect(() => {
     const filtered = templates
@@ -516,7 +520,7 @@ export default function SettingsPage({ canManageAccess = false }: Props) {
   if (loading) {
     return (
       <div className={styles.centerState}>
-        <SpinnerIcon width={16} height={16} /> Carregando configuracoes...
+        <SpinnerIcon width={16} height={16} /> {isAccessOnly ? 'Carregando controle de acesso...' : 'Carregando configuracoes...'}
       </div>
     );
   }
@@ -525,17 +529,24 @@ export default function SettingsPage({ canManageAccess = false }: Props) {
     <div className={styles.page}>
       <div className={styles.headerRow}>
         <div>
-          <h2 className={styles.title}>Configuracoes</h2>
-          <p className={styles.subtitle}>Configure integracoes, sistema e controle de acesso da plataforma.</p>
+          <h2 className={styles.title}>{isAccessOnly ? 'Usuarios e Roles' : 'Configuracoes'}</h2>
+          <p className={styles.subtitle}>
+            {isAccessOnly
+              ? 'Gerencie usuarios, roles e permissoes de acesso (RBAC).'
+              : 'Configure integracoes e parametros do sistema.'}
+          </p>
         </div>
-        <button className={styles.primaryBtn} onClick={() => void handleSave()} disabled={saving}>
-          {saving ? 'Salvando...' : 'Salvar tudo'}
-        </button>
+        {!isAccessOnly && (
+          <button className={styles.primaryBtn} onClick={() => void handleSave()} disabled={saving}>
+            {saving ? 'Salvando...' : 'Salvar tudo'}
+          </button>
+        )}
       </div>
 
       {error && <div className={`${styles.alert} ${styles.alertError}`}><AlertTriangleIcon width={14} height={14} /> {error}</div>}
       {success && <div className={`${styles.alert} ${styles.alertOk}`}><CheckCircleIcon width={14} height={14} /> {success}</div>}
 
+      {!isAccessOnly && (
       <div className={styles.grid}>
 
         <section className={styles.card}>
@@ -652,6 +663,7 @@ export default function SettingsPage({ canManageAccess = false }: Props) {
           </div>
         </section>
       </div>
+      )}
 
       {canManageAccess && (
         <div className={styles.accessArea}>
