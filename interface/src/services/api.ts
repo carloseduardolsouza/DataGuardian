@@ -689,12 +689,14 @@ function buildCriticalHeaders(auth?: CriticalAuthHeaders): Record<string, string
 
 async function request<T>(url: string, options?: RequestOptions): Promise<T> {
   let res: Response;
+  const customHeaders = options?.headers as Record<string, string> | undefined;
+  const { headers: _ignoredHeaders, ...restOptions } = options ?? {};
 
   try {
     res = await fetch(`${BASE}${url}`, {
-      headers: { 'Content-Type': 'application/json', ...options?.headers },
+      ...restOptions,
+      headers: { 'Content-Type': 'application/json', ...customHeaders },
       credentials: 'include',
-      ...options,
     });
   } catch {
     const message = 'Falha de conexao com o servidor';
