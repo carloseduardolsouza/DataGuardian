@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { listAuditLogs } from '../models/audit-log.model';
+import { listAuditLogs, deleteAuditLogsByPeriod } from '../models/audit-log.model';
 
 export const AuditLogController = {
   async list(req: Request, res: Response, next: NextFunction) {
@@ -28,6 +28,27 @@ export const AuditLogController = {
       });
 
       res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async removeByPeriod(req: Request, res: Response, next: NextFunction) {
+    try {
+      const query = req.query as {
+        from?: string;
+        to?: string;
+      };
+
+      const result = await deleteAuditLogsByPeriod({
+        from: query.from,
+        to: query.to,
+      });
+
+      res.json({
+        message: 'Historico de auditoria limpo com sucesso.',
+        ...result,
+      });
     } catch (err) {
       next(err);
     }

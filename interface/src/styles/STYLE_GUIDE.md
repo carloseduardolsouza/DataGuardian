@@ -1,294 +1,258 @@
-# DataGuardian — Guia de Estilos
+# DataGuardian - Style Guide
 
-Documento de referência para manter consistência visual em todas as páginas.
-**Tecnologia:** CSS Modules + CSS Custom Properties (tokens globais em `tokens.css`)
+Guia oficial para manter consistencia visual no frontend.
+Tecnologia: CSS Modules + CSS Custom Properties (tokens globais em `tokens.css`).
 
 ---
 
-## 1. Arquitetura de estilos
+## 1. Objetivo
 
-```
+Este guia define o estilo atual do produto:
+
+- interfaces claras e orientadas a operacao
+- hierarquia visual forte (header, cards, secoes)
+- profundidade moderada (sombras, bordas, gradientes sutis)
+- interacao previsivel (hover/focus/disabled consistentes)
+- total compatibilidade com light/dark mode via tokens
+
+---
+
+## 2. Estrutura de estilos
+
+```txt
 interface/src/
-├── styles/
-│   ├── tokens.css       ← variáveis globais (cores, espaçamento, tipografia)
-│   └── STYLE_GUIDE.md   ← este arquivo
-├── index.css            ← reset global + importa tokens.css
-└── pages/*/
-    └── *.module.css     ← estilos escopados por componente (CSS Modules)
+|-- styles/
+|   |-- tokens.css
+|   `-- STYLE_GUIDE.md
+|-- index.css
+`-- pages/*/
+    `-- *.module.css
 ```
 
-### Regras
+Regras obrigatorias:
 
-| Regra | Descrição |
-|-------|-----------|
-| **CSS Modules** | Todo estilo de componente/página usa `.module.css` — classes são automaticamente escopadas |
-| **Tokens** | Nunca use valores fixos de cor, espaçamento ou tipografia. Use sempre `var(--token)` |
-| **Sem globals** | Não adicione seletores de elemento (`div`, `p`, `h1`) em arquivos `.module.css` |
-| **Dark mode** | Controlado pelo atributo `data-theme="dark"` no elemento raiz — os tokens mudam automaticamente |
-
----
-
-## 2. Paleta de cores (tokens)
-
-### Backgrounds e superfícies
-
-| Token | Light | Dark | Uso |
-|-------|-------|------|-----|
-| `--color-bg` | `#f4f6fb` | `#0d0f1a` | Fundo principal da página |
-| `--color-surface` | `#ffffff` | `#161926` | Cards, modais, painéis |
-| `--color-surface-elevated` | `#ffffff` | `#1e2235` | Hover de linhas, tooltips, sub-painéis |
-| `--color-sidebar-bg` | `#1e2235` | `#0a0c15` | Sidebar (sempre escuro) |
-
-### Bordas
-
-| Token | Uso |
-|-------|-----|
-| `--color-border` | Bordas visíveis (cards, inputs, divisores) |
-| `--color-border-subtle` | Bordas internas leves (linhas de tabela, separadores) |
-
-### Brand / Primary
-
-| Token | Uso |
-|-------|-----|
-| `--color-primary` | Botões CTA, links, tabs ativas, bordas de foco |
-| `--color-primary-hover` | Hover de botões primários |
-| `--color-primary-muted` | Backgrounds de badges, highlights, focus ring |
-
-### Texto
-
-| Token | Uso |
-|-------|-----|
-| `--color-text` | Texto principal |
-| `--color-text-muted` | Labels, metadados, placeholders |
-| `--color-text-subtle` | Texto desativado, hints |
-| `--color-text-on-primary` | Texto sobre fundo primário |
-| `--color-text-sidebar` | Itens de navegação da sidebar |
-| `--color-text-sidebar-muted` | Labels de grupo, ícones inativos |
-
-### Feedback semântico
-
-| Token | Uso |
-|-------|-----|
-| `--color-success` / `--color-success-muted` | Status healthy, OK, sucesso |
-| `--color-warning` / `--color-warning-muted` | Status warning, alertas não críticos |
-| `--color-danger` / `--color-danger-muted` | Status critical, erros, exclusão |
-| `--color-info` / `--color-info-muted` | Informações, FK, progresso |
+- Use CSS Modules para estilos de pagina/componente.
+- Use somente `var(--token)` para cores, espacamentos, fontes, raio e sombra.
+- Nao use seletor global de elemento em `.module.css`.
+- Nao use cor fixa (`#fff`, `#000`, etc.) em componentes.
+- Prefira `color-mix(...)` com tokens quando precisar de variacao suave.
 
 ---
 
-## 3. Tipografia
+## 3. Tokens (fonte unica)
 
-A fonte padrão é **Inter**. Monospace usa **JetBrains Mono / Consolas** (query editor, valores de tabela).
+Sempre consumir valores de `tokens.css`:
 
-| Token | Tamanho | Uso |
-|-------|---------|-----|
-| `--font-size-2xs` | 10px | Badges compactos, números de linha |
-| `--font-size-xs` | 11px | Labels de grupo (ALLCAPS), metadados |
-| `--font-size-sm` | 13px | Corpo padrão, labels de input, itens de lista |
-| `--font-size-base` | 14px | Texto padrão do sistema |
-| `--font-size-md` | 15px | Títulos de seção |
-| `--font-size-lg` | 18px | Títulos de página |
-| `--font-size-xl` | 22px | Títulos de tela (ex: Login) |
-| `--font-size-2xl` | 28px | Valores de stat cards |
+- Cores: `--color-*`
+- Espacamento: `--space-*`
+- Tipografia: `--font-size-*`, `--font-weight-*`
+- Radius: `--radius-*`
+- Sombras: `--shadow-*`
+- Transicoes: `--transition-*`
+- Layout: `--sidebar-width`, `--topbar-height`
 
-### Pesos
-
-| Token | Valor | Uso |
-|-------|-------|-----|
-| `--font-weight-normal` | 400 | Corpo |
-| `--font-weight-medium` | 500 | Labels, itens de nav |
-| `--font-weight-semi` | 600 | Títulos de seção, botões |
-| `--font-weight-bold` | 700 | Títulos principais, brand |
+Se um valor novo for recorrente, promova para token.
 
 ---
 
-## 4. Espaçamento
+## 4. Linguagem visual atual
 
-Baseado em múltiplos de 4px:
+### 4.1 Background de pagina
 
-| Token | Valor | Uso típico |
-|-------|-------|------------|
-| `--space-1` | 4px | Gaps mínimos entre ícone e texto |
-| `--space-2` | 8px | Gap padrão em grupos pequenos |
-| `--space-3` | 12px | Padding interno de badges, items da sidebar |
-| `--space-4` | 16px | Padding de inputs, padding lateral padrão |
-| `--space-5` | 20px | Padding de cards |
-| `--space-6` | 24px | Padding de seções |
-| `--space-8` | 32px | Margin entre seções maiores |
-| `--space-10` | 40px | Padding de formulários |
+Padrao recomendado para paginas dentro do dashboard:
 
----
+```css
+background:
+  radial-gradient(circle at 15% -10%, color-mix(in srgb, var(--color-primary) 10%, transparent), transparent 45%),
+  radial-gradient(circle at 85% 0%, color-mix(in srgb, var(--color-info) 8%, transparent), transparent 40%),
+  var(--color-bg);
+```
 
-## 5. Border radius
+Regras:
 
-| Token | Valor | Uso |
-|-------|-------|-----|
-| `--radius-sm` | 6px | Badges, inputs pequenos, botões compactos |
-| `--radius-md` | 10px | Inputs, botões, cards pequenos |
-| `--radius-lg` | 14px | Cards de conteúdo |
-| `--radius-xl` | 20px | Cards de login/modal |
-| `--radius-full` | 9999px | Pills, avatares, status dots |
+- Gradiente sempre sutil e com opacidade baixa.
+- Nunca competir com o conteudo.
+- Se a pagina for extremamente densa, pode usar apenas `var(--color-bg)`.
 
----
+### 4.2 Header de pagina
 
-## 6. Sombras
+Padrao:
 
-| Token | Uso |
-|-------|-----|
-| `--shadow-sm` | Cards no estado padrão |
-| `--shadow-md` | Cards no hover, dropdowns |
-| `--shadow-lg` | Modais, card de login |
+- titulo principal com `--font-size-lg`
+- subtitulo com `--font-size-sm`
+- borda inferior sutil
+- superficie levemente translucida com blur opcional
+- acoes principais no canto direito (ex: `Novo ...`)
 
----
+### 4.3 Cards
 
-## 7. Transições
+Padrao de secao:
 
-| Token | Valor | Uso |
-|-------|-------|-----|
-| `--transition-fast` | 130ms ease | Hover de botões, cores de texto |
-| `--transition-base` | 200ms ease | Slides, acordeões |
-| `--transition-slow` | 300ms ease | Animações de página |
+- `background: var(--color-surface)`
+- `border: 1px solid var(--color-border)`
+- `border-radius: var(--radius-lg)`
+- `box-shadow: var(--shadow-sm)`
+- hover: elevar para `--shadow-md` e ajustar borda com `color-mix`
+
+Opcional (recomendado em telas de gestao): linha de destaque inferior com gradiente sutil no pseudo-elemento `::after`.
 
 ---
 
-## 8. Layout
+## 5. Formularios
 
-| Token | Valor | Uso |
-|-------|-------|-----|
-| `--sidebar-width` | 240px | Largura da sidebar de navegação |
-| `--topbar-height` | 64px | Altura da barra de topo |
+### 5.1 Campos
+
+Inputs/selects:
+
+- fundo derivado de `--color-bg` + `--color-surface`
+- borda `1.5px` com `--color-border`
+- focus ring com `--color-primary-muted`
+- hover suave para `--color-surface-elevated`
+
+Labels:
+
+- `--font-size-xs`
+- uppercase
+- `letter-spacing` leve
+- `--color-text-muted`
+
+### 5.2 Blocos de opcoes
+
+Para checkboxes/toggles de configuracao:
+
+- usar grid responsivo
+- cada item dentro de "mini-card" com borda sutil
+- hover reforca borda e fundo
+
+### 5.3 Fluxos de criacao
+
+Novo padrao:
+
+- Criacao/edicao primarias devem acontecer em `Modal` quando o formulario for grande.
+- A pagina principal mostra listagem e acoes.
+- Modal concentra validacao, erros locais e CTA de salvar.
 
 ---
 
-## 9. Padrões de componentes
+## 6. Tabelas e dados
 
-### Botão primário
+Padrao:
+
+- header em `--color-surface-elevated`
+- colunas com label em uppercase (`--font-size-xs`)
+- linhas com `border-bottom` sutil
+- hover de linha em `--color-surface-elevated`
+- acoes por linha com botoes outline pequenos
+
+Status badge:
+
+- formato pill
+- variante semantica (`success`, `warning`, `danger`, `info`, `queued`)
+- variante `running` pode usar animacao de pulso discreta no indicador
+
+---
+
+## 7. Botoes
+
+### Primario
+
 ```css
 background: var(--color-primary);
 color: var(--color-text-on-primary);
 border: none;
 border-radius: var(--radius-md);
 font-weight: var(--font-weight-semi);
-padding: 10px var(--space-4);
-transition: background var(--transition-fast);
-
-:hover → background: var(--color-primary-hover)
-:disabled → opacity: 0.6; cursor: not-allowed
+transition: background var(--transition-fast), transform var(--transition-fast);
 ```
 
-### Botão secundário / outline
-```css
-background: transparent;
-border: 1px solid var(--color-border);
-color: var(--color-text-muted);
-border-radius: var(--radius-md);
-:hover → background: var(--color-surface-elevated); color: var(--color-text)
-```
+Hover: `--color-primary-hover` + leve `translateY(-1px)`.
+Disabled: `opacity: 0.6` + `cursor: not-allowed`.
 
-### Input de texto
-```css
-background: var(--color-bg);
-border: 1.5px solid var(--color-border);
-border-radius: var(--radius-md);
-color: var(--color-text);
-:focus → border-color: var(--color-primary); box-shadow: 0 0 0 3px var(--color-primary-muted)
-```
+### Secundario/outline
 
-### Card de conteúdo
-```css
-background: var(--color-surface);
-border: 1px solid var(--color-border);
-border-radius: var(--radius-lg);
-box-shadow: var(--shadow-sm);
-padding: var(--space-5);
-:hover → box-shadow: var(--shadow-md)
-```
+- fundo transparente
+- borda `--color-border`
+- texto `--color-text-muted`
+- hover em `--color-surface-elevated` com borda mais forte
 
-### Status badge (pill)
-```css
-display: inline-flex; align-items: center; gap: 5px;
-padding: 3px 9px;
-border-radius: var(--radius-full);
-font-size: var(--font-size-xs);
-font-weight: var(--font-weight-medium);
+### Acao destrutiva
 
-/* Variantes semânticas */
-.success → background: var(--color-success-muted); color: var(--color-success)
-.warning → background: var(--color-warning-muted); color: var(--color-warning)
-.danger  → background: var(--color-danger-muted);  color: var(--color-danger)
-.info    → background: var(--color-info-muted);    color: var(--color-info)
-```
-
-### Tabela de dados
-```css
-th: background: var(--color-surface-elevated); font-size: var(--font-size-xs); text-transform: uppercase
-td: font-size: var(--font-size-sm); border-bottom: 1px solid var(--color-border-subtle)
-tr:hover td: background: var(--color-surface-elevated)
-```
+- usar tokens `--color-danger` / `--color-danger-muted`
+- manter contraste e destaque de risco
 
 ---
 
-## 10. Estrutura de páginas
+## 8. Modal (padrao)
 
-### Página simples (ex: Dashboard)
-```
-DashboardPage
-├── Sidebar (fixo, esquerda)
-└── Main
-    ├── Topbar (sticky, 64px)
-    └── Content (.content — com padding, overflow-y: auto)
-        └── conteúdo da página
-```
+Usar `ui/overlay/Modal`:
 
-### Página com layout próprio (ex: Datasources, Executions com split view)
-```
-DashboardPage
-├── Sidebar (fixo, esquerda)
-└── Main
-    ├── Topbar (sticky, 64px)
-    └── Content (.contentFull — sem padding, overflow: hidden, display: flex)
-        └── layout interno da página (ex: 3 painéis)
-```
+- `title`, `subtitle`, `body`, `footer`
+- fechamento por botao e clique fora
+- tamanhos: `sm`, `md`, `lg`
 
-> Para usar `.contentFull`, adicione `activePage === 'sua-pagina'` na condição em `DashboardPage.tsx`.
+Boas praticas:
+
+- erro de submit dentro da modal, proximo ao formulario
+- footer com `Cancelar` + CTA principal
+- desabilitar fechamento durante submit critico, quando necessario
 
 ---
 
-## 11. Icones
+## 9. Responsividade
 
-Todos os ícones são **SVGs inline** com `stroke="currentColor"` — herdam a cor do CSS.
+Breakpoints recomendados:
 
-Dimensões padrão:
-- **Sidebar:** 18×18
-- **Botões:** 14×14 ou 16×16
-- **Decorativos grandes:** 36–56px
+- `<=1080px`: grids de 3 colunas para 2
+- `<=900px`: grids para 1 coluna, footer empilhado
+- manter areas clicaveis confortaveis em mobile
 
-Sempre inclua `strokeLinecap="round"` e `strokeLinejoin="round"` para consistência visual.
+Checklist responsivo:
 
----
-
-## 12. Dark mode
-
-O tema escuro é aplicado via `data-theme="dark"` no elemento raiz (`App.tsx`). Os tokens em `tokens.css` definem os dois temas:
-
-```css
-:root { /* light */ }
-[data-theme="dark"] { /* dark — sobrescreve as mesmas variáveis */ }
-```
-
-**Regras:**
-- Nunca use cores fixas (`#fff`, `#000`) em componentes — use sempre tokens
-- A sidebar (`--color-sidebar-bg`) é sempre escura em ambos os temas
-- Sombras ficam mais intensas no dark mode (já definidas nos tokens)
-- O `localStorage` persiste a escolha do usuário (chave: `dg-theme`)
+- nenhuma coluna estoura horizontalmente sem necessidade
+- botoes continuam legiveis/tocaveis
+- formulario permanece navegavel dentro da modal
 
 ---
 
-## 13. Checklist para novas páginas
+## 10. Acessibilidade minima
 
-- [ ] Criar `NomePagina.tsx` e `NomePagina.module.css` em `src/pages/NomePagina/`
-- [ ] Usar apenas `var(--token)` — zero valores fixos de cor/espaço
-- [ ] Adicionar `activePage === 'nome-pagina'` em `DashboardPage.tsx`
-- [ ] Se a página tem layout próprio (painéis, splitview): usar `.contentFull` em vez de `.content`
-- [ ] Adicionar rota no `Sidebar.tsx` (`navItems`) com ícone SVG
-- [ ] Testar nos dois temas (dark e light)
+Obrigatorio:
+
+- contraste suficiente entre texto e fundo
+- estado de foco visivel em controles interativos
+- `:disabled` visualmente distinto
+- sem dependencia de cor unica para indicar estado
+
+Recomendado:
+
+- usar texto junto de icone em acoes criticas
+- evitar animacoes agressivas ou continuas sem necessidade
+
+---
+
+## 11. Do / Dont
+
+Do:
+
+- reaproveitar padroes existentes da Dashboard e telas recentes
+- manter ritmo visual (espacamento, borda, sombra) consistente
+- usar semantica de cor correta para status e risco
+
+Dont:
+
+- inventar novo padrao de card/botao sem necessidade
+- misturar estilos de alta saturacao com superfices neutras
+- colocar formulario longo inline quando modal ja resolve melhor
+
+---
+
+## 12. Checklist para nova pagina
+
+- [ ] Arquivos `NomePagina.tsx` e `NomePagina.module.css`
+- [ ] Somente tokens (`var(--...)`)
+- [ ] Header com titulo/subtitulo e CTA quando aplicavel
+- [ ] Conteudo principal em cards padronizados
+- [ ] Tabelas, badges e botoes seguindo este guia
+- [ ] Fluxos de criacao/edicao avaliados para modal
+- [ ] Testado em light e dark mode
+- [ ] Testado em desktop e mobile

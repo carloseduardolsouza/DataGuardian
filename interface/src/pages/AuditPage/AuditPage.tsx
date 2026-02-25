@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
-import { SpinnerIcon, SearchIcon, LogIcon } from '../../ui/icons/Icons';
+import { SpinnerIcon, SearchIcon, LogIcon, TrashIcon } from '../../ui/icons/Icons';
 import { auditApi, type ApiAuditLog } from '../../services/api';
+import Modal from '../../ui/overlay/Modal/Modal';
 import styles from './AuditPage.module.css';
 
 interface AuditFilters {
@@ -36,7 +37,7 @@ function formatRelative(value: string) {
 }
 
 function stringifySafe(value: unknown) {
-  if (value === null || value === undefined) return '�';
+  if (value === null || value === undefined) return '-';
   if (typeof value === 'string') return value;
   try {
     return JSON.stringify(value, null, 2);
@@ -45,10 +46,23 @@ function stringifySafe(value: unknown) {
   }
 }
 
+function toLocalDatetimeValue(value: Date) {
+  const local = new Date(value.getTime() - value.getTimezoneOffset() * 60000);
+  return local.toISOString().slice(0, 16);
+}
+
+function defaultCleanupToValue() {
+  const cutoff = new Date();
+  cutoff.setMonth(cutoff.getMonth() - 3);
+  cutoff.setSeconds(0, 0);
+  return toLocalDatetimeValue(cutoff);
+}
+
 export default function AuditPage() {
   const [items, setItems] = useState<ApiAuditLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
 
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -61,6 +75,11 @@ export default function AuditPage() {
   const [to, setTo] = useState('');
 
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [isCleanupModalOpen, setIsCleanupModalOpen] = useState(false);
+  const [cleanupFrom, setCleanupFrom] = useState('');
+  const [cleanupTo, setCleanupTo] = useState(defaultCleanupToValue);
+  const [cleanupError, setCleanupError] = useState<string | null>(null);
+  const [cleaning, setCleaning] = useState(false);
 
   const resourceOptions = useMemo(() => {
     const set = new Set<string>();
@@ -138,6 +157,48 @@ export default function AuditPage() {
     void load(targetPage, emptyFilters);
   };
 
+  const openCleanupModal = () => {
+    setCleanupFrom('');
+    setCleanupTo(defaultCleanupToValue());
+    setCleanupError(null);
+    setIsCleanupModalOpen(true);
+  };
+
+  const closeCleanupModal = () => {
+    if (cleaning) return;
+    setCleanupError(null);
+    setIsCleanupModalOpen(false);
+  };
+
+  const handleCleanup = async () => {
+    if (!cleanupFrom && !cleanupTo) {
+      setCleanupError('Informe ao menos uma data em De ou Ate para limpar o historico.');
+      return;
+    }
+
+    try {
+      setCleaning(true);
+      setCleanupError(null);
+      setError(null);
+      setSuccess(null);
+
+      const response = await auditApi.cleanByPeriod({
+        from: cleanupFrom ? new Date(cleanupFrom).toISOString() : undefined,
+        to: cleanupTo ? new Date(cleanupTo).toISOString() : undefined,
+      });
+
+      const targetPage = 1;
+      setPage(targetPage);
+      setSuccess(`${response.deleted_count} registro(s) removido(s) da auditoria.`);
+      setIsCleanupModalOpen(false);
+      await load(targetPage);
+    } catch (err) {
+      setCleanupError(err instanceof Error ? err.message : 'Falha ao limpar historico de auditoria');
+    } finally {
+      setCleaning(false);
+    }
+  };
+
   return (
     <div className={styles.page}>
       <section className={styles.filtersCard}>
@@ -146,9 +207,14 @@ export default function AuditPage() {
             <h2 className={styles.title}>Trilha de Auditoria</h2>
             <p className={styles.sub}>Registro de acoes, autor, IP e alteracoes de configuracao</p>
           </div>
-          <button className={styles.refreshBtn} onClick={() => void load()} disabled={loading}>
-            <LogIcon /> Atualizar
-          </button>
+          <div className={styles.headerActions}>
+            <button className={styles.dangerBtn} onClick={openCleanupModal} disabled={loading}>
+              <TrashIcon /> Limpar historico
+            </button>
+            <button className={styles.refreshBtn} onClick={() => void load()} disabled={loading}>
+              <LogIcon /> Atualizar
+            </button>
+          </div>
         </div>
 
         <div className={styles.filters}>
@@ -193,6 +259,7 @@ export default function AuditPage() {
       </section>
 
       {error && <div className={styles.error}>{error}</div>}
+      {success && <div className={styles.success}>{success}</div>}
 
       <section className={styles.tableCard}>
         {loading ? (
@@ -228,8 +295,8 @@ export default function AuditPage() {
                         <td>
                           <span className={styles.actionTag}>{item.action}</span>
                         </td>
-                        <td>{item.resource_type || '�'}{item.resource_id ? ` / ${item.resource_id}` : ''}</td>
-                        <td className={styles.ip}>{item.ip || '�'}</td>
+                        <td>{item.resource_type || '-'}{item.resource_id ? ` / ${item.resource_id}` : ''}</td>
+                        <td className={styles.ip}>{item.ip || '-'}</td>
                         <td>
                           <button className={styles.rowBtn} onClick={() => setExpandedId(expanded ? null : item.id)}>
                             {expanded ? 'Ocultar' : 'Detalhes'}
@@ -249,7 +316,7 @@ export default function AuditPage() {
                                 <pre>{stringifySafe(item.metadata)}</pre>
                               </div>
                               <div className={styles.detailMeta}>
-                                <span><strong>User agent:</strong> {item.user_agent || '�'}</span>
+                                <span><strong>User agent:</strong> {item.user_agent || '-'}</span>
                               </div>
                             </div>
                           </td>
@@ -272,8 +339,40 @@ export default function AuditPage() {
           <button onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))} disabled={loading || page >= totalPages}>Proxima</button>
         </div>
       </div>
+
+      {isCleanupModalOpen && (
+        <Modal
+          title="Limpar historico de auditoria"
+          subtitle="Defina um periodo para remover logs. Padrao: apagar tudo ate 3 meses atras."
+          onClose={closeCleanupModal}
+          size="md"
+          footer={(
+            <div className={styles.modalFooter}>
+              <button className={styles.secondaryBtn} onClick={closeCleanupModal} disabled={cleaning}>Cancelar</button>
+              <button className={styles.dangerBtn} onClick={() => void handleCleanup()} disabled={cleaning}>
+                {cleaning ? 'Limpando...' : 'Limpar historico'}
+              </button>
+            </div>
+          )}
+        >
+          <div className={styles.modalBody}>
+            <p className={styles.modalHint}>
+              Dica: para manter os ultimos 3 meses, deixe <strong>De</strong> vazio e use <strong>Ate</strong> com a data sugerida.
+            </p>
+            <div className={styles.modalFields}>
+              <label className={styles.field}>
+                <span>De (opcional)</span>
+                <input type="datetime-local" value={cleanupFrom} onChange={(event) => setCleanupFrom(event.target.value)} />
+              </label>
+              <label className={styles.field}>
+                <span>Ate (opcional)</span>
+                <input type="datetime-local" value={cleanupTo} onChange={(event) => setCleanupTo(event.target.value)} />
+              </label>
+            </div>
+            {cleanupError && <div className={styles.error}>{cleanupError}</div>}
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }
-
-

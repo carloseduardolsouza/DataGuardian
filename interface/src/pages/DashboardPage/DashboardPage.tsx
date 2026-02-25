@@ -150,8 +150,10 @@ export default function DashboardPage({
             || activePage === 'sync'
             || activePage === 'backups'
             || activePage === 'executions'
+            || activePage === 'health'
             || activePage === 'notifications'
             || activePage === 'audit'
+            || activePage === 'settings'
               ? styles.contentFull
               : styles.content
           }

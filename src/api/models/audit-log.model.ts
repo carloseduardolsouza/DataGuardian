@@ -153,3 +153,22 @@ export async function listAuditLogs(filters: {
     },
   };
 }
+
+export async function deleteAuditLogsByPeriod(filters: {
+  from?: string;
+  to?: string;
+}) {
+  const where: Prisma.AuditLogWhereInput = {};
+
+  if (filters.from || filters.to) {
+    where.createdAt = {
+      ...(filters.from && { gte: new Date(filters.from) }),
+      ...(filters.to && { lte: new Date(filters.to) }),
+    };
+  }
+
+  const result = await prisma.auditLog.deleteMany({ where });
+  return {
+    deleted_count: result.count,
+  };
+}
