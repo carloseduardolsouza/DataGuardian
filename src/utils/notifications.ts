@@ -97,6 +97,26 @@ function severityLabel(severity: NotificationSeverity) {
   return 'INFO';
 }
 
+function severityEmoji(severity: NotificationSeverity) {
+  if (severity === 'critical') return '🚨';
+  if (severity === 'warning') return '⚠️';
+  return 'ℹ️';
+}
+
+function typeEmoji(type: NotificationType) {
+  if (type === 'backup_success') return '✅';
+  if (type === 'backup_failed') return '❌';
+  if (type === 'connection_lost') return '🔌';
+  if (type === 'connection_restored') return '🔄';
+  if (type === 'storage_full') return '💽';
+  if (type === 'storage_unreachable') return '📡';
+  if (type === 'health_degraded') return '🩺';
+  if (type === 'cleanup_completed') return '🧹';
+  if (type === 'approval_requested') return '📝';
+  if (type === 'approval_decided') return '✅';
+  return '📣';
+}
+
 function entityLabel(entityType: NotificationEntityType) {
   if (entityType === 'backup_job') return 'Job de backup';
   if (entityType === 'storage_location') return 'Storage';
@@ -109,21 +129,62 @@ function buildWhatsappText(
   rendered: { title: string; message: string },
 ) {
   const when = new Date().toLocaleString('pt-BR', { hour12: false });
-  const title = truncateText(normalizeInline(rendered.title || input.title), 100);
+  const metadata = asObject(input.metadata);
+  const title = truncateText(normalizeInline(rendered.title || input.title), 90);
 
   const renderedMessage = normalizeInline(firstNonEmptyLine(rendered.message));
   const fallbackMessage = normalizeInline(firstNonEmptyLine(input.message));
-  const summary = truncateText(renderedMessage || fallbackMessage || 'Sem detalhes adicionais.', 200);
+  const summary = truncateText(renderedMessage || fallbackMessage || 'Sem detalhes.', 140);
+  const sevLabel = severityLabel(input.severity);
+  const sevEmoji = severityEmoji(input.severity);
+  const evtEmoji = typeEmoji(input.type);
+
+  if (input.type === 'approval_requested') {
+    const action = asString(metadata.action_label) || asString(metadata.action) || 'Acao critica';
+    const requester = asString(metadata.requester_username) || 'Usuario nao identificado';
+    const reason = asString(metadata.request_reason);
+    const resourceType = asString(metadata.resource_type);
+    const resourceId = asString(metadata.resource_id);
+    const resource = resourceType || resourceId ? `${resourceType || '-'} / ${resourceId || '-'}` : null;
+
+    return [
+      '📝 Aprovacao solicitada',
+      `👤 Solicitante: ${requester}`,
+      `⚙️ Acao: ${truncateText(action, 90)}`,
+      ...(resource ? [`🧩 Recurso: ${truncateText(resource, 90)}`] : []),
+      ...(reason ? [`💬 Motivo: ${truncateText(normalizeInline(reason), 100)}`] : []),
+      `🕒 ${when}`,
+    ].join('\n');
+  }
+
+  if (input.type === 'approval_decided') {
+    const action = asString(metadata.action_label) || asString(metadata.action) || 'Acao critica';
+    const requester = asString(metadata.requester_username) || 'Usuario nao identificado';
+    const decisionReason = asString(metadata.decision_reason);
+    const statusRaw = asString(metadata.status).toLowerCase();
+    const statusLabel = statusRaw === 'approved'
+      ? '✅ Aprovada'
+      : statusRaw === 'rejected'
+        ? '❌ Reprovada'
+        : statusRaw === 'canceled'
+          ? '🚫 Cancelada'
+          : 'ℹ️ Atualizada';
+
+    return [
+      `📋 ${statusLabel}`,
+      `👤 Solicitante: ${requester}`,
+      `⚙️ Acao: ${truncateText(action, 90)}`,
+      ...(decisionReason ? [`💬 Decisao: ${truncateText(normalizeInline(decisionReason), 100)}`] : []),
+      `🕒 ${when}`,
+    ].join('\n');
+  }
 
   return [
-    'DataGuardian - Nova notificacao',
-    `Status: ${severityLabel(input.severity)}`,
-    `Evento: ${humanizeType(input.type)}`,
-    `Titulo: ${title}`,
-    `Resumo: ${summary}`,
-    `Origem: ${entityLabel(input.entityType)} (${input.entityId})`,
-    `Horario: ${when}`,
-    'Veja mais detalhes na aba Notificacoes.',
+    `${sevEmoji} ${evtEmoji} ${title}`,
+    `📌 ${humanizeType(input.type)} | ${sevLabel}`,
+    `📝 ${summary}`,
+    `🧭 ${entityLabel(input.entityType)}: ${input.entityId}`,
+    `🕒 ${when}`,
   ].join('\n');
 }
 

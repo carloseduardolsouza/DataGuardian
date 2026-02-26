@@ -20,15 +20,25 @@ const ALL_NOTIFICATION_TYPES: NotificationType[] = [
 
 const ALL_ALERT_CHANNELS: AlertChannel[] = ['whatsapp'];
 
-function getDefaultTemplate(channel: AlertChannel, _type: NotificationType) {
-  const header = `DataGuardian {{severity_upper}}`;
-  const title = '{{title}}';
-  const message = '{{message}}';
-  const details = 'Tipo: {{type}}\nEntidade: {{entity_type}}/{{entity_id}}\nHorario: {{created_at}}';
+function getDefaultTemplate(channel: AlertChannel, type: NotificationType) {
+  const defaultsByType: Record<NotificationType, { emoji: string; label: string }> = {
+    backup_success: { emoji: '✅', label: 'Backup concluido' },
+    backup_failed: { emoji: '❌', label: 'Falha no backup' },
+    connection_lost: { emoji: '🔌', label: 'Conexao perdida' },
+    connection_restored: { emoji: '🔄', label: 'Conexao restaurada' },
+    storage_full: { emoji: '💽', label: 'Storage cheio' },
+    storage_unreachable: { emoji: '📡', label: 'Storage inacessivel' },
+    health_degraded: { emoji: '⚠️', label: 'Saude degradada' },
+    cleanup_completed: { emoji: '🧹', label: 'Limpeza concluida' },
+    approval_requested: { emoji: '📝', label: 'Aprovacao solicitada' },
+    approval_decided: { emoji: '✅', label: 'Aprovacao decidida' },
+  };
+
+  const preset = defaultsByType[type];
 
   return {
-    title_tpl: `${header} - ${title}`,
-    message_tpl: `${message}\n\n${details}`,
+    title_tpl: `${preset.emoji} ${preset.label}`,
+    message_tpl: '{{message}}\n🕒 {{created_at}}',
   };
 }
 
