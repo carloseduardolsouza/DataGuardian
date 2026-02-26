@@ -1,6 +1,6 @@
 {
   "name": "dataguardian",
-  "version": "0.0.0",
+  "version": "1.0.0",
   "description": "Self-hosted open-source backup manager for databases and files",
   "main": "dist/index.js",
   "scripts": {

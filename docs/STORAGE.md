@@ -1,6 +1,8 @@
-﻿# Storage - DataGuardian
+﻿# :bookmark: Storage - DataGuardian
 
-## Tipos suportados
+> Guia de tipos de storage, estratégias e boas práticas operacionais.
+
+## :bookmark: Tipos suportados
 
 - `local`
 - `ssh`
@@ -8,7 +10,7 @@
 - `minio`
 - `backblaze`
 
-## Operacoes suportadas pelos adapters
+## :sparkles: Operações suportadas pelos adapters
 
 - `upload`
 - `download`
@@ -18,16 +20,16 @@
 - `copy`
 - `testConnection`
 
-## Storage explorer (API)
+## :bookmark: Storage Explorer (API)
 
 - `GET /api/storage-locations/:id/files?path=`
 - `DELETE /api/storage-locations/:id/files?path=`
 - `POST /api/storage-locations/:id/files/copy`
 - `GET /api/storage-locations/:id/files/download?path=`
 
-## Estrategias de gravacao no backup job
+## :bookmark: Estratégias de gravação no backup job
 
-- `fallback`: salva no primeiro storage disponivel
+- `fallback`: salva no primeiro storage disponível
 - `replicate`: tenta salvar em todos os storages selecionados
 
 Exemplo de `backup_options`:
@@ -42,33 +44,34 @@ Exemplo de `backup_options`:
 }
 ```
 
-## Organizacao de arquivos de backup
+## :bookmark: Organização de arquivos de backup
 
-Padrao de organizacao por banco e execucao:
+Padrão por banco e execução:
 
 `{database_name}/{YYYY-MM-DD_HHMMSS}/...`
 
-O manifest de artefatos tambem e salvo junto para suportar restore/retry-upload.
+O manifest de artefatos também é salvo junto para suportar restore/retry-upload.
 
-## Download no explorer
+## :bookmark: Download no explorer
 
-- download de arquivo suportado
-- download de pasta suportado (retornado como `.zip`)
+- Download de arquivo suportado
+- Download de pasta suportado (retornado como `.zip`)
 
-## Boas praticas
+## :white_check_mark: Boas práticas
 
-- usar pelo menos 2 storages em jobs criticos
-- usar `replicate` para maior resiliencia
-- testar conexao antes de habilitar storage em producao
-- monitorar health de storage em `/api/health/storage`
+- Usar pelo menos 2 storages em jobs críticos
+- Usar `replicate` para maior resiliência
+- Testar conexão antes de habilitar storage em produção
+- Monitorar health de storage em `/api/health/storage`
 
-## Local em Docker
+## :bookmark: Storage local em Docker
 
-Quando a aplicacao roda em Docker, o tipo `local` deve usar caminho dentro de:
+Quando a aplicação roda em Docker, o tipo `local` deve usar caminho dentro de:
 
 - `/var/backups`
 
-Esse caminho e montado para uma pasta do host (fora do container), garantindo persistencia dos backups mesmo apos update/recreate do container.
+Esse caminho é montado para uma pasta do host, garantindo persistência dos backups mesmo após update/recreate do container.
 
-Voce tambem pode informar um caminho absoluto do host no cadastro (ex.: `C:/backups/dataguardian` ou `/opt/backups/dataguardian`), desde que esteja dentro de `LOCAL_STORAGE_HOST_PATH`.
-A API mapeia automaticamente para o path equivalente dentro do container (`LOCAL_STORAGE_ROOT_PATH`, padrao `/var/backups`).
+Você também pode informar caminho absoluto do host no cadastro (ex.: `C:/backups/dataguardian` ou `/opt/backups/dataguardian`), desde que esteja dentro de `LOCAL_STORAGE_HOST_PATH`.
+A API mapeia automaticamente para o caminho equivalente dentro do container (`LOCAL_STORAGE_ROOT_PATH`, padrão `/var/backups`).
+

@@ -1,14 +1,16 @@
-﻿# Development - DataGuardian
+﻿# :sparkles: Development - DataGuardian
 
-## Pre requisitos
+> Guia para setup local e fluxo de desenvolvimento.
+
+## :white_check_mark: Pré-requisitos
 
 - Node.js 20+
 - npm
 - Docker + Docker Compose
 
-## Setup local
+## :bookmark: Setup local
 
-1. Instalar dependencias
+1. Instalar dependências
 
 ```bash
 npm install
@@ -20,7 +22,7 @@ npm install
 cp .env.example .env
 ```
 
-3. Subir infraestrutura minima
+3. Subir infraestrutura mínima
 
 ```bash
 docker compose -f docker/docker-compose.yml up -d postgres redis
@@ -39,52 +41,53 @@ npm run db:generate
 npm run dev
 ```
 
-## Scripts (`package.json`)
+## :bookmark: Scripts principais (`package.json`)
 
 - `npm run dev`
 - `npm run build`
 - `npm run start`
 - `npm run typecheck`
 - `npm run lint`
-- `npm run test` (atalho para unit)
-- `npm run test:unit` (Jest)
-- `npm run test:e2e` (Jest)
-- `npm run test:coverage` (Jest)
+- `npm run test`
+- `npm run test:unit`
+- `npm run test:e2e`
+- `npm run test:coverage`
 - `npm run db:generate`
 - `npm run db:migrate`
 - `npm run db:deploy`
 - `npm run db:studio`
 - `npm run db:seed`
 
-## Pastas principais
+## :bookmark: Pastas principais
 
-- `src/api`: rotas/controllers/middlewares
-- `src/core`: regras de negocio
+- `src/api`: rotas, controllers e middlewares
+- `src/core`: regras de negócio
 - `src/workers`: workers de fila e ciclos
 - `src/queue`: Redis e BullMQ
 - `interface/`: frontend React
 - `prisma/`: schema e migrations
-- `docs/`: documentacao do projeto
+- `docs/`: documentação do projeto
 
-## Fluxo recomendado
+## :bookmark: Fluxo recomendado
 
-1. implementar alteracao
-2. `npm run test:unit`
-3. `npm run typecheck`
-4. `npm run build`
-5. testar manualmente UI/API
-6. validar logs de backup/restore quando aplicavel
+1. Implementar alteração
+2. Rodar `npm run test:unit`
+3. Rodar `npm run typecheck`
+4. Rodar `npm run build`
+5. Testar manualmente UI/API
+6. Validar logs de backup/restore quando aplicável
 
-## Observacoes
+## :bookmark: Observações
 
-- sem Redis, API sobe, mas workers de fila ficam desativados
-- `/api/*` exige login/sessao (exceto `/api/auth/*`)
-- frontend deve seguir `STYLE_GUIDE.md`
-- para setup inicial, usar `POST /api/auth/setup` quando `GET /api/auth/status` retornar `has_user=false`
-- em fluxos criticos da UI, quando a modal `Aprovacao obrigatoria` e aberta sobre outra modal, ao fechar a modal de aprovacao a modal anterior tambem e fechada
+- Sem Redis, API sobe, mas workers de fila ficam desativados
+- `/api/*` exige login/sessão (exceto `/api/auth/*`)
+- Frontend deve seguir `STYLE_GUIDE.md`
+- Para setup inicial, usar `POST /api/auth/setup` quando `GET /api/auth/status` retornar `has_user=false`
+- Em fluxos críticos da UI, ao fechar a modal de aprovação obrigatória, a modal anterior também é fechada
 
-## Variaveis de performance
+## :white_check_mark: Variáveis de performance
 
 - `WORKER_THREAD_POOL_SIZE`: tamanho do pool `worker_threads` para tarefas CPU-bound
-- `SYSTEM_MONITOR_INTERVAL_MS`: intervalo de coleta do monitor de maquina/processo
-- `SYSTEM_MONITOR_HISTORY_SIZE`: tamanho maximo do historico em memoria para dashboard
+- `SYSTEM_MONITOR_INTERVAL_MS`: intervalo de coleta do monitor de máquina/processo
+- `SYSTEM_MONITOR_HISTORY_SIZE`: tamanho máximo do histórico em memória para dashboard
+

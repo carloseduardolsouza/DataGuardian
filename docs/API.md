@@ -1,18 +1,20 @@
-# API - DataGuardian
+﻿# :bookmark: API - DataGuardian
 
-Base URL:
+> Referência rápida dos endpoints da plataforma.
+
+## :bookmark: Base URL
 
 - `http://localhost:3000/api`
 
-Publico (sem auth):
+## :bookmark: Endpoints Públicos
 
 - `GET /health`
 - `GET /metrics` (formato Prometheus)
 
-Observacao: quase todas as rotas em `/api/*` exigem sessao autenticada.
-Excecoes publicas: `/api/auth/*` e `/api/integrations/whatsapp/webhook`.
+> :bookmark: Quase todas as rotas em `/api/*` exigem sessão autenticada.
+> Exceções: `/api/auth/*` e `/api/integrations/whatsapp/webhook`.
 
-## Auth
+## :bookmark: Auth
 
 - `GET /api/auth/status`
 - `POST /api/auth/setup`
@@ -20,13 +22,13 @@ Excecoes publicas: `/api/auth/*` e `/api/integrations/whatsapp/webhook`.
 - `POST /api/auth/logout`
 - `GET /api/auth/me`
 
-## Integrations (webhooks publicos)
+## :bookmark: Integrations (Webhook Público)
 
 - `POST /api/integrations/whatsapp/webhook`
-  - endpoint inbound do chatbot WhatsApp
-  - aceita token opcional via header `x-whatsapp-webhook-token` ou query `?token=...`
+- Endpoint inbound do chatbot WhatsApp
+- Aceita token opcional via header `x-whatsapp-webhook-token` ou query `?token=...`
 
-## Datasources
+## :sparkles: Datasources
 
 - `GET /api/datasources`
 - `POST /api/datasources`
@@ -38,11 +40,11 @@ Excecoes publicas: `/api/auth/*` e `/api/integrations/whatsapp/webhook`.
 - `POST /api/datasources/:id/query`
 - `POST /api/datasources/:id/tables`
 
-Tipos suportados:
+### Tipos suportados
 
 - `postgres`, `mysql`, `mariadb`, `mongodb`, `sqlserver`, `sqlite`, `files`
 
-## Storage Locations
+## :bookmark: Storage Locations
 
 - `GET /api/storage-locations`
 - `POST /api/storage-locations`
@@ -56,7 +58,7 @@ Tipos suportados:
 - `POST /api/storage-locations/:id/files/copy`
 - `GET /api/storage-locations/:id/files/download?path=`
 
-## Backup Jobs
+## :bookmark: Backup Jobs
 
 - `GET /api/backup-jobs`
 - `POST /api/backup-jobs`
@@ -65,7 +67,7 @@ Tipos suportados:
 - `DELETE /api/backup-jobs/:id`
 - `POST /api/backup-jobs/:id/run`
 
-### Retention policy atual
+### :bookmark: Retention policy atual
 
 Preferencial:
 
@@ -87,7 +89,7 @@ Compatibilidade legada:
 }
 ```
 
-### Backup options
+### :bookmark: Backup options
 
 Campos usados hoje:
 
@@ -95,18 +97,18 @@ Campos usados hoje:
 - `storage_strategy`: `fallback | replicate`
 - `storage_targets`: lista ordenada de storages
 - `referenced_files` (opcional): copia arquivos referenciados por query SQL
-  - `enabled`: boolean
-  - `source_type`: `local | ssh` (default `local`)
-  - `source` (quando `source_type=ssh`):
-    - `host`, `port`, `username`
-    - autenticacao por `password` ou `private_key`
-  - `discovery_query`: SQL que retorna caminhos de arquivos
-  - `path_column` (opcional): nome da coluna com o caminho (se omitido, usa primeira coluna string)
-  - `base_directories`: lista de diretorios permitidos para resolucao/copia
-  - `missing_file_policy`: `warn | fail`
-  - `max_files`: limite maximo de arquivos por execucao
+- `enabled`: boolean
+- `source_type`: `local | ssh` (default `local`)
+- `source` (quando `source_type=ssh`):
+- `host`, `port`, `username`
+- autenticação por `password` ou `private_key`
+- `discovery_query`: SQL que retorna caminhos de arquivos
+- `path_column` (opcional): nome da coluna com caminho
+- `base_directories`: diretórios permitidos para resolução/cópia
+- `missing_file_policy`: `warn | fail`
+- `max_files`: limite máximo de arquivos por execução
 
-## DB Sync Jobs (modulo separado)
+## :bookmark: DB Sync Jobs (Módulo separado)
 
 - `GET /api/db-sync-jobs`
 - `POST /api/db-sync-jobs`
@@ -116,7 +118,7 @@ Campos usados hoje:
 - `POST /api/db-sync-jobs/:id/run`
 - `GET /api/db-sync-jobs/:id/executions`
 
-Campos principais do sync job:
+### Campos principais do sync job
 
 ```json
 {
@@ -133,7 +135,7 @@ Campos principais do sync job:
 }
 ```
 
-## Executions
+## :bookmark: Executions
 
 - `GET /api/executions`
 - `GET /api/executions/:id`
@@ -142,7 +144,7 @@ Campos principais do sync job:
 - `POST /api/executions/:id/retry-upload`
 - `DELETE /api/executions/:id`
 
-## Backups (exploracao e restore)
+## :bookmark: Backups (Exploração e Restore)
 
 - `GET /api/backups/datasources`
 - `GET /api/backups/datasources/:datasourceId`
@@ -150,16 +152,16 @@ Campos principais do sync job:
 - `GET /api/backups/:executionId/download?storage_location_id=uuid-opcional`
 - `POST /api/backups/:executionId/restore`
 
-`POST /restore` retorna `202` e cria execucao `queued` com `operation=restore` em metadata.
-O processamento e feito pelo `restore-worker` na `restore-queue`.
+`POST /restore` retorna `202` e cria execução `queued` com `operation=restore` em metadata.
+O processamento é feito pelo `restore-worker` na `restore-queue`.
 
-Restore suportado:
+### Restore suportado
 
 - `postgres`
 - `mysql`
 - `mariadb`
 
-Campos de body no restore:
+### Body do restore
 
 ```json
 {
@@ -172,22 +174,22 @@ Campos de body no restore:
 }
 ```
 
-Confirmacao obrigatoria:
+### Frases obrigatórias de confirmação
 
-- restore normal: `confirmation_phrase = "RESTAURAR"`
-- restore verification mode: `confirmation_phrase = "VERIFICAR RESTORE"`
+- Restore normal: `RESTAURAR`
+- Restore verification mode: `VERIFICAR RESTORE`
 
-## Health
+## :bookmark: Health
 
 - `GET /api/health`
 - `GET /api/health/datasources`
 - `GET /api/health/storage`
 
-## Dashboard
+## :bookmark: Dashboard
 
 - `GET /api/dashboard/overview`
 
-Campos relevantes de performance em `GET /api/dashboard/overview`:
+### Campos relevantes de performance
 
 ```json
 {
@@ -232,18 +234,18 @@ Campos relevantes de performance em `GET /api/dashboard/overview`:
 }
 ```
 
-## Notifications
+## :bookmark: Notifications
 
 - `GET /api/notifications`
 - `PUT /api/notifications/read-all`
 - `PUT /api/notifications/:id/read`
 - `DELETE /api/notifications/:id`
 
-## Audit Logs
+## :bookmark: Audit Logs
 
 - `GET /api/audit-logs`
 
-## Access (RBAC)
+## :sparkles: Access (RBAC)
 
 - `GET /api/access/permissions`
 - `GET /api/access/roles`
@@ -256,7 +258,7 @@ Campos relevantes de performance em `GET /api/dashboard/overview`:
 - `PUT /api/access/users/:id/password`
 - `DELETE /api/access/users/:id`
 
-## System
+## :bookmark: System
 
 - `GET /api/system/settings`
 - `POST /api/system/settings`
@@ -271,34 +273,35 @@ Campos relevantes de performance em `GET /api/dashboard/overview`:
 - `PUT /api/system/notification-templates/:id`
 - `POST /api/system/notification-templates/:id/new-version`
 
-## Permissoes (resumo)
+## :bookmark: Permissões (Resumo)
 
-As rotas protegidas exigem permissao RBAC. Exemplos:
+As rotas protegidas exigem permissão RBAC. Exemplos:
 
 - `backup_jobs.run` para `POST /api/backup-jobs/:id/run`
 - `backups.restore` para `POST /api/backups/:executionId/restore`
 - `backups.restore_verify` para `verification_mode=true`
 - `storage.download` para download no explorer
 - `audit.read` para auditoria
-- `access.manage` para gerenciamento de usuarios/roles
+- `access.manage` para gerenciamento de usuários/roles
 
-### Regras de aprovacao critica (granular por acao)
+### Regras de aprovação crítica (granular por ação)
 
-- criar solicitacao em `/api/critical-approvals/requests` exige a permissao da acao solicitada
-- aprovar/reprovar em `/api/critical-approvals/requests/:id/(approve|reject)` exige:
-  - `access.manage`
-  - permissao da acao da solicitacao (ex.: `backups.restore`, `executions.control`, `storage.write`)
-- executar acao critica com `x-admin-password` ou `x-critical-approval-id` valida permissao da acao de forma individual
+- Criar solicitação em `/api/critical-approvals/requests` exige a permissão da ação solicitada
+- Aprovar/reprovar em `/api/critical-approvals/requests/:id/(approve|reject)` exige:
+- `access.manage`
+- permissão da ação da solicitação (ex.: `backups.restore`, `executions.control`, `storage.write`)
+- Executar ação crítica com `x-admin-password` ou `x-critical-approval-id` valida permissão individualmente
 
-## Status codes usados
+## :white_check_mark: Status codes usados
 
 - `200` sucesso
 - `201` criado
-- `202` aceito para processamento async
+- `202` aceito para processamento assíncrono
 - `204` sem corpo
-- `400` entrada invalida / erro de operacao
-- `401` nao autenticado
-- `404` nao encontrado
-- `409` conflito de regra de negocio
-- `422` validacao
-- `503` dependencia indisponivel (ex: Redis/Storage)
+- `400` entrada inválida / erro de operação
+- `401` não autenticado
+- `404` não encontrado
+- `409` conflito de regra de negócio
+- `422` validação
+- `503` dependência indisponível (ex.: Redis/Storage)
+

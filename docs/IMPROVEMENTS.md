@@ -1,45 +1,54 @@
-﻿# Sugestoes de Melhorias - DataGuardian
+﻿# :bookmark: Sugestões de Melhorias - DataGuardian
 
-Este documento lista melhorias futuras. Itens ja implementados foram removidos do backlog principal.
+> Backlog estratégico para evolução do produto.
 
-## Ja implementado recentemente
+## :white_check_mark: Já implementado recentemente
 
-- restore em fila BullMQ com retry/control de concorrencia
-- endpoint Prometheus nativo (`/metrics`)
-- persistencia de health de storage em tabela (`storage_health_checks`)
-- alertas externos robustos (SMTP, webhook, WhatsApp) com templates/versionamento
-- RBAC dinamico + auditoria
-- restore verification mode com confirmacao explicita e permissao dedicada
+- Restore em fila BullMQ com retry e controle de concorrência
+- Endpoint Prometheus nativo (`/metrics`)
+- Persistência de health de storage em `storage_health_checks`
+- Alertas externos robustos (SMTP, webhook, WhatsApp) com templates/versionamento
+- RBAC dinâmico + auditoria
+- Restore verification mode com confirmação explícita e permissão dedicada
 
-## Backlog recomendado (proximas evolucoes)
+## :sparkles: Backlog recomendado (próximas evoluções)
 
-1. Streaming de logs em tempo real (SSE/WebSocket)
-- Exibir logs sem polling para execucoes longas.
+### 1) Streaming de logs em tempo real
 
-2. Criptografia de artefatos em repouso
-- AES por job/storage, com rotacao de chave.
+- Exibir logs sem polling para execuções longas (SSE/WebSocket)
 
-3. Politicas de retencao avancadas
-- Regras por janela (diario/semanal/mensal) alem de `max_backups`.
+### 2) Criptografia de artefatos em repouso
 
-4. Restore drill automatizado
-- Rotina periodica que executa verification mode e gera relatorio.
+- AES por job/storage com rotação de chave
 
-5. SLA/SLO operacionais
-- Meta de sucesso de backup/restore por datasource e alertas por violacao.
+### 3) Políticas de retenção avançadas
 
-6. E2E ampliado para cenarios de falha
-- Falha de Redis, storage parcial, credenciais expiradas, retry exaustivo.
+- Regras por janela (diário/semanal/mensal) além de `max_backups`
 
-7. Integrações de observabilidade
-- Exportar traces (OpenTelemetry) e correlacionar com logs/metricas.
+### 4) Restore drill automatizado
 
-8. Multi-tenant (opcional)
-- Isolamento por organizacao/equipe para ambientes compartilhados.
+- Rotina periódica com verification mode + relatório
 
-## Criterios de sucesso sugeridos
+### 5) SLA/SLO operacionais
 
-- reduzir tempo medio de diagnostico (MTTD)
-- reduzir tempo medio de recuperacao (MTTR)
-- aumentar taxa de sucesso de backup/restore
-- diminuir regressao funcional por release
+- Meta de sucesso de backup/restore por datasource com alertas de violação
+
+### 6) E2E ampliado para falhas
+
+- Redis indisponível, storage parcial, credenciais expiradas, retry exaustivo
+
+### 7) Integrações de observabilidade
+
+- Exportar traces (OpenTelemetry) e correlacionar com logs/métricas
+
+### 8) Multi-tenant (opcional)
+
+- Isolamento por organização/equipe para ambientes compartilhados
+
+## :bookmark: Critérios de sucesso sugeridos
+
+- Reduzir tempo médio de diagnóstico (MTTD)
+- Reduzir tempo médio de recuperação (MTTR)
+- Aumentar taxa de sucesso de backup/restore
+- Diminuir regressão funcional por release
+

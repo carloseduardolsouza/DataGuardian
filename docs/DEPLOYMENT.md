@@ -1,9 +1,12 @@
-﻿# Deployment - DataGuardian
+﻿# :bookmark: Deployment - DataGuardian
 
-Guia alinhado ao compose em `docker/docker-compose.yml`.
-O servico `app` usa imagem publicada no Docker Hub (`carlossouzadev/dataguardian:latest`).
+> Guia de deploy com Docker Compose, incluindo versionamento de imagem.
 
-## Servicos
+## :bookmark: Visão geral
+
+O serviço `app` usa imagem publicada no Docker Hub (`carlossouzadev/dataguardian`) com tag configurável por `APP_IMAGE_TAG`.
+
+## :bookmark: Serviços
 
 - `postgres` (metadados)
 - `redis` (fila BullMQ)
@@ -12,20 +15,33 @@ O servico `app` usa imagem publicada no Docker Hub (`carlossouzadev/dataguardian
 - `evolution-redis`
 - `evolution-api`
 
-## Subir stack
+## :bookmark: Subir stack
 
 ```bash
-docker compose -f docker/docker-compose.yml up -d
+docker compose --env-file docker/.env -f docker/docker-compose.yml up -d
 ```
 
-Para forcar pull da imagem mais recente da aplicacao:
+## :bookmark: Atualizar imagem da aplicação
+
+Para forçar pull da imagem mais recente da aplicação:
 
 ```bash
-docker compose -f docker/docker-compose.yml pull app
-docker compose -f docker/docker-compose.yml up -d app
+docker compose --env-file docker/.env -f docker/docker-compose.yml pull app
+docker compose --env-file docker/.env -f docker/docker-compose.yml up -d app
 ```
 
-## Variaveis importantes (`.env`)
+Para fixar versão específica (recomendado em produção):
+
+```bash
+# docker/.env
+DOCKER_IMAGE=carlossouzadev/dataguardian
+APP_IMAGE_TAG=1.2.3
+
+docker compose --env-file docker/.env -f docker/docker-compose.yml pull app
+docker compose --env-file docker/.env -f docker/docker-compose.yml up -d app
+```
+
+## :bookmark: Variáveis importantes (`docker/.env`)
 
 - `DATABASE_URL`
 - `REDIS_URL`
@@ -39,53 +55,55 @@ docker compose -f docker/docker-compose.yml up -d app
 - `HEALTH_CHECK_INTERVAL_MS`
 - `CLEANUP_CRON`
 - `TEMP_DIRECTORY`
-- `LOCAL_STORAGE_HOST_PATH` (pasta do host montada em `/var/backups` no container app)
-- `LOCAL_STORAGE_ROOT_PATH` (path interno no container usado para storage local; padrao `/var/backups`)
+- `LOCAL_STORAGE_HOST_PATH` (pasta do host montada em `/var/backups`)
+- `LOCAL_STORAGE_ROOT_PATH` (path interno no container; padrão `/var/backups`)
 - `EVOLUTION_API_GLOBAL_KEY`
+- `DOCKER_IMAGE` (repositório da imagem Docker da app)
+- `APP_IMAGE_TAG` (ex.: `1.2.3`, `1.2`, `latest`)
 
-## Health e metricas
+## :bookmark: Health e métricas
 
 - `GET /health` (liveness simples)
 - `GET /api/health` (detalhado, protegido)
 - `GET /metrics` (Prometheus)
 
-## Acesso via IP da maquina
+## :bookmark: Acesso via IP da máquina
 
-Para acessar de outro dispositivo na rede (ex.: `http://192.168.0.10:3000`):
+Exemplo: `http://192.168.0.10:3000`
 
-- mantenha `HOST=0.0.0.0`
-- inclua o origin correto em `ALLOWED_ORIGINS` quando nao usar `*`
-  - exemplo: `ALLOWED_ORIGINS=http://192.168.0.10:3000,http://localhost:3000`
+- Mantenha `HOST=0.0.0.0`
+- Inclua origin correto em `ALLOWED_ORIGINS` quando não usar `*`
+- Exemplo: `ALLOWED_ORIGINS=http://192.168.0.10:3000,http://localhost:3000`
 
-## Redis indisponivel em producao
+## :bookmark: Redis indisponível em produção
 
 Com Redis offline:
 
 - `scheduler`, `backup` e `restore` ficam desativados
 - `health` e `cleanup` continuam
-- endpoints dependentes de fila podem retornar `503`
+- Endpoints dependentes de fila podem retornar `503`
 
-Quando Redis volta, os workers de fila sao religados automaticamente.
+Quando Redis volta, os workers de fila são religados automaticamente.
 
-## Upgrade
+## :bookmark: Upgrade
 
 ```bash
 git pull
-docker compose -f docker/docker-compose.yml build app
-docker compose -f docker/docker-compose.yml up -d app
+docker compose --env-file docker/.env -f docker/docker-compose.yml pull app
+docker compose --env-file docker/.env -f docker/docker-compose.yml up -d app
 ```
 
-## Releases no GitHub
+## :sparkles: Releases no GitHub
 
-Fluxo recomendado de versao e tags:
+Fluxo recomendado:
 
-- versionamento e changelog automaticos via GitHub Actions (`Release Please`)
-- tags semanticas no formato `vX.Y.Z`
-- publicacao automatica de imagem Docker via workflow em `.github/workflows/docker-publish.yml`
+- Versionamento e changelog automáticos via GitHub Actions (`Release Please`)
+- Tags semânticas no formato `vX.Y.Z`
+- Publicação automática de imagem Docker via workflow em `.github/workflows/docker-publish.yml`
 
-Detalhes operacionais em `docs/RELEASES.md`.
+Detalhes em `docs/RELEASES.md`.
 
-## Migrations
+## :sparkles: Migrations
 
 Em deploy, garantir migrations aplicadas:
 
@@ -94,13 +112,13 @@ npm run db:deploy
 npm run db:generate
 ```
 
-## Logs
+## :bookmark: Logs
 
 ```bash
-docker compose -f docker/docker-compose.yml logs -f app
+docker compose --env-file docker/.env -f docker/docker-compose.yml logs -f app
 ```
 
-## Persistencia
+## :bookmark: Persistência
 
 Volumes principais:
 
@@ -109,9 +127,10 @@ Volumes principais:
 - `backup-storage`
 - `evolution-*`
 
-## Recomendacoes
+## :bookmark: Recomendações
 
-- nao expor `5432` e `6379` publicamente
-- usar reverse proxy HTTPS para o `app`
-- proteger `.env` e credenciais de storage
-- coletar `/metrics` em Prometheus/Grafana
+- Não expor `5432` e `6379` publicamente
+- Usar reverse proxy HTTPS para o `app`
+- Proteger `.env` e credenciais de storage
+- Coletar `/metrics` em Prometheus/Grafana
+

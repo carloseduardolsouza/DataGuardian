@@ -1,19 +1,43 @@
 #!/usr/bin/env node
 const { spawnSync } = require('node:child_process');
+const path = require('node:path');
+const fs = require('node:fs');
 
 const user = process.env.DOCKERHUB_USER || 'carlossouzadev';
 const repo = process.env.DOCKERHUB_REPO || 'dataguardian';
-const tag = process.env.DOCKERHUB_TAG || 'latest';
-const alsoLatest = process.env.DOCKERHUB_ALSO_LATEST !== 'false' && tag !== 'latest';
 
-if (!user || !repo || !tag) {
+function getPackageVersion() {
+  if (process.env.npm_package_version) {
+    return process.env.npm_package_version.trim();
+  }
+
+  const packageJsonPath = path.resolve(__dirname, '..', 'package.json');
+  const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
+  return typeof packageJson.version === 'string' ? packageJson.version.trim() : '';
+}
+
+function getSemverAliases(tag) {
+  const match = /^v?(\d+)\.(\d+)\.(\d+)$/.exec(tag);
+  if (!match) return [];
+  const [, major, minor] = match;
+  return [`${major}.${minor}`];
+}
+
+const versionTag = getPackageVersion();
+const primaryTag = process.env.DOCKERHUB_TAG || versionTag || 'latest';
+const alsoLatest = process.env.DOCKERHUB_ALSO_LATEST !== 'false' && primaryTag !== 'latest';
+const additionalTags = process.env.DOCKERHUB_EXTRA_TAGS
+  ? process.env.DOCKERHUB_EXTRA_TAGS.split(',').map((tag) => tag.trim()).filter(Boolean)
+  : getSemverAliases(primaryTag);
+const tags = [...new Set([primaryTag, ...additionalTags, ...(alsoLatest ? ['latest'] : [])])];
+
+if (!user || !repo || !primaryTag) {
   console.error('Missing Docker Hub settings.');
   console.error('Use DOCKERHUB_USER, DOCKERHUB_REPO, DOCKERHUB_TAG.');
   process.exit(1);
 }
 
-const image = `${user}/${repo}:${tag}`;
-const latestImage = `${user}/${repo}:latest`;
+const primaryImage = `${user}/${repo}:${primaryTag}`;
 
 function run(cmd, args) {
   const result = spawnSync(cmd, args, { stdio: 'inherit', shell: process.platform === 'win32' });
@@ -22,20 +46,18 @@ function run(cmd, args) {
   }
 }
 
-console.log(`Building image: ${image}`);
-run('docker', ['build', '-f', 'docker/Dockerfile', '-t', image, '.']);
+console.log(`Building image: ${primaryImage}`);
+run('docker', ['build', '-f', 'docker/Dockerfile', '-t', primaryImage, '.']);
 
-if (alsoLatest) {
-  console.log(`Tagging latest: ${latestImage}`);
-  run('docker', ['tag', image, latestImage]);
+for (const tag of tags) {
+  const image = `${user}/${repo}:${tag}`;
+  if (tag !== primaryTag) {
+    console.log(`Tagging image: ${image}`);
+    run('docker', ['tag', primaryImage, image]);
+  }
+
+  console.log(`Pushing image: ${image}`);
+  run('docker', ['push', image]);
 }
 
-console.log(`Pushing image: ${image}`);
-run('docker', ['push', image]);
-
-if (alsoLatest) {
-  console.log(`Pushing image: ${latestImage}`);
-  run('docker', ['push', latestImage]);
-}
-
-console.log(`Done: ${image}${alsoLatest ? ` and ${latestImage}` : ''}`);
+console.log(`Done. Published tags: ${tags.join(', ')}`);

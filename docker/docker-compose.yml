@@ -42,7 +42,7 @@ services:
 
   # Aplicacao (API + Workers)
   app:
-    image: carlossouzadev/dataguardian:latest
+    image: ${DOCKER_IMAGE:-carlossouzadev/dataguardian}:${APP_IMAGE_TAG:-latest}
     pull_policy: always
     container_name: data-guardian-app
     restart: unless-stopped

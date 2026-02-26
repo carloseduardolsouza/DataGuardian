@@ -1,76 +1,68 @@
-# Performance Monitoring
+﻿# :bookmark: Performance Monitoring - DataGuardian
 
-Este documento descreve os recursos de performance adicionados na aplicacao para reduzir bloqueio de event-loop e melhorar visibilidade de consumo da maquina.
+> Recursos de performance para reduzir bloqueio do event-loop e aumentar visibilidade operacional.
 
-## Objetivos
+## :bookmark: Objetivos
 
-- reduzir impacto de tarefas CPU-bound no loop principal
-- exibir dados de maquina/processo no dashboard
-- facilitar diagnostico de lentidao e gargalos
+- Reduzir impacto de tarefas CPU-bound no loop principal
+- Exibir dados de máquina/processo no dashboard
+- Facilitar diagnóstico de lentidão e gargalos
 
-## Thread Pool (`worker_threads`)
+## :bookmark: Thread Pool (`worker_threads`)
 
 Arquivo: `src/core/performance/thread-pool.ts`
 
 ### Uso atual
 
-- checksum SHA-256 de artefatos de backup no `backup-worker`
+- Checksum SHA-256 de artefatos de backup no `backup-worker`
 
 ### Como funciona
 
-- pool fixo de workers iniciado sob demanda
-- fila interna para tarefas pendentes
-- metrica de throughput e erro (`processed`, `failed`)
-- fallback automatico para thread principal em caso de erro de worker
+- Pool fixo de workers iniciado sob demanda
+- Fila interna para tarefas pendentes
+- Métricas de throughput e erro (`processed`, `failed`)
+- Fallback automático para thread principal em caso de erro de worker
 
-### Configuracao
+### Configuração
 
 - `WORKER_THREAD_POOL_SIZE`
-  - `0`: desabilita pool
-  - `>= 1`: numero de workers
-  - default: `max(1, min(8, cpu_count - 1))`
+- `0`: desabilita pool
+- `>= 1`: número de workers
+- Default: `max(1, min(8, cpu_count - 1))`
 
-## Monitor de Maquina/Processo
+## :sparkles: Monitor de Máquina/Processo
 
 Arquivo: `src/core/performance/system-monitor.ts`
 
 ### Coleta
 
-- CPU da maquina (`cpu_percent`)
-- load average (`load_avg_1m`, `load_avg_5m`, `load_avg_15m`)
-- memoria da maquina (`memory_usage_percent`)
+- CPU da máquina (`cpu_percent`)
+- Load average (`load_avg_1m`, `load_avg_5m`, `load_avg_15m`)
+- Memória da máquina (`memory_usage_percent`)
 - CPU do processo Node (`process_cpu_percent`)
-- memoria do processo (`process_memory_rss_bytes`, `process_heap_used_bytes`)
-- event loop lag medio (`event_loop_lag_ms`)
+- Memória do processo (`process_memory_rss_bytes`, `process_heap_used_bytes`)
+- Event loop lag médio (`event_loop_lag_ms`)
 
-### Configuracao
+### Configuração
 
 - `SYSTEM_MONITOR_INTERVAL_MS` (default `5000`)
 - `SYSTEM_MONITOR_HISTORY_SIZE` (default `120`)
 
-## Dashboard
+## :bookmark: Dashboard
 
 Endpoint: `GET /api/dashboard/overview`
 
-Novos campos:
+Campos adicionados:
 
 - `performance.machine`
 - `performance.current`
 - `performance.history`
 - `performance.thread_pool`
 
-## Diagnostico rapido
+## :bookmark: Diagnóstico rápido
 
-- CPU maquina alta + CPU processo baixa:
-- gargalo externo (outras aplicacoes/host)
-
-- CPU processo alta + event loop lag alto:
-- carga pesada no processo Node
-
-- `thread_pool.queued` crescendo continuamente:
-- tarefas CPU-bound acima da capacidade do pool
-- considerar aumentar `WORKER_THREAD_POOL_SIZE` com cuidado
-
-- RSS alto e heap alto:
-- investigar retencao de objetos em memoria
+- CPU da máquina alta + CPU do processo baixa: gargalo externo (outras aplicações/host)
+- CPU do processo alta + event loop lag alto: carga pesada no processo Node
+- `thread_pool.queued` crescendo continuamente: tarefas CPU-bound acima da capacidade do pool
+- RSS alto e heap alto: investigar retenção excessiva de objetos em memória
 
