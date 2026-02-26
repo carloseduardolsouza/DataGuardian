@@ -235,6 +235,7 @@ export default function StoragePage({ isAdmin = false }: { isAdmin?: boolean }) 
         actionLabel: 'Remover storage',
         resourceType: 'storage',
         resourceId: deleteTarget.id,
+        onApprovalModalClose: () => setDeleteTarget(null),
         execute: (auth) => storageApi.remove(deleteTarget.id, auth),
       });
       if (!done) return;

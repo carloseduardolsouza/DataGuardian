@@ -194,6 +194,7 @@ export default function AuditPage({ isAdmin = false }: { isAdmin?: boolean }) {
           from: cleanupFrom ? new Date(cleanupFrom).toISOString() : null,
           to: cleanupTo ? new Date(cleanupTo).toISOString() : null,
         },
+        onApprovalModalClose: () => setIsCleanupModalOpen(false),
         execute: async (auth) => {
           const response = await auditApi.cleanByPeriod({
             from: cleanupFrom ? new Date(cleanupFrom).toISOString() : undefined,

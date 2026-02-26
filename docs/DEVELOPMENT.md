@@ -81,6 +81,7 @@ npm run dev
 - `/api/*` exige login/sessao (exceto `/api/auth/*`)
 - frontend deve seguir `STYLE_GUIDE.md`
 - para setup inicial, usar `POST /api/auth/setup` quando `GET /api/auth/status` retornar `has_user=false`
+- em fluxos criticos da UI, quando a modal `Aprovacao obrigatoria` e aberta sobre outra modal, ao fechar a modal de aprovacao a modal anterior tambem e fechada
 
 ## Variaveis de performance
 

@@ -277,6 +277,7 @@ export default function ExecutionsPage({ isAdmin = false }: { isAdmin?: boolean 
             actionLabel: 'Excluir execução',
             resourceType: 'execution',
             resourceId: id,
+            onApprovalModalClose: () => setDeleteIds([]),
             execute: (auth) => executionsApi.remove(id, auth),
           });
           if (!done) {

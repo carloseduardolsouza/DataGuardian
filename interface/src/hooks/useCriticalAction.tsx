@@ -9,6 +9,7 @@ interface RunOptions {
   resourceId?: string | null;
   payload?: Record<string, unknown>;
   requestApprovalFirst?: boolean;
+  onApprovalModalClose?: () => void;
   execute: (auth?: CriticalAuthHeaders) => Promise<void>;
   onSuccess?: () => Promise<void> | void;
 }
@@ -19,6 +20,7 @@ interface PendingAction {
   resourceType?: string | null;
   resourceId?: string | null;
   payload?: Record<string, unknown>;
+  onApprovalModalClose?: () => void;
   execute: (auth?: CriticalAuthHeaders) => Promise<void>;
   onSuccess?: () => Promise<void> | void;
 }
@@ -39,6 +41,7 @@ export function useCriticalAction(options?: UseCriticalActionOptions) {
         resourceType: options.resourceType,
         resourceId: options.resourceId,
         payload: options.payload,
+        onApprovalModalClose: options.onApprovalModalClose,
         execute: options.execute,
         onSuccess: options.onSuccess,
       });
@@ -60,6 +63,7 @@ export function useCriticalAction(options?: UseCriticalActionOptions) {
           resourceType: options.resourceType,
           resourceId: options.resourceId,
           payload: options.payload,
+          onApprovalModalClose: options.onApprovalModalClose,
           execute: options.execute,
           onSuccess: options.onSuccess,
         });
@@ -79,7 +83,10 @@ export function useCriticalAction(options?: UseCriticalActionOptions) {
         resourceType={pending.resourceType}
         resourceId={pending.resourceId}
         payload={pending.payload}
-        onClose={() => setPending(null)}
+        onClose={() => {
+          pending.onApprovalModalClose?.();
+          setPending(null);
+        }}
         onExecute={async (auth) => {
           await pending.execute(auth);
           await pending.onSuccess?.();

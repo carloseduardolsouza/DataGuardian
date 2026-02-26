@@ -195,6 +195,7 @@ export default function BackupJobsPage({
         actionLabel: 'Remover backup job',
         resourceType: 'backup_job',
         resourceId: deleteTarget.id,
+        onApprovalModalClose: () => setDeleteTarget(null),
         execute: (auth) => backupJobsApi.remove(deleteTarget.id, auth),
         onSuccess: async () => {
           await loadAll();

@@ -546,6 +546,7 @@ export default function DatasourcesPage({ isAdmin = false }: { isAdmin?: boolean
         actionLabel: 'Remover datasource',
         resourceType: 'datasource',
         resourceId: deleteTarget.id,
+        onApprovalModalClose: () => setDeleteTarget(null),
         execute: (auth) => datasourceApi.remove(deleteTarget.id, auth),
       });
       if (!done) return;
@@ -694,6 +695,7 @@ export default function DatasourcesPage({ isAdmin = false }: { isAdmin?: boolean
           verification_mode: restoreVerificationMode,
         },
         requestApprovalFirst: !isAdmin,
+        onApprovalModalClose: () => setRestoreTargetDatasource(null),
         execute: async (auth) => {
           const response = await backupsApi.restore(
             selectedBackupExecutionId,
@@ -748,6 +750,7 @@ export default function DatasourcesPage({ isAdmin = false }: { isAdmin?: boolean
           verification_mode: importVerificationMode,
         },
         requestApprovalFirst: !isAdmin,
+        onApprovalModalClose: () => setImportTargetDatasource(null),
         execute: async (auth) => {
           const response = await backupsApi.importAndRestore({
             file: importFile,

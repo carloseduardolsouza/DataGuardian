@@ -147,6 +147,7 @@ export default function LogModal({ executionId, isAdmin = false, onClose, onChan
         actionLabel: 'Excluir execução',
         resourceType: 'execution',
         resourceId: execution.id,
+        onApprovalModalClose: () => setShowDeleteConfirm(false),
         execute: (auth) => executionsApi.remove(execution.id, auth),
       });
       if (!done) return;

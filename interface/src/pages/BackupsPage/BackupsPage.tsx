@@ -279,6 +279,7 @@ export default function BackupsPage({ permissions = [], isAdmin = false }: Props
         resourceId: backup.execution_id,
         payload: approvalPayload,
         requestApprovalFirst: !isAdmin,
+        onApprovalModalClose: () => setRestoreTarget(null),
         execute: async (auth) => {
           const response = await backupsApi.restore(
             backup.execution_id,
