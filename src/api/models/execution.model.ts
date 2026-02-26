@@ -3,6 +3,7 @@ import { prisma } from '../../lib/prisma';
 import { AppError } from '../middlewares/error-handler';
 import { bigIntToSafe } from '../../utils/config';
 import { retryExecutionUploadNow } from '../../workers/backup-worker';
+import { deleteBackupExecutionWithArtifacts } from '../../core/retention/cleanup-manager';
 
 type ExecutionLogLevel = 'info' | 'warn' | 'error' | 'debug' | 'success';
 
@@ -248,10 +249,7 @@ export async function deleteExecution(id: string) {
     );
   }
 
-  await prisma.$transaction([
-    prisma.backupChunk.deleteMany({ where: { executionId: id } }),
-    prisma.backupExecution.delete({ where: { id } }),
-  ]);
+  await deleteBackupExecutionWithArtifacts(id);
 }
 
 export async function retryExecutionUpload(id: string) {

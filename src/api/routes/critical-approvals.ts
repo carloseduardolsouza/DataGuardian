@@ -1,8 +1,8 @@
 import { Router } from 'express';
 import { validate } from '../middlewares/validation';
-import { requirePermission } from '../middlewares/auth';
-import { PERMISSIONS } from '../../core/auth/permissions';
+import { requireRole } from '../middlewares/auth';
 import { CriticalApprovalController } from '../controllers/critical-approval.controller';
+import { DEFAULT_ROLE_NAMES } from '../../core/auth/permissions';
 import {
   createCriticalApprovalRequestSchema,
   criticalApprovalListQuerySchema,
@@ -25,22 +25,21 @@ criticalApprovalsRouter.get(
 
 criticalApprovalsRouter.get(
   '/requests',
-  requirePermission(PERMISSIONS.ACCESS_MANAGE),
+  requireRole(DEFAULT_ROLE_NAMES.ADMIN),
   validate(criticalApprovalListQuerySchema, 'query'),
   CriticalApprovalController.list,
 );
 
 criticalApprovalsRouter.post(
   '/requests/:id/approve',
-  requirePermission(PERMISSIONS.ACCESS_MANAGE),
+  requireRole(DEFAULT_ROLE_NAMES.ADMIN),
   validate(updateCriticalApprovalDecisionSchema),
   CriticalApprovalController.approve,
 );
 
 criticalApprovalsRouter.post(
   '/requests/:id/reject',
-  requirePermission(PERMISSIONS.ACCESS_MANAGE),
+  requireRole(DEFAULT_ROLE_NAMES.ADMIN),
   validate(updateCriticalApprovalDecisionSchema),
   CriticalApprovalController.reject,
 );
-

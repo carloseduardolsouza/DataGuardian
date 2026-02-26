@@ -128,8 +128,12 @@ export default function Sidebar({ active, onLogout, unreadNotifications = 0, cur
   const currentUsername = currentUser?.username || 'Usuario';
   const currentRole = currentUser?.roles?.[0] || 'sem role';
   const permissions = new Set(currentUser?.permissions ?? []);
+  const isRoleAdmin = currentUser?.roles?.includes('admin') ?? false;
   const visibleMainNav = mainNav.filter((item) => permissions.has(item.permission));
-  const visibleSystemNav = systemNav.filter((item) => permissions.has(item.permission));
+  const visibleSystemNav = systemNav.filter((item) => {
+    if (item.key === 'approvals') return isRoleAdmin;
+    return permissions.has(item.permission);
+  });
 
   useEffect(() => {
     document.documentElement.style.setProperty(

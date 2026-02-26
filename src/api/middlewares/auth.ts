@@ -62,3 +62,23 @@ export function requireAnyPermission(permissionList: string[]) {
     }
   };
 }
+
+export function requireRole(roleName: string) {
+  return (_req: Request, res: Response, next: NextFunction) => {
+    try {
+      const authUser = res.locals.authUser as { username?: string; roles?: string[] } | undefined;
+      const roles = Array.isArray(authUser?.roles) ? authUser.roles : [];
+      if (!authUser?.username || !roles.includes(roleName)) {
+        throw new AppError(
+          'FORBIDDEN',
+          403,
+          'Voce nao possui role para executar esta acao',
+          { required_role: roleName },
+        );
+      }
+      next();
+    } catch (err) {
+      next(err);
+    }
+  };
+}
