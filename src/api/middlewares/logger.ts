@@ -42,11 +42,13 @@ export function requestLogger(req: Request, res: Response, next: NextFunction): 
   const start = Date.now();
   let responseBody: unknown;
 
-  const originalJson = res.json.bind(res);
-  res.json = ((body: unknown) => {
-    responseBody = body;
-    return originalJson(body);
-  }) as typeof res.json;
+  if (typeof res.json === 'function') {
+    const originalJson = res.json.bind(res);
+    res.json = ((body: unknown) => {
+      responseBody = body;
+      return originalJson(body);
+    }) as typeof res.json;
+  }
 
   res.on('finish', () => {
     const durationMs = Date.now() - start;

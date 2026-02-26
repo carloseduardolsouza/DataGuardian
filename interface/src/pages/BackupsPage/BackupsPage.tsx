@@ -62,10 +62,10 @@ function storageStatusClass(status: ApiBackupStorageLocation['status']) {
 
 interface Props {
   permissions?: string[];
+  isAdmin?: boolean;
 }
 
-export default function BackupsPage({ permissions = [] }: Props) {
-  const isAdmin = permissions.includes(PERMISSIONS.ACCESS_MANAGE);
+export default function BackupsPage({ permissions = [], isAdmin = false }: Props) {
   const criticalAction = useCriticalAction({ isAdmin });
   const [isDesktop, setIsDesktop] = useState(() => window.innerWidth > 980);
   const navigate = useNavigate();
@@ -120,11 +120,6 @@ export default function BackupsPage({ permissions = [] }: Props) {
   const canRestore = permissions.includes(PERMISSIONS.BACKUPS_RESTORE);
   const canRunRestoreVerification = permissions.includes(PERMISSIONS.BACKUPS_RESTORE_VERIFY);
   const requiredPhrase = verificationMode ? 'VERIFICAR RESTORE' : 'RESTAURAR';
-  const selectedRestoreTarget = useMemo(
-    () => restoreTargets.find((item) => item.datasource_id === targetDatasourceId) ?? null,
-    [restoreTargets, targetDatasourceId],
-  );
-  const requiresExtraApproval = selectedRestoreTarget?.classification === 'production';
 
   const loadDatasources = async () => {
     try {
@@ -283,7 +278,7 @@ export default function BackupsPage({ permissions = [] }: Props) {
         resourceType: 'backup_execution',
         resourceId: backup.execution_id,
         payload: approvalPayload,
-        requestApprovalFirst: !isAdmin || requiresExtraApproval,
+        requestApprovalFirst: !isAdmin,
         execute: async (auth) => {
           const response = await backupsApi.restore(
             backup.execution_id,
@@ -562,12 +557,6 @@ export default function BackupsPage({ permissions = [] }: Props) {
                 />
                 <span>Limpar objetos existentes antes do restore (clean)</span>
               </label>
-            )}
-
-            {requiresExtraApproval && (
-              <p className={styles.warningText}>
-                Este destino esta classificado como <strong>producao</strong>. Restore exige aprovacao critica/senha administrativa.
-              </p>
             )}
 
             {verificationMode && (

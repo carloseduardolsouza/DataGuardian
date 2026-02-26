@@ -693,7 +693,7 @@ export default function DatasourcesPage({ isAdmin = false }: { isAdmin?: boolean
           target_datasource_id: restoreTargetDatasource.id,
           verification_mode: restoreVerificationMode,
         },
-        requestApprovalFirst: !isAdmin || restoreTargetDatasource.classification === 'production',
+        requestApprovalFirst: !isAdmin,
         execute: async (auth) => {
           const response = await backupsApi.restore(
             selectedBackupExecutionId,
@@ -747,7 +747,7 @@ export default function DatasourcesPage({ isAdmin = false }: { isAdmin?: boolean
           file_name: importFile.name,
           verification_mode: importVerificationMode,
         },
-        requestApprovalFirst: !isAdmin || importTargetDatasource.classification === 'production',
+        requestApprovalFirst: !isAdmin,
         execute: async (auth) => {
           const response = await backupsApi.importAndRestore({
             file: importFile,
@@ -1091,11 +1091,6 @@ export default function DatasourcesPage({ isAdmin = false }: { isAdmin?: boolean
             <p className={styles.warningText}>
               Acao irreversivel. Confirme digitando <strong>{restoreRequiredPhrase}</strong>.
             </p>
-            {restoreTargetDatasource.classification === 'production' && (
-              <p className={styles.warningText}>
-                Destino classificado como <strong>producao</strong>: restore exige aprovacao critica/senha administrativa.
-              </p>
-            )}
             <label className={styles.field}>
               CONFIRMACAO
               <input
@@ -1193,11 +1188,6 @@ export default function DatasourcesPage({ isAdmin = false }: { isAdmin?: boolean
             <p className={styles.warningText}>
               Acao irreversivel. Confirme digitando <strong>{importRequiredPhrase}</strong>.
             </p>
-            {importTargetDatasource.classification === 'production' && (
-              <p className={styles.warningText}>
-                Destino classificado como <strong>producao</strong>: import restore exige aprovacao critica/senha administrativa.
-              </p>
-            )}
             <label className={styles.field}>
               CONFIRMACAO
               <input

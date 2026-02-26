@@ -53,11 +53,5 @@ backupJobsRouter.delete(
 backupJobsRouter.post(
   "/:id/run",
   requirePermission(PERMISSIONS.BACKUP_JOBS_RUN),
-  requireCriticalApproval({
-    action: 'backup_job.run',
-    actionLabel: 'Executar job de backup',
-    resourceType: 'backup_job',
-    resolveResourceId: (req) => String(req.params.id),
-  }),
   BackupJobController.run,
 );

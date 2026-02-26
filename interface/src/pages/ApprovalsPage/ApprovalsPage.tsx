@@ -102,7 +102,7 @@ export default function ApprovalsPage() {
         </div>
         <div className={styles.actions}>
           <div className={styles.filterField}>
-            <span>Status</span>
+            <span className={styles.filterLabel}>Status</span>
             <select className={styles.select} value={status} onChange={(e) => setStatus(e.target.value as CriticalApprovalStatus | 'all')}>
               <option value="all">Todos</option>
               <option value="pending">Pendentes</option>
@@ -165,25 +165,41 @@ export default function ApprovalsPage() {
                   <tr key={item.id}>
                     <td>
                       <div className={styles.whenCell}>
-                        <span>{new Date(item.created_at).toLocaleString('pt-BR')}</span>
-                        <small>ID: {item.id.slice(0, 8)}...</small>
+                        <span className={styles.whenText}>{new Date(item.created_at).toLocaleString('pt-BR')}</span>
+                        <span className={styles.metaText}>ID: {item.id.slice(0, 8)}...</span>
                       </div>
                     </td>
-                    <td>{item.requester_user?.username ?? item.requester_user_id}</td>
+                    <td>
+                      <div className={styles.requesterCell}>
+                        <span className={styles.requesterValue}>{item.requester_user?.username ?? item.requester_user_id}</span>
+                      </div>
+                    </td>
                     <td>
                       <div className={styles.actionCell}>
-                        <strong>{item.action_label ?? item.action}</strong>
-                        <small>{item.action}</small>
+                        <strong className={styles.actionTitle}>{item.action_label ?? item.action}</strong>
+                        <span className={styles.metaText}>{item.action}</span>
                       </div>
                     </td>
-                    <td>{item.resource_type ?? '-'} / {item.resource_id ?? '-'}</td>
+                    <td>
+                      <div className={styles.resourceCell}>
+                        <span className={styles.resourceValue}>{item.resource_type ?? '-'}</span>
+                        <span className={styles.metaText}>{item.resource_id ?? '-'}</span>
+                      </div>
+                    </td>
                     <td>
                       <span className={`${styles.status} ${styles[`status_${item.status}`]}`}>{statusLabel(item.status)}</span>
                     </td>
                     <td>
-                      {item.decided_by_user
-                        ? `${item.decided_by_user.username}${item.decided_at ? ` (${new Date(item.decided_at).toLocaleString('pt-BR')})` : ''}`
-                        : '-'}
+                      {item.decided_by_user ? (
+                        <div className={styles.decisionCell}>
+                          <span className={styles.decisionValue}>{item.decided_by_user.username}</span>
+                          <span className={styles.metaText}>
+                            {item.decided_at ? new Date(item.decided_at).toLocaleString('pt-BR') : '-'}
+                          </span>
+                        </div>
+                      ) : (
+                        <span className={styles.muted}>-</span>
+                      )}
                     </td>
                     <td>
                       {item.status === 'pending' ? (
@@ -220,13 +236,22 @@ export default function ApprovalsPage() {
         >
           <div className={styles.modalBody}>
             <div className={styles.modalInfo}>
-              <p><strong>Recurso:</strong> {decisionTarget.resource_type ?? '-'} / {decisionTarget.resource_id ?? '-'}</p>
-              <p><strong>Solicitante:</strong> {decisionTarget.requester_user?.username ?? decisionTarget.requester_user_id}</p>
-              <p><strong>Motivo da solicitacao:</strong> {decisionTarget.request_reason || '-'}</p>
+              <div className={styles.infoRow}>
+                <span className={styles.infoLabel}>Recurso:</span>
+                <span className={styles.infoValue}>{decisionTarget.resource_type ?? '-'} / {decisionTarget.resource_id ?? '-'}</span>
+              </div>
+              <div className={styles.infoRow}>
+                <span className={styles.infoLabel}>Solicitante:</span>
+                <span className={styles.infoValue}>{decisionTarget.requester_user?.username ?? decisionTarget.requester_user_id}</span>
+              </div>
+              <div className={styles.infoRow}>
+                <span className={styles.infoLabel}>Motivo da solicitacao:</span>
+                <span className={styles.infoValue}>{decisionTarget.request_reason || '-'}</span>
+              </div>
             </div>
             {decisionMode === 'approve' && (
               <label className={styles.field}>
-                <span>Expiracao da aprovacao (minutos)</span>
+                <span className={styles.fieldLabel}>Expiracao da aprovacao (minutos)</span>
                 <input
                   className={styles.input}
                   type="number"
@@ -238,7 +263,7 @@ export default function ApprovalsPage() {
               </label>
             )}
             <label className={styles.field}>
-              <span>Justificativa (opcional)</span>
+              <span className={styles.fieldLabel}>Justificativa (opcional)</span>
               <textarea
                 className={styles.textarea}
                 rows={3}

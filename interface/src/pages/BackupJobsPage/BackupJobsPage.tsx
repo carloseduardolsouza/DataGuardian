@@ -4,6 +4,7 @@ import type { ApiBackupJob, ApiDatasource, ApiStorageLocation } from '../../serv
 import JobFormModal from './JobFormModal';
 import ConfirmDialog from '../../ui/dialogs/ConfirmDialog/ConfirmDialog';
 import { useCriticalAction } from '../../hooks/useCriticalAction';
+import { PERMISSIONS } from '../../constants/permissions';
 import styles from './BackupJobsPage.module.css';
 
 import StatusBadge from '../../ui/data-display/StatusBadge/StatusBadge';
@@ -65,8 +66,12 @@ function resolveStorageNames(job: ApiBackupJob, storages: ApiStorageLocation[]) 
   });
 }
 
-export default function BackupJobsPage({ isAdmin = false }: { isAdmin?: boolean }) {
+export default function BackupJobsPage({
+  isAdmin = false,
+  permissions = [],
+}: { isAdmin?: boolean; permissions?: string[] }) {
   const criticalAction = useCriticalAction({ isAdmin });
+  const canRunManual = permissions.includes(PERMISSIONS.BACKUP_JOBS_RUN);
   const [jobs, setJobs] = useState<ApiBackupJob[]>([]);
   const [datasources, setDatasources] = useState<ApiDatasource[]>([]);
   const [storages, setStorages] = useState<ApiStorageLocation[]>([]);
@@ -123,6 +128,11 @@ export default function BackupJobsPage({ isAdmin = false }: { isAdmin?: boolean 
   }
 
   async function runNow(jobId: string) {
+    if (!canRunManual) {
+      setError('Voce nao possui permissao para executar backup manual.');
+      return;
+    }
+
     const startedAt = new Date().toISOString();
     setError(null);
     setRunningNowIds((prev) => (prev.includes(jobId) ? prev : [...prev, jobId]));
@@ -342,7 +352,7 @@ export default function BackupJobsPage({ isAdmin = false }: { isAdmin?: boolean 
                         className={styles.actionBtn}
                         title="Executar agora"
                         onClick={() => void runNow(job.id)}
-                        disabled={runningNowIds.includes(job.id)}
+                        disabled={runningNowIds.includes(job.id) || !canRunManual}
                       >
                         <PlayFilledIcon />
                       </button>

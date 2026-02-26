@@ -1,8 +1,8 @@
 import { NextFunction, Request, Response } from 'express';
 import { AppError } from './error-handler';
 import { consumeCriticalApprovalGrant } from '../models/critical-approval.model';
-import { verifyUserPassword } from '../../core/auth/auth.service';
-import { PERMISSIONS } from '../../core/auth/permissions';
+import { verifyAnyAdminPassword, verifyUserPassword } from '../../core/auth/auth.service';
+import { DEFAULT_ROLE_NAMES } from '../../core/auth/permissions';
 
 interface CriticalApprovalOptions {
   action: string;
@@ -20,8 +20,12 @@ function readHeaderValue(value: string | string[] | undefined) {
 export function requireCriticalApproval(options: CriticalApprovalOptions) {
   return async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const authUser = res.locals.authUser as { id?: string; username?: string } | undefined;
-      const permissions = res.locals.authPermissions as Set<string> | undefined;
+      const authUser = res.locals.authUser as {
+        id?: string;
+        username?: string;
+        roles?: string[];
+        is_owner?: boolean;
+      } | undefined;
       const actorUserId = String(authUser?.id ?? '').trim();
       if (!actorUserId) {
         throw new AppError('FORBIDDEN', 403, 'Usuario autenticado nao encontrado para validar aprovacao');
@@ -30,9 +34,13 @@ export function requireCriticalApproval(options: CriticalApprovalOptions) {
       const enforceForAdmins = typeof options.enforceForAdmins === 'function'
         ? await options.enforceForAdmins(req, res)
         : Boolean(options.enforceForAdmins);
+      const isAdmin = Boolean(
+        authUser?.is_owner
+        || authUser?.roles?.includes(DEFAULT_ROLE_NAMES.ADMIN),
+      );
 
       // Admins bypass critical approval requirements.
-      if (!enforceForAdmins && permissions?.has(PERMISSIONS.ACCESS_MANAGE)) {
+      if (!enforceForAdmins && isAdmin) {
         res.locals.criticalApproval = {
           mode: 'admin_bypass',
           action: options.action,
@@ -48,17 +56,16 @@ export function requireCriticalApproval(options: CriticalApprovalOptions) {
 
       const adminPassword = readHeaderValue(req.header('x-admin-password')).trim();
       if (adminPassword) {
-        if (!permissions?.has(PERMISSIONS.ACCESS_MANAGE)) {
-          throw new AppError('FORBIDDEN', 403, 'Somente admins podem usar senha administrativa');
-        }
-
-        const validPassword = await verifyUserPassword(actorUserId, adminPassword);
-        if (!validPassword) {
+        const validatedAdminUserId = isAdmin
+          ? (await verifyUserPassword(actorUserId, adminPassword) ? actorUserId : null)
+          : await verifyAnyAdminPassword(adminPassword);
+        if (!validatedAdminUserId) {
           throw new AppError('ADMIN_PASSWORD_INVALID', 401, 'Senha administrativa invalida');
         }
 
         res.locals.criticalApproval = {
           mode: 'admin_password',
+          validated_admin_user_id: validatedAdminUserId,
           action: options.action,
           resource_type: resourceType,
           resource_id: resourceId,

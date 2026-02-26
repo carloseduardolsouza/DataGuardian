@@ -3,6 +3,7 @@ export const PERMISSIONS = {
   DATASOURCES_READ: 'datasources.read',
   STORAGE_READ: 'storage.read',
   BACKUP_JOBS_READ: 'backup_jobs.read',
+  BACKUP_JOBS_RUN: 'backup_jobs.run',
   DB_SYNC_JOBS_READ: 'db_sync_jobs.read',
   DB_SYNC_JOBS_WRITE: 'db_sync_jobs.write',
   DB_SYNC_JOBS_RUN: 'db_sync_jobs.run',

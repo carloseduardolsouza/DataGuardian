@@ -25,7 +25,6 @@ import NotificationsPage from '../NotificationsPage/NotificationsPage';
 import AuditPage from '../AuditPage/AuditPage';
 import ApprovalsPage from '../ApprovalsPage/ApprovalsPage';
 import { dashboardApi, type ApiDashboardOverview } from '../../services/api';
-import { PERMISSIONS } from '../../constants/permissions';
 import styles from './DashboardPage.module.css';
 
 interface Props {
@@ -35,6 +34,7 @@ interface Props {
   onLogout: () => void;
   currentUser?: {
     username: string;
+    is_owner?: boolean;
     roles: string[];
     permissions: string[];
   };
@@ -119,7 +119,7 @@ export default function DashboardPage({
   unreadNotifications = 0,
 }: Props) {
   const { title, sub } = PAGE_TITLES[activePage];
-  const isAdmin = permissions.includes(PERMISSIONS.ACCESS_MANAGE);
+  const isAdmin = Boolean(currentUser?.is_owner || currentUser?.roles?.includes('admin'));
 
   return (
     <div className={styles.layout}>
@@ -168,9 +168,9 @@ export default function DashboardPage({
           {activePage === 'dashboard' && <DashboardContent />}
           {activePage === 'datasources' && <DatasourcesPage isAdmin={isAdmin} />}
           {activePage === 'storage' && <StoragePage isAdmin={isAdmin} />}
-          {activePage === 'backup-jobs' && <BackupJobsPage isAdmin={isAdmin} />}
+          {activePage === 'backup-jobs' && <BackupJobsPage isAdmin={isAdmin} permissions={permissions} />}
           {activePage === 'sync' && <SyncPage permissions={permissions} />}
-          {activePage === 'backups' && <BackupsPage permissions={permissions} />}
+          {activePage === 'backups' && <BackupsPage permissions={permissions} isAdmin={isAdmin} />}
           {activePage === 'executions' && <ExecutionsPage isAdmin={isAdmin} />}
           {activePage === 'health' && <HealthPage />}
           {activePage === 'notifications' && (

@@ -73,6 +73,37 @@ export async function verifyUserPassword(userId: string, password: string) {
   return verifyPassword(password, user.passwordHash);
 }
 
+export async function verifyAnyAdminPassword(password: string) {
+  const adminUsers = await prisma.user.findMany({
+    where: {
+      isActive: true,
+      OR: [
+        { isOwner: true },
+        {
+          roles: {
+            some: {
+              role: {
+                name: DEFAULT_ROLE_NAMES.ADMIN,
+              },
+            },
+          },
+        },
+      ],
+    },
+    select: {
+      id: true,
+      passwordHash: true,
+    },
+  });
+
+  for (const user of adminUsers) {
+    const valid = await verifyPassword(password, user.passwordHash);
+    if (valid) return user.id;
+  }
+
+  return null;
+}
+
 async function getLegacyUserConfig() {
   const setting = await prisma.systemSetting.findUnique({ where: { key: USER_SETTING_KEY } });
   return parseLegacyStoredUser(setting?.value);

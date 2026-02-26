@@ -12,6 +12,8 @@ const mockRestoreBackupExecution = jest.fn();
 
 jest.mock('../../src/core/auth/auth.service', () => ({
   AUTH_COOKIE_NAME: 'dg_session',
+  verifyUserPassword: jest.fn(async () => true),
+  verifyAnyAdminPassword: jest.fn(async () => 'admin-e2e'),
   getSessionUserByToken: jest.fn(async () => ({
     id: 'user-e2e',
     username: 'e2e-user',
@@ -64,6 +66,7 @@ describe('E2E Critical API Flows', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     authState.permissions = [
+      PERMISSIONS.ACCESS_MANAGE,
       PERMISSIONS.BACKUP_JOBS_RUN,
       PERMISSIONS.EXECUTIONS_CONTROL,
       PERMISSIONS.BACKUPS_RESTORE,
@@ -91,6 +94,26 @@ describe('E2E Critical API Flows', () => {
     });
     expect(mockRunBackupJob).toHaveBeenCalledTimes(1);
     expect(mockRunBackupJob).toHaveBeenCalledWith('job-123');
+  });
+
+  it('run manual should require backup_jobs.run permission', async () => {
+    authState.permissions = [
+      PERMISSIONS.ACCESS_MANAGE,
+      PERMISSIONS.BACKUP_JOBS_READ,
+      PERMISSIONS.EXECUTIONS_CONTROL,
+      PERMISSIONS.BACKUPS_RESTORE,
+      PERMISSIONS.BACKUPS_RESTORE_VERIFY,
+    ];
+
+    const response = await fetch(`${baseUrl}/api/backup-jobs/job-123/run`, {
+      method: 'POST',
+      headers: { cookie: 'dg_session=e2e' },
+    });
+
+    expect(response.status).toBe(403);
+    const body = await response.json() as Record<string, unknown>;
+    expect(body.error).toBe('FORBIDDEN');
+    expect(mockRunBackupJob).not.toHaveBeenCalled();
   });
 
   it('retry-upload should retry a failed execution upload', async () => {
@@ -135,7 +158,7 @@ describe('E2E Critical API Flows', () => {
   });
 
   it('restore verification mode should enforce dedicated permission', async () => {
-    authState.permissions = [PERMISSIONS.BACKUPS_RESTORE];
+    authState.permissions = [PERMISSIONS.ACCESS_MANAGE, PERMISSIONS.BACKUPS_RESTORE];
 
     const response = await fetch(`${baseUrl}/api/backups/exec-backup-11/restore`, {
       method: 'POST',
