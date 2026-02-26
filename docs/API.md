@@ -282,6 +282,14 @@ As rotas protegidas exigem permissao RBAC. Exemplos:
 - `audit.read` para auditoria
 - `access.manage` para gerenciamento de usuarios/roles
 
+### Regras de aprovacao critica (granular por acao)
+
+- criar solicitacao em `/api/critical-approvals/requests` exige a permissao da acao solicitada
+- aprovar/reprovar em `/api/critical-approvals/requests/:id/(approve|reject)` exige:
+  - `access.manage`
+  - permissao da acao da solicitacao (ex.: `backups.restore`, `executions.control`, `storage.write`)
+- executar acao critica com `x-admin-password` ou `x-critical-approval-id` valida permissao da acao de forma individual
+
 ## Status codes usados
 
 - `200` sucesso

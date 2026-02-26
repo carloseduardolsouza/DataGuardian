@@ -104,6 +104,24 @@ export async function verifyAnyAdminPassword(password: string) {
   return null;
 }
 
+export async function userHasPermission(userId: string, permissionKey: string) {
+  const count = await prisma.userRole.count({
+    where: {
+      userId,
+      role: {
+        permissions: {
+          some: {
+            permission: {
+              key: permissionKey,
+            },
+          },
+        },
+      },
+    },
+  });
+  return count > 0;
+}
+
 async function getLegacyUserConfig() {
   const setting = await prisma.systemSetting.findUnique({ where: { key: USER_SETTING_KEY } });
   return parseLegacyStoredUser(setting?.value);

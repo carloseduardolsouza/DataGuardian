@@ -1,18 +1,9 @@
 import { z } from 'zod';
+import { CRITICAL_ACTION_KEYS, type CriticalActionKey } from '../core/auth/critical-action-policy';
 
-export const criticalApprovalActionSchema = z.enum([
-  'datasource.delete',
-  'storage.delete',
-  'storage.path.delete',
-  'backup_job.delete',
-  'backup_job.run',
-  'db_sync_job.delete',
-  'db_sync_job.run',
-  'execution.delete',
-  'backup.restore',
-  'backup.import_restore',
-  'audit_logs.cleanup',
-]);
+export const criticalApprovalActionSchema = z.enum(
+  CRITICAL_ACTION_KEYS as [CriticalActionKey, ...CriticalActionKey[]],
+);
 
 export const createCriticalApprovalRequestSchema = z.object({
   action: criticalApprovalActionSchema,
@@ -35,4 +26,3 @@ export const criticalApprovalListQuerySchema = z.object({
   requester_user_id: z.string().uuid().optional(),
   action: criticalApprovalActionSchema.optional(),
 });
-

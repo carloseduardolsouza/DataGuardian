@@ -179,11 +179,7 @@ export default function App() {
     }
   };
 
-  const isRoleAdmin = currentUser?.roles?.includes('admin') ?? false;
   const allowedPages = APP_PAGES.filter((page) => {
-    if (page === 'approvals') {
-      return isRoleAdmin;
-    }
     const permission = PAGE_PERMISSIONS[page];
     return currentUser?.permissions?.includes(permission) ?? false;
   });

@@ -1,8 +1,9 @@
 import { NextFunction, Request, Response } from 'express';
 import { AppError } from './error-handler';
 import { consumeCriticalApprovalGrant } from '../models/critical-approval.model';
-import { verifyAnyAdminPassword, verifyUserPassword } from '../../core/auth/auth.service';
+import { userHasPermission, verifyAnyAdminPassword, verifyUserPassword } from '../../core/auth/auth.service';
 import { DEFAULT_ROLE_NAMES } from '../../core/auth/permissions';
+import { getRequiredPermissionForCriticalAction } from '../../core/auth/critical-action-policy';
 
 interface CriticalApprovalOptions {
   action: string;
@@ -53,6 +54,11 @@ export function requireCriticalApproval(options: CriticalApprovalOptions) {
 
       const resourceId = options.resolveResourceId ? options.resolveResourceId(req) : null;
       const resourceType = options.resourceType ?? null;
+      const requiredPermission = getRequiredPermissionForCriticalAction(options.action);
+      const actorPermissions = res.locals.authPermissions as Set<string> | undefined;
+      const actorHasRequiredPermission = requiredPermission
+        ? Boolean(actorPermissions?.has(requiredPermission))
+        : true;
 
       const adminPassword = readHeaderValue(req.header('x-admin-password')).trim();
       if (adminPassword) {
@@ -61,6 +67,28 @@ export function requireCriticalApproval(options: CriticalApprovalOptions) {
           : await verifyAnyAdminPassword(adminPassword);
         if (!validatedAdminUserId) {
           throw new AppError('ADMIN_PASSWORD_INVALID', 401, 'Senha administrativa invalida');
+        }
+        if (requiredPermission) {
+          if (validatedAdminUserId === actorUserId) {
+            if (!actorHasRequiredPermission) {
+              throw new AppError(
+                'FORBIDDEN',
+                403,
+                'Voce nao possui permissao para executar esta acao critica',
+                { required_permission: requiredPermission, action: options.action },
+              );
+            }
+          } else {
+            const validatedAdminHasPermission = await userHasPermission(validatedAdminUserId, requiredPermission);
+            if (!validatedAdminHasPermission) {
+              throw new AppError(
+                'ADMIN_PASSWORD_PERMISSION_DENIED',
+                403,
+                'A senha administrativa informada nao possui permissao para esta acao',
+                { required_permission: requiredPermission, action: options.action },
+              );
+            }
+          }
         }
 
         res.locals.criticalApproval = {
@@ -76,6 +104,14 @@ export function requireCriticalApproval(options: CriticalApprovalOptions) {
 
       const approvalRequestId = readHeaderValue(req.header('x-critical-approval-id')).trim();
       if (approvalRequestId) {
+        if (requiredPermission && !actorHasRequiredPermission) {
+          throw new AppError(
+            'FORBIDDEN',
+            403,
+            'Voce nao possui permissao para executar esta acao critica',
+            { required_permission: requiredPermission, action: options.action },
+          );
+        }
         await consumeCriticalApprovalGrant({
           approval_request_id: approvalRequestId,
           requester_user_id: actorUserId,
@@ -93,6 +129,15 @@ export function requireCriticalApproval(options: CriticalApprovalOptions) {
         };
         next();
         return;
+      }
+
+      if (requiredPermission && !actorHasRequiredPermission) {
+        throw new AppError(
+          'FORBIDDEN',
+          403,
+          'Voce nao possui permissao para executar esta acao critica',
+          { required_permission: requiredPermission, action: options.action },
+        );
       }
 
       throw new AppError(

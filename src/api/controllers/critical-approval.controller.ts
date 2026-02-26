@@ -1,4 +1,5 @@
 import { NextFunction, Request, Response } from 'express';
+import { AppError } from '../middlewares/error-handler';
 import { getPaginationParams, buildPaginatedResponse } from '../../utils/config';
 import type { CriticalApprovalStatus } from '@prisma/client';
 import {
@@ -9,12 +10,38 @@ import {
   rejectCriticalApprovalRequest,
 } from '../models/critical-approval.model';
 import { createAuditLog, extractAuditContextFromRequest } from '../models/audit-log.model';
+import { getRequiredPermissionForCriticalAction } from '../../core/auth/critical-action-policy';
+import { PERMISSIONS } from '../../core/auth/permissions';
+import { prisma } from '../../lib/prisma';
+
+function assertActionPermissionForUser(params: {
+  action: string;
+  permissions: Set<string>;
+  userMessage: string;
+}) {
+  const requiredPermission = getRequiredPermissionForCriticalAction(params.action);
+  if (!requiredPermission) {
+    throw new AppError('VALIDATION_ERROR', 422, 'Acao critica desconhecida');
+  }
+  if (!params.permissions.has(requiredPermission)) {
+    throw new AppError('FORBIDDEN', 403, params.userMessage, {
+      action: params.action,
+      required_permission: requiredPermission,
+    });
+  }
+}
 
 export const CriticalApprovalController = {
   async request(req: Request, res: Response, next: NextFunction) {
     try {
       const actorUser = res.locals.authUser as { id?: string } | undefined;
       const requesterUserId = String(actorUser?.id ?? '').trim();
+      const actorPermissions = (res.locals.authPermissions as Set<string> | undefined) ?? new Set<string>();
+      assertActionPermissionForUser({
+        action: req.body.action,
+        permissions: actorPermissions,
+        userMessage: 'Voce nao possui permissao para solicitar aprovacao desta acao',
+      });
       const created = await createCriticalApprovalRequest({
         requester_user_id: requesterUserId,
         action: req.body.action,
@@ -88,6 +115,24 @@ export const CriticalApprovalController = {
     try {
       const actorUser = res.locals.authUser as { id?: string } | undefined;
       const decidedByUserId = String(actorUser?.id ?? '').trim();
+      const actorPermissions = (res.locals.authPermissions as Set<string> | undefined) ?? new Set<string>();
+      if (!actorPermissions.has(PERMISSIONS.ACCESS_MANAGE)) {
+        throw new AppError('FORBIDDEN', 403, 'Voce nao possui permissao para gerenciar aprovacoes criticas', {
+          required_permission: PERMISSIONS.ACCESS_MANAGE,
+        });
+      }
+      const request = await prisma.criticalApprovalRequest.findUnique({
+        where: { id: String(req.params.id) },
+        select: { action: true },
+      });
+      if (!request) {
+        throw new AppError('NOT_FOUND', 404, 'Solicitacao de aprovacao nao encontrada');
+      }
+      assertActionPermissionForUser({
+        action: request.action,
+        permissions: actorPermissions,
+        userMessage: 'Voce nao possui permissao para aprovar esta acao critica',
+      });
       const approved = await approveCriticalApprovalRequest({
         approval_request_id: String(req.params.id),
         decided_by_user_id: decidedByUserId,
@@ -113,6 +158,24 @@ export const CriticalApprovalController = {
     try {
       const actorUser = res.locals.authUser as { id?: string } | undefined;
       const decidedByUserId = String(actorUser?.id ?? '').trim();
+      const actorPermissions = (res.locals.authPermissions as Set<string> | undefined) ?? new Set<string>();
+      if (!actorPermissions.has(PERMISSIONS.ACCESS_MANAGE)) {
+        throw new AppError('FORBIDDEN', 403, 'Voce nao possui permissao para gerenciar aprovacoes criticas', {
+          required_permission: PERMISSIONS.ACCESS_MANAGE,
+        });
+      }
+      const request = await prisma.criticalApprovalRequest.findUnique({
+        where: { id: String(req.params.id) },
+        select: { action: true },
+      });
+      if (!request) {
+        throw new AppError('NOT_FOUND', 404, 'Solicitacao de aprovacao nao encontrada');
+      }
+      assertActionPermissionForUser({
+        action: request.action,
+        permissions: actorPermissions,
+        userMessage: 'Voce nao possui permissao para reprovar esta acao critica',
+      });
       const rejected = await rejectCriticalApprovalRequest({
         approval_request_id: String(req.params.id),
         decided_by_user_id: decidedByUserId,
