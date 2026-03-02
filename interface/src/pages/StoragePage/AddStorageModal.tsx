@@ -194,7 +194,7 @@ export default function AddStorageModal({ onClose, onSave, editData }: Props) {
 
     if (selectedType === 'ssh') {
       if (!form.sshHost.trim()) return 'Informe o host do servidor SSH.';
-      if (!form.sshUsername.trim()) return 'Informe o usu·rio SSH.';
+      if (!form.sshUsername.trim()) return 'Informe o usuÔøΩrio SSH.';
       if (!form.sshRemotePath.trim()) return 'Informe o caminho remoto.';
       if (!isEdit && form.sshAuthMethod === 'key' && !form.sshPrivateKey.trim()) return 'Informe a chave privada SSH.';
       if (!isEdit && form.sshAuthMethod === 'password' && !form.sshPassword.trim()) return 'Informe a senha SSH.';
@@ -203,7 +203,7 @@ export default function AddStorageModal({ onClose, onSave, editData }: Props) {
 
     if (selectedType === 's3') {
       if (!form.s3Bucket.trim()) return 'Informe o bucket S3.';
-      if (!form.s3Region.trim()) return 'Informe a regi„o S3.';
+      if (!form.s3Region.trim()) return 'Informe a regiÔøΩo S3.';
       if (!form.s3AccessKeyId.trim()) return 'Informe o Access Key ID.';
       if (!isEdit && !form.s3SecretKey.trim()) return 'Informe o Secret Access Key.';
       return null;
@@ -246,12 +246,12 @@ export default function AddStorageModal({ onClose, onSave, editData }: Props) {
 
       setTestResult({
         kind: 'ok',
-        message: `Conex„o OK${result.latency_ms !== null ? ` - ${result.latency_ms}ms` : ''}`,
+        message: `ConexÔøΩo OK${result.latency_ms !== null ? ` - ${result.latency_ms}ms` : ''}`,
       });
     } catch (err) {
       setTestResult({
         kind: 'error',
-        message: err instanceof Error ? err.message : 'N„o foi possÌvel validar a conex„o.',
+        message: err instanceof Error ? err.message : 'NÔøΩo foi possÔøΩvel validar a conexÔøΩo.',
       });
     } finally {
       setTesting(false);
@@ -313,7 +313,7 @@ export default function AddStorageModal({ onClose, onSave, editData }: Props) {
             disabled={!selectedType || saving || testing}
             onClick={() => setStep(2)}
           >
-            {'PrÛximo ->'}
+            {'Proximo ->'}
           </button>
         ) : (
           <>
@@ -323,10 +323,10 @@ export default function AddStorageModal({ onClose, onSave, editData }: Props) {
               disabled={testing || saving}
             >
               {testing ? <SpinnerIcon /> : <PlugIcon />}
-              {testing ? 'Testando...' : 'Testar Conex„o'}
+              {testing ? 'Testando...' : 'Testar Conex√£o'}
             </button>
             <button className={styles.primaryBtn} onClick={handleSave} disabled={saving || testing}>
-              {saving ? 'Salvando...' : isEdit ? 'Salvar alteraÁıes' : 'Salvar'}
+              {saving ? 'Salvando...' : isEdit ? 'Salvar altera√ß√µes' : 'Salvar'}
             </button>
           </>
         )}
@@ -337,7 +337,7 @@ export default function AddStorageModal({ onClose, onSave, editData }: Props) {
   return (
     <Modal
       title={isEdit ? 'Editar Storage' : 'Adicionar Storage'}
-      subtitle={step === 1 ? 'Escolha o tipo de armazenamento' : 'Configure a conex„o'}
+      subtitle={step === 1 ? 'Escolha o tipo de armazenamento' : 'Configure a conex√£o'}
       onClose={onClose}
       footer={footerContent}
       size="lg"
@@ -351,7 +351,7 @@ export default function AddStorageModal({ onClose, onSave, editData }: Props) {
           <div className={styles.stepLine} />
           <div className={`${styles.step} ${step >= 2 ? styles.stepDone : ''}`}>
             <span className={styles.stepNum}>2</span>
-            <span>ConfiguraÁ„o</span>
+            <span>Configura√ß√£o</span>
           </div>
         </div>
       )}
@@ -383,7 +383,7 @@ export default function AddStorageModal({ onClose, onSave, editData }: Props) {
             <input
               className={formStyles.input}
               type="text"
-              placeholder={`Ex: ${selectedType === 'ssh' ? 'NAS do escritÛrio' : selectedType === 's3' ? 'S3 ProduÁ„o' : 'Storage principal'}`}
+              placeholder={`Ex: ${selectedType === 'ssh' ? 'NAS do escrit√≥rio' : selectedType === 's3' ? 'S3 Produ√ß√£o' : 'Storage principal'}`}
               value={form.name}
               onChange={set('name')}
             />
@@ -391,7 +391,7 @@ export default function AddStorageModal({ onClose, onSave, editData }: Props) {
 
           <label className={formStyles.checkLabel}>
             <input type="checkbox" checked={form.isDefault} onChange={setCheck('isDefault')} />
-            <span>Definir como local de armazenamento padr„o</span>
+            <span>Definir como local de armazenamento padr√£o</span>
           </label>
 
           <div className={formStyles.divider} />
@@ -401,7 +401,7 @@ export default function AddStorageModal({ onClose, onSave, editData }: Props) {
               <FormField label="Caminho absoluto *" hint="Em Docker, informe um caminho do host dentro de LOCAL_STORAGE_HOST_PATH ou use /var/backups/...">
                 <input className={formStyles.input} type="text" placeholder="Ex.: C:/backups/cliente-a ou /var/backups/cliente-a" value={form.localPath} onChange={set('localPath')} />
               </FormField>
-              <FormField label="Tamanho m·ximo (GB)" hint="Opcional. Ex: 500">
+              <FormField label="Tamanho m√°ximo (GB)" hint="Opcional. Ex: 500">
                 <input className={formStyles.input} type="number" min="1" value={form.localMaxSizeGb} onChange={set('localMaxSizeGb')} />
               </FormField>
             </>
@@ -418,11 +418,11 @@ export default function AddStorageModal({ onClose, onSave, editData }: Props) {
                 </FormField>
               </div>
 
-              <FormField label="Usu·rio *">
+              <FormField label="UsuÔøΩrio *">
                 <input className={formStyles.input} type="text" placeholder="backup-user" value={form.sshUsername} onChange={set('sshUsername')} />
               </FormField>
 
-              <FormField label="AutenticaÁ„o">
+              <FormField label="AutenticaÔøΩÔøΩo">
                 <div className={styles.radioGroup}>
                   <label className={styles.radioLabel}>
                     <input type="radio" name="authMethod" value="key" checked={form.sshAuthMethod === 'key'}
@@ -440,7 +440,7 @@ export default function AddStorageModal({ onClose, onSave, editData }: Props) {
               {form.sshAuthMethod === 'key' ? (
                 <FormField
                   label={isEdit ? 'Nova chave privada SSH' : 'Chave privada SSH *'}
-                  hint={isEdit ? 'Deixe em branco para manter a chave atual' : 'Conte˙do do arquivo id_rsa ou id_ed25519'}
+                  hint={isEdit ? 'Deixe em branco para manter a chave atual' : 'ConteÔøΩdo do arquivo id_rsa ou id_ed25519'}
                 >
                   <textarea
                     className={`${formStyles.input} ${formStyles.textarea}`}
@@ -465,7 +465,7 @@ export default function AddStorageModal({ onClose, onSave, editData }: Props) {
                 </FormField>
               )}
 
-              <FormField label="Caminho remoto *" hint="DiretÛrio no servidor SSH onde os backups ser„o salvos">
+              <FormField label="Caminho remoto *" hint="DiretÔøΩrio no servidor SSH onde os backups serÔøΩo salvos">
                 <input className={formStyles.input} type="text" placeholder="/volume1/backups" value={form.sshRemotePath} onChange={set('sshRemotePath')} />
               </FormField>
             </>
@@ -473,7 +473,7 @@ export default function AddStorageModal({ onClose, onSave, editData }: Props) {
 
           {selectedType === 's3' && (
             <>
-              <FormField label="Endpoint" hint="Deixe vazio para usar endpoint padr„o AWS S3">
+              <FormField label="Endpoint" hint="Deixe vazio para usar endpoint padr√£o AWS S3">
                 <input className={formStyles.input} type="text" value={form.s3Endpoint} onChange={set('s3Endpoint')} />
               </FormField>
 
@@ -481,12 +481,12 @@ export default function AddStorageModal({ onClose, onSave, editData }: Props) {
                 <FormField label="Bucket *">
                   <input className={formStyles.input} type="text" placeholder="meu-bucket-backups" value={form.s3Bucket} onChange={set('s3Bucket')} />
                 </FormField>
-                <FormField label="Regi„o *">
+                <FormField label="RegiÔøΩo *">
                   <input className={formStyles.input} type="text" placeholder="us-east-1" value={form.s3Region} onChange={set('s3Region')} />
                 </FormField>
               </div>
 
-              <FormField label="Storage Class" hint="Define custo e tempo de recuperaÁ„o dos arquivos">
+              <FormField label="Storage Class" hint="Define custo e tempo de recuperaÔøΩÔøΩo dos arquivos">
                 <select className={formStyles.select} value={form.s3StorageClass} onChange={set('s3StorageClass')}>
                   {S3_STORAGE_CLASSES.map(sc => (
                     <option key={sc.value} value={sc.value}>{sc.label}</option>

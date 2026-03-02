@@ -71,7 +71,7 @@ export default function LogModal({ executionId, isAdmin = false, onClose, onChan
       setExecution(exec);
       setLogs(logsRes.logs ?? []);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erro ao carregar execuÃ§Ã£o');
+      setError(err instanceof Error ? err.message : 'Erro ao carregar execução e logs');
     } finally {
       setLoading(false);
     }
@@ -132,7 +132,7 @@ export default function LogModal({ executionId, isAdmin = false, onClose, onChan
       await onChanged();
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erro ao cancelar execuÃ§Ã£o');
+      setError(err instanceof Error ? err.message : 'Erro ao cancelar execução');
     } finally {
       setActing(null);
     }
@@ -155,7 +155,7 @@ export default function LogModal({ executionId, isAdmin = false, onClose, onChan
       setShowDeleteConfirm(false);
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erro ao remover execuÃ§Ã£o');
+      setError(err instanceof Error ? err.message : 'Erro ao remover execução');
       setActing(null);
     }
   }
@@ -174,7 +174,7 @@ export default function LogModal({ executionId, isAdmin = false, onClose, onChan
         <div className={styles.header}>
           <div className={styles.headerLeft}>
             <div className={styles.execId}>{execution?.id ?? executionId}</div>
-            <h2 className={styles.title}>{execution?.job?.name ?? 'ExecuÃ§Ã£o'}</h2>
+            <h2 className={styles.title}>{execution?.job?.name ?? 'Execução'}</h2>
             <div className={styles.meta}>
               <span className={`${styles.statusPill} ${styles[execution?.status ?? 'queued']}`}>
                 {execution ? EXEC_STATUS_LABELS[execution.status] : 'Carregando'}

@@ -22,9 +22,9 @@ interface PaginationState {
 }
 
 function formatBytes(value: number | string | null) {
-  if (value === null) return 'â€”';
+  if (value === null) return '0 Kb';
   const bytes = typeof value === 'string' ? Number(value) : value;
-  if (!Number.isFinite(bytes) || bytes <= 0) return 'â€”';
+  if (!Number.isFinite(bytes) || bytes <= 0) return '0 Kb';
   const units = ['B', 'KB', 'MB', 'GB', 'TB'];
   const index = Math.min(units.length - 1, Math.floor(Math.log(bytes) / Math.log(1024)));
   const amount = bytes / 1024 ** index;
@@ -228,7 +228,7 @@ export default function ExecutionsPage({ isAdmin = false }: { isAdmin?: boolean 
       await executionsApi.cancel(id);
       await Promise.all([loadExecutions(), loadCounts()]);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erro ao cancelar execuÃ§Ã£o');
+      setError(err instanceof Error ? err.message : 'Erro ao cancelar execução');
     }
   }
 
@@ -290,10 +290,10 @@ export default function ExecutionsPage({ isAdmin = false }: { isAdmin?: boolean 
       }
 
       if (failed > 0) {
-        setError(`${failed} execuÃ§Ã£o(Ãµes) nÃ£o puderam ser removidas.`);
+        setError(`${failed} execução(ões) não puderam ser removidas.`);
       }
       if (approvalRequested) {
-        setError('Uma ou mais execucoes exigem aprovacao para exclusao.');
+        setError('Uma ou mais execuções exigem aprovação para exclusão.');
       }
 
       await Promise.all([loadExecutions(), loadCounts()]);
@@ -309,7 +309,7 @@ export default function ExecutionsPage({ isAdmin = false }: { isAdmin?: boolean 
         <div>
           <h2 className={styles.pageTitle}>Execucoes</h2>
           <p className={styles.pageSub}>
-            {counts.all} execucoes Â· {formatBytes(totalSize)} nesta pÃ¡gina
+            {counts.all} execucoes · {formatBytes(totalSize)} nesta pàgina
           </p>
         </div>
         {selected.size > 0 && (
@@ -360,7 +360,7 @@ export default function ExecutionsPage({ isAdmin = false }: { isAdmin?: boolean 
               onChange={(event) => { setDateFrom(event.target.value); resetPage(); }}
               title="Data inicial"
             />
-            <span className={styles.dateSep}>â†’</span>
+            <span className={styles.dateSep}>a</span>
             <input
               className={styles.dateInput}
               type="date"
@@ -390,7 +390,7 @@ export default function ExecutionsPage({ isAdmin = false }: { isAdmin?: boolean 
         ) : executions.length === 0 ? (
           <div className={styles.empty}>
             <EmptyExecIcon />
-            <p>Nenhuma execuÃ§Ã£o encontrada</p>
+            <p>Nenhuma execução encontrada</p>
             <span>Tente ajustar os filtros aplicados</span>
           </div>
         ) : (
@@ -449,7 +449,7 @@ export default function ExecutionsPage({ isAdmin = false }: { isAdmin?: boolean 
               setPage(1);
             }}
           >
-            {PAGE_SIZES.map((size) => <option key={size} value={size}>{size} por pÃ¡gina</option>)}
+            {PAGE_SIZES.map((size) => <option key={size} value={size}>{size} por página</option>)}
           </select>
         </div>
 
@@ -593,7 +593,7 @@ function ExecRow({
             <div className={styles.errorInline}>
               <ErrorIcon />
               <span>{execution.error_message}</span>
-              <button className={styles.logsLink} onClick={onViewLog}>Ver logs completos â†’</button>
+              <button className={styles.logsLink} onClick={onViewLog}>Ver logs completos →</button>
             </div>
           </td>
         </tr>
