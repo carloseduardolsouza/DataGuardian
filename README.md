@@ -50,8 +50,8 @@
 
 ### 🟢 Versão Estável — Pronta para Produção
 
-[![Download ZIP](https://img.shields.io/badge/⬇️%20Baixar%20Pacote%20de%20Deploy-.zip-22c55e?style=for-the-badge&logoColor=white)](https://github.com/carloseduardolsouza/DataGuardian/releases/latest/download/dataguardian-deploy.zip)
-[![Releases](https://img.shields.io/github/v/release/carloseduardolsouza/DataGuardian?style=for-the-badge&label=Última%20versão&color=3b82f6)](https://github.com/carloseduardolsouza/DataGuardian/releases/latest)
+[![Download ZIP](https://img.shields.io/badge/⬇️%20Baixar%20Pacote%20de%20Deploy-.zip-22c55e?style=for-the-badge&logoColor=white)](sha256:2611417fd7ebbf73b45d7f3b8e2b4784223b3f88923084c0bf90f426e0b9e890)
+[![Releases](https://img.shields.io/github/v/release/carloseduardolsouza/DataGuardian?style=for-the-badge&label=Última%20versão&color=3b82f6)](https://github.com/carloseduardolsouza/DataGuardian/releases/tag/v1.0.0)
 
 </div>
 
