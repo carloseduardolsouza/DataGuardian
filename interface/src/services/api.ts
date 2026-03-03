@@ -311,19 +311,6 @@ export type ApiSystemSettingsMap = Record<string, {
   updated_at: string;
 }>;
 
-export interface ApiNotificationTemplate {
-  id: string;
-  channel: 'whatsapp';
-  type: ApiNotification['type'];
-  version: number;
-  enabled: boolean;
-  is_default: boolean;
-  title_tpl: string | null;
-  message_tpl: string;
-  created_at: string;
-  updated_at: string;
-}
-
 export interface ApiWhatsappEvolutionStatus {
   instance: string;
   status: 'connected' | 'disconnected' | 'not_found' | 'unknown';
@@ -1306,6 +1293,9 @@ export const notificationsApi = {
   markAllAsRead: () =>
     request<{ updated_count: number }>('/notifications/read-all', { method: 'PUT' }),
 
+  removeAll: () =>
+    request<{ deleted_count: number }>('/notifications', { method: 'DELETE' }),
+
   remove: (id: string) =>
     request<void>(`/notifications/${id}`, { method: 'DELETE' }),
 };
@@ -1439,53 +1429,6 @@ export const systemApi = {
     const query = qs.toString();
     return request<ApiWhatsappEvolutionStatus>(`/system/settings/whatsapp/status${query ? `?${query}` : ''}`);
   },
-
-  listNotificationTemplates: (params?: { channel?: 'whatsapp'; type?: ApiNotification['type'] }) => {
-    const qs = new URLSearchParams();
-    if (params?.channel) qs.set('channel', params.channel);
-    if (params?.type) qs.set('type', params.type);
-    const query = qs.toString();
-    return request<{ data: ApiNotificationTemplate[] }>(`/system/notification-templates${query ? `?${query}` : ''}`);
-  },
-
-  createNotificationTemplate: (data: {
-    channel: 'whatsapp';
-    type: ApiNotification['type'];
-    version?: number;
-    enabled?: boolean;
-    title_tpl?: string | null;
-    message_tpl: string;
-  }) =>
-    request<ApiNotificationTemplate>('/system/notification-templates', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    }),
-
-  updateNotificationTemplate: (
-    id: string,
-    patch: {
-      enabled?: boolean;
-      title_tpl?: string | null;
-      message_tpl?: string;
-    },
-  ) =>
-    request<ApiNotificationTemplate>(`/system/notification-templates/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(patch),
-    }),
-
-  createNotificationTemplateVersion: (
-    id: string,
-    patch?: {
-      enabled?: boolean;
-      title_tpl?: string | null;
-      message_tpl?: string;
-    },
-  ) =>
-    request<ApiNotificationTemplate>(`/system/notification-templates/${id}/new-version`, {
-      method: 'POST',
-      body: JSON.stringify(patch ?? {}),
-    }),
 };
 
 

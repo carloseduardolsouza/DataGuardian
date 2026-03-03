@@ -4,6 +4,7 @@ import {
   markNotificationAsRead,
   markAllNotificationsAsRead,
   deleteNotification,
+  deleteAllNotifications,
 } from '../models/notification.model';
 import { getPaginationParams, buildPaginatedResponse } from '../../utils/config';
 
@@ -44,6 +45,15 @@ export const NotificationController = {
     try {
       await deleteNotification(String(req.params.id));
       res.status(204).send();
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async removeAll(_req: Request, res: Response, next: NextFunction) {
+    try {
+      const result = await deleteAllNotifications();
+      res.json(result);
     } catch (err) {
       next(err);
     }

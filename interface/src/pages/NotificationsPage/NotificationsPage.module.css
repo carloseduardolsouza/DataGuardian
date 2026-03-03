@@ -38,6 +38,12 @@
   color: var(--color-text-muted);
 }
 
+.headerActions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
 .markAllBtn {
   display: inline-flex;
   align-items: center;
@@ -62,7 +68,33 @@
   cursor: not-allowed;
 }
 
+.clearAllBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 10px var(--space-4);
+  border-radius: var(--radius-md);
+  border: 1px solid color-mix(in srgb, var(--color-danger) 24%, var(--color-border) 76%);
+  background: transparent;
+  color: var(--color-danger);
+  cursor: pointer;
+  font-weight: var(--font-weight-semi);
+  transition: background var(--transition-fast), border-color var(--transition-fast), transform var(--transition-fast), opacity var(--transition-fast);
+}
+
+.clearAllBtn:hover:not(:disabled) {
+  background: var(--color-danger-muted);
+  border-color: color-mix(in srgb, var(--color-danger) 48%, transparent);
+  transform: translateY(-1px);
+}
+
+.clearAllBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .markAllBtn:focus-visible,
+.clearAllBtn:focus-visible,
 .select:focus-visible,
 .actionBtn:focus-visible,
 .deleteBtn:focus-visible,
@@ -305,6 +337,16 @@
   .header {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .headerActions {
+    width: 100%;
+  }
+
+  .markAllBtn,
+  .clearAllBtn {
+    flex: 1;
+    justify-content: center;
   }
 
   .filters {

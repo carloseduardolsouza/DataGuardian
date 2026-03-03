@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { notificationsApi } from '../../services/api';
 import type { ApiNotification } from '../../services/api';
+import { ApiRequestError } from '../../services/api';
 import { CheckIcon, TrashIcon, SpinnerIcon } from '../../ui/icons/Icons';
 import ConfirmDialog from '../../ui/dialogs/ConfirmDialog/ConfirmDialog';
 import styles from './NotificationsPage.module.css';
@@ -41,6 +42,8 @@ export default function NotificationsPage({ onUnreadCountChange }: Props) {
   const [total, setTotal] = useState(0);
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [deleteAllOpen, setDeleteAllOpen] = useState(false);
+  const [deletingAll, setDeletingAll] = useState(false);
 
   const readParam = readFilter === 'all' ? undefined : readFilter === 'read' ? 'true' : 'false';
   const severityParam = severityFilter === 'all' ? undefined : severityFilter;
@@ -100,6 +103,31 @@ export default function NotificationsPage({ onUnreadCountChange }: Props) {
     }
   }
 
+  async function confirmRemoveAll() {
+    try {
+      setDeletingAll(true);
+      try {
+        await notificationsApi.removeAll();
+      } catch (err) {
+        // Compatibilidade com backend sem DELETE /api/notifications.
+        if (!(err instanceof ApiRequestError) || err.status !== 404) {
+          throw err;
+        }
+        while (true) {
+          const batch = await notificationsApi.list({ page: 1, limit: 100 });
+          if (!batch.data.length) break;
+          await Promise.all(batch.data.map((item) => notificationsApi.remove(item.id)));
+        }
+      }
+      await load();
+      setDeleteAllOpen(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao remover notificacoes');
+    } finally {
+      setDeletingAll(false);
+    }
+  }
+
   const emptyText = useMemo(() => {
     if (readFilter === 'unread') return 'Nenhuma notificacao nao lida encontrada';
     if (readFilter === 'read') return 'Nenhuma notificacao lida encontrada';
@@ -114,9 +142,14 @@ export default function NotificationsPage({ onUnreadCountChange }: Props) {
           <p className={styles.sub}>{unreadCount} nao lidas</p>
         </div>
 
-        <button className={styles.markAllBtn} onClick={() => void markAllAsRead()} disabled={unreadCount === 0}>
-          <CheckIcon /> Marcar todas como lidas
-        </button>
+        <div className={styles.headerActions}>
+          <button className={styles.markAllBtn} onClick={() => void markAllAsRead()} disabled={unreadCount === 0 || loading || deletingAll}>
+            <CheckIcon /> Marcar todas como lidas
+          </button>
+          <button className={styles.clearAllBtn} onClick={() => setDeleteAllOpen(true)} disabled={loading || deletingAll}>
+            <TrashIcon /> Apagar todas
+          </button>
+        </div>
       </div>
 
       <div className={styles.filters}>
@@ -191,6 +224,17 @@ export default function NotificationsPage({ onUnreadCountChange }: Props) {
           if (!deleting) setDeleteTargetId(null);
         }}
         onConfirm={() => void confirmRemove()}
+      />
+      <ConfirmDialog
+        open={deleteAllOpen}
+        title="Confirmar exclusao de todas as notificacoes"
+        message="Deseja excluir todas as notificacoes do sistema?"
+        confirmLabel="Apagar todas"
+        loading={deletingAll}
+        onClose={() => {
+          if (!deletingAll) setDeleteAllOpen(false);
+        }}
+        onConfirm={() => void confirmRemoveAll()}
       />
     </div>
   );

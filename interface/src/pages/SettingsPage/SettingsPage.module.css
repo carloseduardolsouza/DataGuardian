@@ -400,6 +400,70 @@
   gap: var(--space-3);
 }
 
+.newUserOwnerRow {
+  align-items: center;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-3);
+  background: color-mix(in srgb, var(--color-surface-elevated) 78%, transparent);
+}
+
+.newUserMeta {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.newUserRolesTitle {
+  margin: 0;
+  color: var(--color-text);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semi);
+}
+
+.newUserHint {
+  margin: 0;
+  color: var(--color-text-subtle);
+  font-size: var(--font-size-xs);
+}
+
+.newUserRoleGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.newUserRoleOption {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 40px;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-3);
+  background: color-mix(in srgb, var(--color-surface-elevated) 70%, transparent);
+  color: var(--color-text);
+  cursor: pointer;
+  transition: border-color var(--transition-fast), background var(--transition-fast), transform var(--transition-fast);
+}
+
+.newUserRoleOption:hover {
+  border-color: color-mix(in srgb, var(--color-primary) 35%, var(--color-border));
+  background: var(--color-surface-elevated);
+  transform: translateY(-1px);
+}
+
+.newUserRoleOptionChecked {
+  border-color: color-mix(in srgb, var(--color-primary) 55%, transparent);
+  background: color-mix(in srgb, var(--color-primary-muted) 50%, var(--color-surface));
+}
+
+.newUserRoleName {
+  color: var(--color-text);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semi);
+}
+
 .toggleRow {
   display: flex;
   align-items: center;
@@ -456,6 +520,10 @@
 
 @media (max-width: 720px) {
   .checkboxGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .newUserRoleGrid {
     grid-template-columns: 1fr;
   }
 

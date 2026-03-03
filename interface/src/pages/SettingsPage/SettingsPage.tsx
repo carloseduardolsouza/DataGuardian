@@ -5,7 +5,6 @@ import {
   type ApiAccessPermission,
   type ApiAccessRole,
   type ApiAccessUser,
-  type ApiNotificationTemplate,
   type ApiWhatsappEvolutionStatus,
 } from '../../services/api';
 import { AlertTriangleIcon, CheckCircleIcon, SpinnerIcon } from '../../ui/icons/Icons';
@@ -139,14 +138,6 @@ export default function SettingsPage({ canManageAccess = false, viewMode = 'full
   const [passwordUserId, setPasswordUserId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<{ type: 'role' | 'user'; id: string; label: string } | null>(null);
 
-  const [templatesLoading, setTemplatesLoading] = useState(false);
-  const [templates, setTemplates] = useState<ApiNotificationTemplate[]>([]);
-  const [templateType, setTemplateType] = useState<ApiNotificationTemplate['type']>('backup_failed');
-  const [templateVersion, setTemplateVersion] = useState<number | null>(null);
-  const [templateEnabled, setTemplateEnabled] = useState(true);
-  const [templateTitle, setTemplateTitle] = useState('');
-  const [templateMessage, setTemplateMessage] = useState('');
-
   async function loadSettings() {
     try {
       setLoading(true);
@@ -195,47 +186,14 @@ export default function SettingsPage({ canManageAccess = false, viewMode = 'full
     }
   }
 
-  async function loadTemplates() {
-    try {
-      setTemplatesLoading(true);
-      const response = await systemApi.listNotificationTemplates();
-      setTemplates(response.data);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Falha ao carregar templates de notificacao.');
-    } finally {
-      setTemplatesLoading(false);
-    }
-  }
-
   useEffect(() => {
     if (!isAccessOnly) {
       void loadSettings();
-      void loadTemplates();
     }
     if (canManageAccess) {
       void loadAccess();
     }
   }, [canManageAccess, isAccessOnly]);
-
-  useEffect(() => {
-    const filtered = templates
-      .filter((item) => item.channel === 'whatsapp' && item.type === templateType)
-      .sort((a, b) => b.version - a.version);
-    const selected = templateVersion
-      ? filtered.find((item) => item.version === templateVersion) ?? filtered[0]
-      : filtered[0];
-    if (!selected) {
-      setTemplateVersion(null);
-      setTemplateEnabled(true);
-      setTemplateTitle('');
-      setTemplateMessage('');
-      return;
-    }
-    setTemplateVersion(selected.version);
-    setTemplateEnabled(selected.enabled);
-    setTemplateTitle(selected.title_tpl ?? '');
-    setTemplateMessage(selected.message_tpl);
-  }, [templates, templateType]);
 
   const waConfigured = useMemo(() => {
     return Boolean(
@@ -325,52 +283,6 @@ export default function SettingsPage({ canManageAccess = false, viewMode = 'full
       }
     } finally {
       setWaStatusLoading(false);
-    }
-  }
-
-  async function handleSaveTemplate() {
-    try {
-      setError(null);
-      const current = templates.find((item) => item.channel === 'whatsapp' && item.type === templateType && item.version === templateVersion);
-      if (!current) {
-        const created = await systemApi.createNotificationTemplate({
-          channel: 'whatsapp',
-          type: templateType,
-          enabled: templateEnabled,
-          title_tpl: templateTitle || null,
-          message_tpl: templateMessage || '{{message}}',
-        });
-        setSuccess(`Template ${created.channel}/${created.type} v${created.version} criado.`);
-      } else {
-        const updated = await systemApi.updateNotificationTemplate(current.id, {
-          enabled: templateEnabled,
-          title_tpl: templateTitle || null,
-          message_tpl: templateMessage || '{{message}}',
-        });
-        setSuccess(`Template ${updated.channel}/${updated.type} v${updated.version} atualizado.`);
-      }
-      await loadTemplates();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Falha ao salvar template.');
-    }
-  }
-
-  async function handleCreateTemplateVersion() {
-    try {
-      setError(null);
-      const current = templates.find((item) => item.channel === 'whatsapp' && item.type === templateType && item.version === templateVersion);
-      if (!current) {
-        throw new Error('Selecione um template existente para criar nova versao.');
-      }
-      const created = await systemApi.createNotificationTemplateVersion(current.id, {
-        enabled: true,
-        title_tpl: templateTitle || null,
-        message_tpl: templateMessage || '{{message}}',
-      });
-      setSuccess(`Nova versao criada: v${created.version}`);
-      await loadTemplates();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Falha ao criar nova versao de template.');
     }
   }
 
@@ -551,53 +463,6 @@ export default function SettingsPage({ canManageAccess = false, viewMode = 'full
 
         <section className={styles.card}>
           <div className={styles.cardHeader}>
-            <h3 className={styles.cardTitle}>Templates de Alertas</h3>
-            <div className={styles.actionsRow}>
-              <button className={styles.secondaryBtn} onClick={() => void loadTemplates()} disabled={templatesLoading}>
-                {templatesLoading ? 'Atualizando...' : 'Atualizar'}
-              </button>
-            </div>
-          </div>
-          <div className={styles.twoCols}>
-            <label className={styles.field}>
-              <span>Tipo</span>
-              <select className={styles.input} value={templateType} onChange={(e) => setTemplateType(e.target.value as ApiNotificationTemplate['type'])}>
-                <option value="backup_success">backup_success</option>
-                <option value="backup_failed">backup_failed</option>
-                <option value="connection_lost">connection_lost</option>
-                <option value="connection_restored">connection_restored</option>
-                <option value="storage_full">storage_full</option>
-                <option value="storage_unreachable">storage_unreachable</option>
-                <option value="health_degraded">health_degraded</option>
-                <option value="cleanup_completed">cleanup_completed</option>
-              </select>
-            </label>
-            <label className={styles.field}>
-              <span>Versao</span>
-              <input className={styles.input} type="number" value={templateVersion ?? 1} disabled />
-            </label>
-            <label className={styles.checkboxRow}>
-              <input type="checkbox" checked={templateEnabled} onChange={(e) => setTemplateEnabled(e.target.checked)} />
-              <span>Template habilitado</span>
-            </label>
-          </div>
-          <label className={styles.field}>
-            <span>Template de titulo</span>
-            <input className={styles.input} value={templateTitle} onChange={(e) => setTemplateTitle(e.target.value)} placeholder="{{title}}" />
-          </label>
-          <label className={styles.field}>
-            <span>Template de mensagem</span>
-            <textarea className={styles.input} rows={6} value={templateMessage} onChange={(e) => setTemplateMessage(e.target.value)} />
-          </label>
-          <p className={styles.hint}>Placeholders disponiveis: {'{{title}}'}, {'{{message}}'}, {'{{severity}}'}, {'{{type}}'}, {'{{entity_type}}'}, {'{{entity_id}}'}, {'{{created_at}}'}.</p>
-          <div className={styles.actionsRow}>
-            <button className={styles.primaryBtn} onClick={() => void handleSaveTemplate()}>Salvar template</button>
-            <button className={styles.secondaryBtn} onClick={() => void handleCreateTemplateVersion()}>Nova versao</button>
-          </div>
-        </section>
-
-        <section className={styles.card}>
-          <div className={styles.cardHeader}>
             <h3 className={styles.cardTitle}>WhatsApp (Evolution API)</h3>
             <span className={`${styles.badge} ${waConfigured ? styles.badgeOk : styles.badgeWarn}`}>{boolLabel(waConfigured)}</span>
           </div>
@@ -702,7 +567,7 @@ export default function SettingsPage({ canManageAccess = false, viewMode = 'full
                   <div className={styles.accessRow}>
                     <div>
                       <strong className={styles.helpTitle}>{role.name}</strong>
-                      <p className={styles.hint} >{role.description || 'Sem descricao'} · {role.users_count} usuario(s)</p>
+                      <p className={styles.hint} >{role.description || 'Sem descricao'} Â· {role.users_count} usuario(s)</p>
                     </div>
                     <div className={styles.actionsRow}>
                       <button className={styles.secondaryBtn} onClick={() => setEditingRoleId(role.id)}>Editar</button>
@@ -835,32 +700,41 @@ export default function SettingsPage({ canManageAccess = false, viewMode = 'full
             </>
           )}
         >
-          <div className={styles.twoCols}>
-            <label className={styles.field}><span>Username</span><input className={styles.input} value={newUser.username} onChange={(e) => setNewUser((c) => ({ ...c, username: e.target.value }))} /></label>
-            <label className={styles.field}><span>Senha</span><input className={styles.input} type="password" value={newUser.password} onChange={(e) => setNewUser((c) => ({ ...c, password: e.target.value }))} /></label>
-            <label className={styles.field}><span>Nome completo</span><input className={styles.input} value={newUser.full_name} onChange={(e) => setNewUser((c) => ({ ...c, full_name: e.target.value }))} /></label>
-            <label className={styles.field}><span>E-mail</span><input className={styles.input} value={newUser.email} onChange={(e) => setNewUser((c) => ({ ...c, email: e.target.value }))} /></label>
-          </div>
-          <label className={styles.checkboxRow}>
-            <input type="checkbox" checked={newUser.is_owner} onChange={(e) => setNewUser((c) => ({ ...c, is_owner: e.target.checked }))} />
-            <span>Marcar como owner</span>
-          </label>
-          <div className={styles.checkboxGrid}>
-            {roles.map((role) => (
-              <label key={`new-${role.id}`} className={styles.checkboxRow}>
-                <input
-                  type="checkbox"
-                  checked={newUser.role_ids.includes(role.id)}
-                  onChange={() => setNewUser((c) => ({
-                    ...c,
-                    role_ids: c.role_ids.includes(role.id)
-                      ? c.role_ids.filter((id) => id !== role.id)
-                      : [...c.role_ids, role.id],
-                  }))}
-                />
-                <span>{role.name}</span>
-              </label>
-            ))}
+          <div className={styles.modalForm}>
+            <div className={styles.twoCols}>
+              <label className={styles.field}><span>Username</span><input className={styles.input} value={newUser.username} onChange={(e) => setNewUser((c) => ({ ...c, username: e.target.value }))} /></label>
+              <label className={styles.field}><span>Senha</span><input className={styles.input} type="password" value={newUser.password} onChange={(e) => setNewUser((c) => ({ ...c, password: e.target.value }))} /></label>
+              <label className={styles.field}><span>Nome completo</span><input className={styles.input} value={newUser.full_name} onChange={(e) => setNewUser((c) => ({ ...c, full_name: e.target.value }))} /></label>
+              <label className={styles.field}><span>E-mail</span><input className={styles.input} value={newUser.email} onChange={(e) => setNewUser((c) => ({ ...c, email: e.target.value }))} /></label>
+            </div>
+            <label className={`${styles.checkboxRow} ${styles.newUserOwnerRow}`}>
+              <input type="checkbox" checked={newUser.is_owner} onChange={(e) => setNewUser((c) => ({ ...c, is_owner: e.target.checked }))} />
+              <span>Marcar como owner</span>
+            </label>
+            <div className={styles.newUserMeta}>
+              <p className={styles.newUserRolesTitle}>Roles de acesso</p>
+              <p className={styles.newUserHint}>Selecione uma ou mais roles para definir os acessos iniciais.</p>
+            </div>
+            <div className={styles.newUserRoleGrid}>
+              {roles.map((role) => {
+                const checked = newUser.role_ids.includes(role.id);
+                return (
+                  <label key={`new-${role.id}`} className={`${styles.newUserRoleOption} ${checked ? styles.newUserRoleOptionChecked : ''}`}>
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => setNewUser((c) => ({
+                        ...c,
+                        role_ids: c.role_ids.includes(role.id)
+                          ? c.role_ids.filter((id) => id !== role.id)
+                          : [...c.role_ids, role.id],
+                      }))}
+                    />
+                    <span className={styles.newUserRoleName}>{role.name}</span>
+                  </label>
+                );
+              })}
+            </div>
           </div>
         </Modal>
       )}

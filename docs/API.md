@@ -237,6 +237,7 @@ O processamento é feito pelo `restore-worker` na `restore-queue`.
 ## :bookmark: Notifications
 
 - `GET /api/notifications`
+- `DELETE /api/notifications`
 - `PUT /api/notifications/read-all`
 - `PUT /api/notifications/:id/read`
 - `DELETE /api/notifications/:id`
@@ -268,10 +269,6 @@ O processamento é feito pelo `restore-worker` na `restore-queue`.
 - `GET /api/system/settings/:key`
 - `PUT /api/system/settings/:key`
 - `DELETE /api/system/settings/:key`
-- `GET /api/system/notification-templates`
-- `POST /api/system/notification-templates`
-- `PUT /api/system/notification-templates/:id`
-- `POST /api/system/notification-templates/:id/new-version`
 
 ## :bookmark: Permissões (Resumo)
 

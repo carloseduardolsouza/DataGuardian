@@ -12,7 +12,6 @@ import { startCleanupWorker, stopCleanupWorker } from './workers/cleanup-worker'
 import { closeQueues } from './queue/queues';
 import { closeRedis, connectRedis, ensureRedisAvailable } from './queue/redis-client';
 import { seedAuthDefaults } from './core/auth/auth.service';
-import { seedDefaultNotificationTemplates } from './api/models/notification-template.model';
 import { startSystemMonitor, stopSystemMonitor } from './core/performance/system-monitor';
 import { shutdownThreadPool } from './core/performance/thread-pool';
 
@@ -49,13 +48,6 @@ async function bootstrap() {
     logger.info('Roles e permissoes padrao verificadas/criadas');
   } catch (err) {
     logger.warn({ err }, 'Erro ao verificar roles/permissoes padrao');
-  }
-
-  try {
-    await seedDefaultNotificationTemplates();
-    logger.info('Templates de notificacao padrao verificados/criados');
-  } catch (err) {
-    logger.warn({ err }, 'Erro ao verificar templates de notificacao');
   }
 
   const app = createApp();

@@ -98,3 +98,8 @@ export async function deleteNotification(id: string) {
   await prisma.notification.findUniqueOrThrow({ where: { id } });
   await prisma.notification.delete({ where: { id } });
 }
+
+export async function deleteAllNotifications() {
+  const result = await prisma.notification.deleteMany({});
+  return { deleted_count: result.count };
+}

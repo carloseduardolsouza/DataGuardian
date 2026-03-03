@@ -35,6 +35,7 @@ notificationsRouter.get(
   validate(listQuerySchema, "query"),
   NotificationController.list,
 );
+notificationsRouter.delete("/", requirePermission(PERMISSIONS.NOTIFICATIONS_MANAGE), NotificationController.removeAll);
 notificationsRouter.put("/read-all", requirePermission(PERMISSIONS.NOTIFICATIONS_MANAGE), NotificationController.markAllAsRead);
 notificationsRouter.put("/:id/read", requirePermission(PERMISSIONS.NOTIFICATIONS_MANAGE), NotificationController.markAsRead);
 notificationsRouter.delete("/:id", requirePermission(PERMISSIONS.NOTIFICATIONS_MANAGE), NotificationController.remove);

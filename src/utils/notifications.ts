@@ -7,11 +7,6 @@ import {
 import { prisma } from '../lib/prisma';
 import { logger } from './logger';
 import { sendEvolutionText } from '../integrations/evolution-api/client';
-import {
-  buildTemplateContext,
-  getActiveTemplate,
-  renderTemplate,
-} from '../api/models/notification-template.model';
 
 interface CreateNotificationInput {
   type: NotificationType;
@@ -126,15 +121,12 @@ function entityLabel(entityType: NotificationEntityType) {
 
 function buildWhatsappText(
   input: CreateNotificationInput,
-  rendered: { title: string; message: string },
 ) {
   const when = new Date().toLocaleString('pt-BR', { hour12: false });
   const metadata = asObject(input.metadata);
-  const title = truncateText(normalizeInline(rendered.title || input.title), 90);
+  const title = truncateText(normalizeInline(input.title), 90);
 
-  const renderedMessage = normalizeInline(firstNonEmptyLine(rendered.message));
-  const fallbackMessage = normalizeInline(firstNonEmptyLine(input.message));
-  const summary = truncateText(renderedMessage || fallbackMessage || 'Sem detalhes.', 140);
+  const summary = truncateText(normalizeInline(firstNonEmptyLine(input.message)) || 'Sem detalhes.', 140);
   const sevLabel = severityLabel(input.severity);
   const sevEmoji = severityEmoji(input.severity);
   const evtEmoji = typeEmoji(input.type);
@@ -188,28 +180,6 @@ function buildWhatsappText(
   ].join('\n');
 }
 
-async function resolveRenderedTemplate(
-  channel: 'whatsapp',
-  input: CreateNotificationInput,
-) {
-  const template = await getActiveTemplate(channel, input.type);
-  const context = buildTemplateContext({
-    type: input.type,
-    severity: input.severity,
-    entityType: input.entityType,
-    entityId: input.entityId,
-    title: input.title,
-    message: input.message,
-    metadata: (input.metadata ?? {}) as Prisma.JsonValue,
-  });
-
-  return {
-    title: renderTemplate(template?.titleTpl ?? '{{title}}', context) || input.title,
-    message: renderTemplate(template?.messageTpl ?? '{{message}}', context) || input.message,
-    template_version: template?.version ?? 0,
-  };
-}
-
 async function dispatchWhatsappNotification(input: CreateNotificationInput) {
   const cfg = await readDispatchConfig();
   if (!cfg.whatsappEnabled) {
@@ -240,7 +210,6 @@ async function dispatchWhatsappNotification(input: CreateNotificationInput) {
     return;
   }
 
-  const rendered = await resolveRenderedTemplate('whatsapp', input);
   logger.info(
     {
       type: input.type,
@@ -256,7 +225,7 @@ async function dispatchWhatsappNotification(input: CreateNotificationInput) {
     recipients.map(async (to) => {
       const startedAt = Date.now();
       try {
-        const text = buildWhatsappText(input, rendered);
+        const text = buildWhatsappText(input);
         await sendEvolutionText({
           apiUrl,
           apiKey,

@@ -94,6 +94,7 @@ Regra prática: ao concluir o 4º backup do mesmo job, remove o mais antigo.
 - `GET /api/notifications`
 - `PUT /api/notifications/:id/read`
 - `PUT /api/notifications/read-all`
+- `DELETE /api/notifications`
 - `DELETE /api/notifications/:id`
 
 Notificações externas configuráveis em `system_settings`:
@@ -101,13 +102,6 @@ Notificações externas configuráveis em `system_settings`:
 - SMTP
 - Webhook
 - WhatsApp (Evolution)
-
-Templates/versionamento:
-
-- `GET /api/system/notification-templates`
-- `POST /api/system/notification-templates`
-- `PUT /api/system/notification-templates/:id`
-- `POST /api/system/notification-templates/:id/new-version`
 
 ## :bookmark: Troubleshooting rápido
 

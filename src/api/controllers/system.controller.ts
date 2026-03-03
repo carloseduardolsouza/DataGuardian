@@ -9,12 +9,6 @@ import {
   getWhatsappEvolutionStatus,
   getWhatsappEvolutionQrCode,
 } from '../models/system.model';
-import {
-  createNotificationTemplate,
-  createNotificationTemplateVersion,
-  listNotificationTemplates,
-  updateNotificationTemplateById,
-} from '../models/notification-template.model';
 import { createAuditLog, extractAuditContextFromRequest } from '../models/audit-log.model';
 
 export const SystemController = {
@@ -121,45 +115,6 @@ export const SystemController = {
       const instance = typeof req.query?.instance === 'string' ? req.query.instance : undefined;
       const result = await getWhatsappEvolutionStatus(instance);
       res.json(result);
-    } catch (err) {
-      next(err);
-    }
-  },
-
-  async listNotificationTemplates(req: Request, res: Response, next: NextFunction) {
-    try {
-      const data = await listNotificationTemplates({
-        channel: req.query?.channel as any,
-        type: req.query?.type as any,
-      });
-      res.json({ data });
-    } catch (err) {
-      next(err);
-    }
-  },
-
-  async createNotificationTemplate(req: Request, res: Response, next: NextFunction) {
-    try {
-      const created = await createNotificationTemplate(req.body);
-      res.status(201).json(created);
-    } catch (err) {
-      next(err);
-    }
-  },
-
-  async updateNotificationTemplate(req: Request, res: Response, next: NextFunction) {
-    try {
-      const updated = await updateNotificationTemplateById(String(req.params.id), req.body);
-      res.json(updated);
-    } catch (err) {
-      next(err);
-    }
-  },
-
-  async createNotificationTemplateVersion(req: Request, res: Response, next: NextFunction) {
-    try {
-      const created = await createNotificationTemplateVersion(String(req.params.id), req.body);
-      res.status(201).json(created);
     } catch (err) {
       next(err);
     }
