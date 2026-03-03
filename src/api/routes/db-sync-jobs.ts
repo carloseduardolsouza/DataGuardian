@@ -1,9 +1,10 @@
-﻿import { Router } from 'express';
+import { Router } from 'express';
 import { validate } from '../middlewares/validation';
-import { requirePermission } from '../middlewares/auth';
+import { requirePermission, requireScopedPermission } from '../middlewares/auth';
 import { requireCriticalApproval } from '../middlewares/critical-approval';
 import { PERMISSIONS } from '../../core/auth/permissions';
 import { DbSyncJobsController } from '../controllers/db-sync-jobs.controller';
+import { prisma } from '../../lib/prisma';
 import {
   createDbSyncJobSchema,
   listDbSyncJobsQuerySchema,
@@ -14,7 +15,7 @@ export const dbSyncJobsRouter = Router();
 
 dbSyncJobsRouter.get(
   '/',
-  requirePermission(PERMISSIONS.DB_SYNC_JOBS_READ),
+  requireScopedPermission(PERMISSIONS.DB_SYNC_JOBS_READ, { resource_type: 'db_sync_job' }),
   validate(listDbSyncJobsQuerySchema, 'query'),
   DbSyncJobsController.list,
 );
@@ -26,16 +27,22 @@ dbSyncJobsRouter.post(
   DbSyncJobsController.create,
 );
 
-dbSyncJobsRouter.get('/:id', requirePermission(PERMISSIONS.DB_SYNC_JOBS_READ), DbSyncJobsController.findById);
+dbSyncJobsRouter.get(
+  '/:id',
+  requireScopedPermission(PERMISSIONS.DB_SYNC_JOBS_READ, (req) => ({ resource_type: 'db_sync_job', resource_id: String(req.params.id) })),
+  DbSyncJobsController.findById,
+);
+
 dbSyncJobsRouter.put(
   '/:id',
-  requirePermission(PERMISSIONS.DB_SYNC_JOBS_WRITE),
+  requireScopedPermission(PERMISSIONS.DB_SYNC_JOBS_WRITE, (req) => ({ resource_type: 'db_sync_job', resource_id: String(req.params.id) })),
   validate(updateDbSyncJobSchema),
   DbSyncJobsController.update,
 );
+
 dbSyncJobsRouter.delete(
   '/:id',
-  requirePermission(PERMISSIONS.DB_SYNC_JOBS_WRITE),
+  requireScopedPermission(PERMISSIONS.DB_SYNC_JOBS_WRITE, (req) => ({ resource_type: 'db_sync_job', resource_id: String(req.params.id) })),
   requireCriticalApproval({
     action: 'db_sync_job.delete',
     actionLabel: 'Excluir job de sincronizacao',
@@ -44,9 +51,29 @@ dbSyncJobsRouter.delete(
   }),
   DbSyncJobsController.remove,
 );
+
 dbSyncJobsRouter.post(
   '/:id/run',
-  requirePermission(PERMISSIONS.DB_SYNC_JOBS_RUN),
+  requireScopedPermission(PERMISSIONS.DB_SYNC_JOBS_RUN, async (req) => {
+    const jobId = String(req.params.id);
+    const job = await prisma.databaseSyncJob.findUnique({
+      where: { id: jobId },
+      select: {
+        sourceDatasourceId: true,
+        targetDatasourceId: true,
+        storageLocationId: true,
+      },
+    });
+
+    if (!job) return [{ resource_type: 'db_sync_job', resource_id: jobId }];
+
+    return [
+      { resource_type: 'db_sync_job', resource_id: jobId },
+      { resource_type: 'datasource', resource_id: job.sourceDatasourceId },
+      { resource_type: 'datasource', resource_id: job.targetDatasourceId },
+      { resource_type: 'storage_location', resource_id: job.storageLocationId },
+    ];
+  }),
   requireCriticalApproval({
     action: 'db_sync_job.run',
     actionLabel: 'Executar sincronizacao',
@@ -55,4 +82,9 @@ dbSyncJobsRouter.post(
   }),
   DbSyncJobsController.runNow,
 );
-dbSyncJobsRouter.get('/:id/executions', requirePermission(PERMISSIONS.DB_SYNC_JOBS_READ), DbSyncJobsController.executions);
+
+dbSyncJobsRouter.get(
+  '/:id/executions',
+  requireScopedPermission(PERMISSIONS.DB_SYNC_JOBS_READ, (req) => ({ resource_type: 'db_sync_job', resource_id: String(req.params.id) })),
+  DbSyncJobsController.executions,
+);

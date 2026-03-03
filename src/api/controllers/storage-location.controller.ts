@@ -14,13 +14,16 @@ import {
 } from '../models/storage-location.model';
 import { promises as fs } from 'node:fs';
 import { getPaginationParams, buildPaginatedResponse } from '../../utils/config';
+import { getScopedFilter } from '../middlewares/auth';
+import { PERMISSIONS } from '../../core/auth/permissions';
 
 export const StorageLocationController = {
   async list(req: Request, res: Response, next: NextFunction) {
     try {
       const { page, limit, skip } = getPaginationParams(req.query);
       const { type, status } = req.query as Record<string, string | undefined>;
-      const { items, total } = await listStorageLocations({ type, status }, skip, limit);
+      const scopedIds = getScopedFilter(res, PERMISSIONS.STORAGE_READ, 'storage_location');
+      const { items, total } = await listStorageLocations({ type, status }, skip, limit, scopedIds);
       res.json(buildPaginatedResponse(items, total, page, limit));
     } catch (err) {
       next(err);

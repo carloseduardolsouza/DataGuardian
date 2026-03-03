@@ -45,3 +45,21 @@ export const updateUserPasswordSchema = z.object({
 export const idParamSchema = z.object({
   id: z.string().uuid(),
 });
+
+const scopeResourceTypeSchema = z.enum([
+  'datasource',
+  'storage_location',
+  'backup_job',
+  'db_sync_job',
+]);
+
+export const updateAccessScopesSchema = z.object({
+  scopes: z.array(
+    z.object({
+      permission_key: z.string().trim().min(1).max(120),
+      resource_type: scopeResourceTypeSchema,
+      resource_ids: z.array(z.string().uuid()).default([]),
+      denied_resource_ids: z.array(z.string().uuid()).optional(),
+    }),
+  ).default([]),
+});

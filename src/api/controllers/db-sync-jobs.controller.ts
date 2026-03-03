@@ -1,5 +1,7 @@
 ﻿import { Request, Response, NextFunction } from 'express';
 import { buildPaginatedResponse, getPaginationParams } from '../../utils/config';
+import { getScopedFilter } from '../middlewares/auth';
+import { PERMISSIONS } from '../../core/auth/permissions';
 import {
   createDbSyncJob,
   deleteDbSyncJob,
@@ -14,7 +16,8 @@ export const DbSyncJobsController = {
   async list(req: Request, res: Response, next: NextFunction) {
     try {
       const { page, limit, skip } = getPaginationParams(req.query);
-      const { items, total } = await listDbSyncJobs(skip, limit);
+      const scopedIds = getScopedFilter(res, PERMISSIONS.DB_SYNC_JOBS_READ, 'db_sync_job');
+      const { items, total } = await listDbSyncJobs(skip, limit, scopedIds);
       res.json(buildPaginatedResponse(items, total, page, limit));
     } catch (err) {
       next(err);

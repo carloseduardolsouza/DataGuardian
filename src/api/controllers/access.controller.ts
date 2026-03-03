@@ -10,6 +10,11 @@ import {
   updateAccessRole,
   updateAccessUser,
   updateAccessUserPassword,
+  getAccessUserScopes,
+  updateAccessUserScopes,
+  getAccessRoleScopes,
+  updateAccessRoleScopes,
+  getMyEffectiveScopes,
 } from '../models/access.model';
 import { createAuditLog, extractAuditContextFromRequest } from '../models/audit-log.model';
 
@@ -147,6 +152,72 @@ export const AccessController = {
         resource_id: String(req.params.id),
       });
       res.status(204).send();
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async getUserScopes(req: Request, res: Response, next: NextFunction) {
+    try {
+      const data = await getAccessUserScopes(String(req.params.id));
+      res.json(data);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async updateUserScopes(req: Request, res: Response, next: NextFunction) {
+    try {
+      const updated = await updateAccessUserScopes({
+        user_id: String(req.params.id),
+        scopes: req.body?.scopes ?? [],
+      });
+      await createAuditLog({
+        ...extractAuditContextFromRequest(req, res.locals.authUser),
+        action: 'access.user.scopes.update',
+        resource_type: 'user',
+        resource_id: String(req.params.id),
+        changes: { scopes: req.body?.scopes ?? [] },
+      });
+      res.json(updated);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async getRoleScopes(req: Request, res: Response, next: NextFunction) {
+    try {
+      const data = await getAccessRoleScopes(String(req.params.id));
+      res.json(data);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async updateRoleScopes(req: Request, res: Response, next: NextFunction) {
+    try {
+      const updated = await updateAccessRoleScopes({
+        role_id: String(req.params.id),
+        scopes: req.body?.scopes ?? [],
+      });
+      await createAuditLog({
+        ...extractAuditContextFromRequest(req, res.locals.authUser),
+        action: 'access.role.scopes.update',
+        resource_type: 'role',
+        resource_id: String(req.params.id),
+        changes: { scopes: req.body?.scopes ?? [] },
+      });
+      res.json(updated);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async myScopes(_req: Request, res: Response, next: NextFunction) {
+    try {
+      const authUserId = String(res.locals.authUser?.id ?? '');
+      const data = await getMyEffectiveScopes(authUserId);
+      res.json(data);
     } catch (err) {
       next(err);
     }

@@ -117,6 +117,23 @@ enum CriticalApprovalStatus {
   canceled
 }
 
+enum AccessScopeSubjectType {
+  user
+  role
+}
+
+enum AccessScopeResourceType {
+  datasource
+  storage_location
+  backup_job
+  db_sync_job
+}
+
+enum AccessScopeEffect {
+  allow
+  deny
+}
+
 // ──────────────────────────────────────────
 // Models
 // ──────────────────────────────────────────
@@ -385,6 +402,24 @@ model AuthSession {
   @@index([userId])
   @@index([expiresAt])
   @@map("auth_sessions")
+}
+
+model AccessScope {
+  id           String                 @id @default(uuid())
+  subjectType  AccessScopeSubjectType @map("subject_type")
+  subjectId    String                 @map("subject_id")
+  permissionKey String                @map("permission_key") @db.VarChar(120)
+  resourceType AccessScopeResourceType @map("resource_type")
+  resourceId   String                 @map("resource_id")
+  effect       AccessScopeEffect      @default(allow)
+  createdAt    DateTime               @default(now()) @map("created_at")
+  updatedAt    DateTime               @updatedAt @map("updated_at")
+
+  @@unique([subjectType, subjectId, permissionKey, resourceType, resourceId, effect])
+  @@index([subjectType, subjectId])
+  @@index([permissionKey, resourceType])
+  @@index([resourceId])
+  @@map("access_scopes")
 }
 
 model AuditLog {

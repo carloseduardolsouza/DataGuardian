@@ -8,13 +8,16 @@ import {
   runBackupJob,
 } from '../models/backup-job.model';
 import { getPaginationParams, buildPaginatedResponse } from '../../utils/config';
+import { getScopedFilter } from '../middlewares/auth';
+import { PERMISSIONS } from '../../core/auth/permissions';
 
 export const BackupJobController = {
   async list(req: Request, res: Response, next: NextFunction) {
     try {
       const { page, limit, skip } = getPaginationParams(req.query);
       const { enabled, datasource_id, storage_location_id } = req.query as Record<string, string | undefined>;
-      const { items, total } = await listBackupJobs({ enabled, datasource_id, storage_location_id }, skip, limit);
+      const scopedIds = getScopedFilter(res, PERMISSIONS.BACKUP_JOBS_READ, 'backup_job');
+      const { items, total } = await listBackupJobs({ enabled, datasource_id, storage_location_id }, skip, limit, scopedIds);
       res.json(buildPaginatedResponse(items, total, page, limit));
     } catch (err) {
       next(err);

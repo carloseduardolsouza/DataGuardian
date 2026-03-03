@@ -579,8 +579,14 @@ export async function listStorageLocations(
   filters: ListStorageFilters,
   skip: number,
   limit: number,
+  allowedIds?: string[],
 ) {
+  if (allowedIds && allowedIds.length === 0) {
+    return { items: [], total: 0 };
+  }
+
   const where: Prisma.StorageLocationWhereInput = {};
+  if (allowedIds) where.id = { in: allowedIds };
   if (filters.type) where.type = filters.type as StorageLocationType;
   if (filters.status) where.status = filters.status as StorageLocationStatus;
 

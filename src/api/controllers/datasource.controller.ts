@@ -11,13 +11,16 @@ import {
   createDatasourceTable,
 } from '../models/datasource.model';
 import { getPaginationParams, buildPaginatedResponse } from '../../utils/config';
+import { getScopedFilter } from '../middlewares/auth';
+import { PERMISSIONS } from '../../core/auth/permissions';
 
 export const DatasourceController = {
   async list(req: Request, res: Response, next: NextFunction) {
     try {
       const { page, limit, skip } = getPaginationParams(req.query);
       const { type, status, enabled, tag } = req.query as Record<string, string | undefined>;
-      const { items, total } = await listDatasources({ type, status, enabled, tag }, skip, limit);
+      const scopedIds = getScopedFilter(res, PERMISSIONS.DATASOURCES_READ, 'datasource');
+      const { items, total } = await listDatasources({ type, status, enabled, tag }, skip, limit, scopedIds);
       res.json(buildPaginatedResponse(items, total, page, limit));
     } catch (err) {
       next(err);

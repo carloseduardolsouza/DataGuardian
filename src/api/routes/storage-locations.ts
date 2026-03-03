@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { validate } from "../middlewares/validation";
-import { requirePermission } from "../middlewares/auth";
+import { requirePermission, requireScopedPermission } from "../middlewares/auth";
 import { requireCriticalApproval } from '../middlewares/critical-approval';
 import { StorageLocationController } from "../controllers/storage-location.controller";
 import { PERMISSIONS } from "../../core/auth/permissions";
@@ -35,7 +35,7 @@ const copyFileSchema = z.object({
 
 storageLocationsRouter.get(
   "/",
-  requirePermission(PERMISSIONS.STORAGE_READ),
+  requireScopedPermission(PERMISSIONS.STORAGE_READ, { resource_type: 'storage_location' }),
   validate(listQuerySchema, "query"),
   StorageLocationController.list,
 );
@@ -51,16 +51,20 @@ storageLocationsRouter.post(
   validate(testConfigSchema),
   StorageLocationController.testConfig,
 );
-storageLocationsRouter.get("/:id", requirePermission(PERMISSIONS.STORAGE_READ), StorageLocationController.findById);
+storageLocationsRouter.get(
+  "/:id",
+  requireScopedPermission(PERMISSIONS.STORAGE_READ, (req) => ({ resource_type: 'storage_location', resource_id: String(req.params.id) })),
+  StorageLocationController.findById,
+);
 storageLocationsRouter.put(
   "/:id",
-  requirePermission(PERMISSIONS.STORAGE_WRITE),
+  requireScopedPermission(PERMISSIONS.STORAGE_WRITE, (req) => ({ resource_type: 'storage_location', resource_id: String(req.params.id) })),
   validate(updateStorageLocationSchema),
   StorageLocationController.update,
 );
 storageLocationsRouter.delete(
   "/:id",
-  requirePermission(PERMISSIONS.STORAGE_WRITE),
+  requireScopedPermission(PERMISSIONS.STORAGE_WRITE, (req) => ({ resource_type: 'storage_location', resource_id: String(req.params.id) })),
   requireCriticalApproval({
     action: 'storage.delete',
     actionLabel: 'Excluir storage',
@@ -71,18 +75,18 @@ storageLocationsRouter.delete(
 );
 storageLocationsRouter.post(
   "/:id/test",
-  requirePermission(PERMISSIONS.STORAGE_WRITE),
+  requireScopedPermission(PERMISSIONS.STORAGE_WRITE, (req) => ({ resource_type: 'storage_location', resource_id: String(req.params.id) })),
   StorageLocationController.testConnection,
 );
 storageLocationsRouter.get(
   "/:id/files",
-  requirePermission(PERMISSIONS.STORAGE_READ),
+  requireScopedPermission(PERMISSIONS.STORAGE_READ, (req) => ({ resource_type: 'storage_location', resource_id: String(req.params.id) })),
   validate(browseFilesQuerySchema, "query"),
   StorageLocationController.browseFiles,
 );
 storageLocationsRouter.delete(
   "/:id/files",
-  requirePermission(PERMISSIONS.STORAGE_WRITE),
+  requireScopedPermission(PERMISSIONS.STORAGE_WRITE, (req) => ({ resource_type: 'storage_location', resource_id: String(req.params.id) })),
   validate(browseFilesQuerySchema, "query"),
   requireCriticalApproval({
     action: 'storage.path.delete',
@@ -94,13 +98,13 @@ storageLocationsRouter.delete(
 );
 storageLocationsRouter.post(
   "/:id/files/copy",
-  requirePermission(PERMISSIONS.STORAGE_WRITE),
+  requireScopedPermission(PERMISSIONS.STORAGE_WRITE, (req) => ({ resource_type: 'storage_location', resource_id: String(req.params.id) })),
   validate(copyFileSchema),
   StorageLocationController.copyFile,
 );
 storageLocationsRouter.get(
   "/:id/files/download",
-  requirePermission(PERMISSIONS.STORAGE_DOWNLOAD),
+  requireScopedPermission(PERMISSIONS.STORAGE_DOWNLOAD, (req) => ({ resource_type: 'storage_location', resource_id: String(req.params.id) })),
   validate(browseFilesQuerySchema, "query"),
   StorageLocationController.downloadFile,
 );

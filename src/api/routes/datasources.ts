@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { validate } from '../middlewares/validation';
-import { requirePermission } from '../middlewares/auth';
+import { requirePermission, requireScopedPermission } from '../middlewares/auth';
 import { requireCriticalApproval } from '../middlewares/critical-approval';
 import { DatasourceController } from '../controllers/datasource.controller';
 import { createDatasourceSchema, updateDatasourceSchema } from '../../types/datasource.types';
@@ -38,13 +38,27 @@ const executeDatasourceQuerySchema = z.object({
   sql: z.string().trim().min(1),
 });
 
-datasourcesRouter.get('/', requirePermission(PERMISSIONS.DATASOURCES_READ), validate(listDatasourceQuerySchema, 'query'), DatasourceController.list);
+datasourcesRouter.get(
+  '/',
+  requireScopedPermission(PERMISSIONS.DATASOURCES_READ, { resource_type: 'datasource' }),
+  validate(listDatasourceQuerySchema, 'query'),
+  DatasourceController.list,
+);
 datasourcesRouter.post('/', requirePermission(PERMISSIONS.DATASOURCES_WRITE), validate(createDatasourceSchema), DatasourceController.create);
-datasourcesRouter.get('/:id', requirePermission(PERMISSIONS.DATASOURCES_READ), DatasourceController.findById);
-datasourcesRouter.put('/:id', requirePermission(PERMISSIONS.DATASOURCES_WRITE), validate(updateDatasourceSchema), DatasourceController.update);
+datasourcesRouter.get(
+  '/:id',
+  requireScopedPermission(PERMISSIONS.DATASOURCES_READ, (req) => ({ resource_type: 'datasource', resource_id: String(req.params.id) })),
+  DatasourceController.findById,
+);
+datasourcesRouter.put(
+  '/:id',
+  requireScopedPermission(PERMISSIONS.DATASOURCES_WRITE, (req) => ({ resource_type: 'datasource', resource_id: String(req.params.id) })),
+  validate(updateDatasourceSchema),
+  DatasourceController.update,
+);
 datasourcesRouter.delete(
   '/:id',
-  requirePermission(PERMISSIONS.DATASOURCES_WRITE),
+  requireScopedPermission(PERMISSIONS.DATASOURCES_WRITE, (req) => ({ resource_type: 'datasource', resource_id: String(req.params.id) })),
   requireCriticalApproval({
     action: 'datasource.delete',
     actionLabel: 'Excluir datasource',
@@ -53,7 +67,25 @@ datasourcesRouter.delete(
   }),
   DatasourceController.remove,
 );
-datasourcesRouter.post('/:id/test', requirePermission(PERMISSIONS.DATASOURCES_QUERY), DatasourceController.testConnection);
-datasourcesRouter.get('/:id/schema', requirePermission(PERMISSIONS.DATASOURCES_READ), DatasourceController.getSchema);
-datasourcesRouter.post('/:id/query', requirePermission(PERMISSIONS.DATASOURCES_QUERY), validate(executeDatasourceQuerySchema), DatasourceController.executeQuery);
-datasourcesRouter.post('/:id/tables', requirePermission(PERMISSIONS.DATASOURCES_QUERY), validate(createDatasourceTableSchema), DatasourceController.createTable);
+datasourcesRouter.post(
+  '/:id/test',
+  requireScopedPermission(PERMISSIONS.DATASOURCES_QUERY, (req) => ({ resource_type: 'datasource', resource_id: String(req.params.id) })),
+  DatasourceController.testConnection,
+);
+datasourcesRouter.get(
+  '/:id/schema',
+  requireScopedPermission(PERMISSIONS.DATASOURCES_READ, (req) => ({ resource_type: 'datasource', resource_id: String(req.params.id) })),
+  DatasourceController.getSchema,
+);
+datasourcesRouter.post(
+  '/:id/query',
+  requireScopedPermission(PERMISSIONS.DATASOURCES_QUERY, (req) => ({ resource_type: 'datasource', resource_id: String(req.params.id) })),
+  validate(executeDatasourceQuerySchema),
+  DatasourceController.executeQuery,
+);
+datasourcesRouter.post(
+  '/:id/tables',
+  requireScopedPermission(PERMISSIONS.DATASOURCES_QUERY, (req) => ({ resource_type: 'datasource', resource_id: String(req.params.id) })),
+  validate(createDatasourceTableSchema),
+  DatasourceController.createTable,
+);

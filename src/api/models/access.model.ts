@@ -2,6 +2,14 @@ import { prisma } from '../../lib/prisma';
 import { AppError } from '../middlewares/error-handler';
 import { DEFAULT_ROLE_NAMES } from '../../core/auth/permissions';
 import { hashPassword } from '../../core/auth/auth.service';
+import {
+  invalidateScopeCache,
+  invalidateScopeCacheByRoleId,
+  listSubjectScopes,
+  replaceSubjectScopes,
+  resolveEffectiveScopes,
+  type ScopeResourceType,
+} from '../../core/auth/scope.service';
 
 function uniqueStrings(values: string[]) {
   return [...new Set(values.map((v) => v.trim()).filter(Boolean))];
@@ -217,6 +225,8 @@ export async function updateAccessRole(roleId: string, input: {
     });
   });
 
+  await invalidateScopeCacheByRoleId(roleId);
+
   return mapRole(updated);
 }
 
@@ -240,6 +250,7 @@ export async function deleteAccessRole(roleId: string) {
   }
 
   await prisma.role.delete({ where: { id: roleId } });
+  await invalidateScopeCacheByRoleId(roleId);
 }
 
 async function getFallbackRoleId() {
@@ -407,6 +418,8 @@ export async function updateAccessUser(userId: string, input: {
     });
   });
 
+  invalidateScopeCache({ user_ids: [userId] });
+
   return mapUser(updated);
 }
 
@@ -443,4 +456,81 @@ export async function deleteAccessUser(userId: string, actorUserId: string) {
   }
 
   await prisma.user.delete({ where: { id: userId } });
+  invalidateScopeCache({ user_ids: [userId] });
+}
+
+export async function getAccessUserScopes(userId: string) {
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { id: true } });
+  if (!user) throw new AppError('NOT_FOUND', 404, 'Usuario nao encontrado');
+  return listSubjectScopes('user', userId);
+}
+
+export async function updateAccessUserScopes(input: {
+  user_id: string;
+  scopes: Array<{
+    permission_key: string;
+    resource_type: ScopeResourceType;
+    resource_ids: string[];
+    denied_resource_ids?: string[];
+  }>;
+}) {
+  const user = await prisma.user.findUnique({ where: { id: input.user_id }, select: { id: true } });
+  if (!user) throw new AppError('NOT_FOUND', 404, 'Usuario nao encontrado');
+
+  try {
+    return await replaceSubjectScopes({
+      subject_type: 'user',
+      subject_id: input.user_id,
+      scopes: input.scopes,
+    });
+  } catch (err) {
+    if (err instanceof Error) {
+      throw new AppError('VALIDATION_ERROR', 422, err.message);
+    }
+    throw err;
+  }
+}
+
+export async function getAccessRoleScopes(roleId: string) {
+  const role = await prisma.role.findUnique({ where: { id: roleId }, select: { id: true } });
+  if (!role) throw new AppError('NOT_FOUND', 404, 'Role nao encontrada');
+  return listSubjectScopes('role', roleId);
+}
+
+export async function updateAccessRoleScopes(input: {
+  role_id: string;
+  scopes: Array<{
+    permission_key: string;
+    resource_type: ScopeResourceType;
+    resource_ids: string[];
+    denied_resource_ids?: string[];
+  }>;
+}) {
+  const role = await prisma.role.findUnique({ where: { id: input.role_id }, select: { id: true } });
+  if (!role) throw new AppError('NOT_FOUND', 404, 'Role nao encontrada');
+
+  try {
+    return await replaceSubjectScopes({
+      subject_type: 'role',
+      subject_id: input.role_id,
+      scopes: input.scopes,
+    });
+  } catch (err) {
+    if (err instanceof Error) {
+      throw new AppError('VALIDATION_ERROR', 422, err.message);
+    }
+    throw err;
+  }
+}
+
+export async function getMyEffectiveScopes(userId: string) {
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { id: true } });
+  if (!user) throw new AppError('NOT_FOUND', 404, 'Usuario nao encontrado');
+  const effective = await resolveEffectiveScopes(userId);
+  return {
+    user_id: userId,
+    role_ids: effective.role_ids,
+    scopes: effective.grouped,
+    cache_hit: effective.cache_hit,
+  };
 }

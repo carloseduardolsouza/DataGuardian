@@ -133,8 +133,14 @@ export async function listBackupJobs(
   filters: ListBackupJobsFilters,
   skip: number,
   limit: number,
+  allowedIds?: string[],
 ) {
+  if (allowedIds && allowedIds.length === 0) {
+    return { items: [], total: 0 };
+  }
+
   const where: Prisma.BackupJobWhereInput = {};
+  if (allowedIds) where.id = { in: allowedIds };
   if (filters.enabled             !== undefined) where.enabled             = filters.enabled === 'true';
   if (filters.datasource_id)       where.datasourceId       = filters.datasource_id;
   if (filters.storage_location_id) where.storageLocationId = filters.storage_location_id;

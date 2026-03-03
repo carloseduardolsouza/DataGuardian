@@ -446,8 +446,14 @@ export async function listDatasources(
   filters: ListDatasourcesFilters,
   skip: number,
   limit: number,
+  allowedIds?: string[],
 ) {
+  if (allowedIds && allowedIds.length === 0) {
+    return { items: [], total: 0 };
+  }
+
   const where: Prisma.DatasourceWhereInput = {};
+  if (allowedIds) where.id = { in: allowedIds };
   if (filters.type)    where.type    = filters.type as DatasourceType;
   if (filters.status)  where.status  = filters.status as DatasourceStatus;
   if (filters.enabled !== undefined) where.enabled = filters.enabled === 'true';

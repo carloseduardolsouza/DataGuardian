@@ -100,6 +100,10 @@
 
 - Associação N:N entre roles e permissões
 
+### `access_scopes`
+
+- Escopos por recurso para permissões (subject user/role, resource type/id, effect allow/deny)
+
 ### `auth_sessions`
 
 - Sessões autenticadas por token

@@ -173,15 +173,24 @@ const includeDefinition = {
   },
 } as const;
 
-export async function listDbSyncJobs(skip: number, limit: number) {
+export async function listDbSyncJobs(skip: number, limit: number, allowedIds?: string[]) {
+  if (allowedIds && allowedIds.length === 0) {
+    return { items: [], total: 0 };
+  }
+
+  const where: Prisma.DatabaseSyncJobWhereInput | undefined = allowedIds
+    ? { id: { in: allowedIds } }
+    : undefined;
+
   const [items, total] = await Promise.all([
     prisma.databaseSyncJob.findMany({
+      where,
       skip,
       take: limit,
       orderBy: { createdAt: 'desc' },
       include: includeDefinition,
     }),
-    prisma.databaseSyncJob.count(),
+    prisma.databaseSyncJob.count({ where }),
   ]);
 
   return {

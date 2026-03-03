@@ -258,6 +258,11 @@ O processamento é feito pelo `restore-worker` na `restore-queue`.
 - `PUT /api/access/users/:id`
 - `PUT /api/access/users/:id/password`
 - `DELETE /api/access/users/:id`
+- `GET /api/access/users/:id/scopes`
+- `PUT /api/access/users/:id/scopes`
+- `GET /api/access/roles/:id/scopes`
+- `PUT /api/access/roles/:id/scopes`
+- `GET /api/access/me/scopes`
 
 ## :bookmark: System
 

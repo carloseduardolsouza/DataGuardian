@@ -24,8 +24,7 @@ import { accessRouter } from './routes/access';
 import { auditLogsRouter } from './routes/audit-logs';
 import { criticalApprovalsRouter } from './routes/critical-approvals';
 import { integrationsRouter } from './routes/integrations';
-import { requireAuth, requirePermission } from './middlewares/auth';
-import { PERMISSIONS } from '../core/auth/permissions';
+import { requireAuth } from './middlewares/auth';
 import { auditTrailMiddleware } from './middlewares/audit-trail';
 import { getPrometheusMetricsText } from './models/metrics.model';
 
@@ -90,7 +89,7 @@ export function createApp() {
   app.use('/api/backups', backupsRouter);
   app.use('/api/audit-logs', auditLogsRouter);
   app.use('/api/critical-approvals', criticalApprovalsRouter);
-  app.use('/api/access', requirePermission(PERMISSIONS.ACCESS_MANAGE), accessRouter);
+  app.use('/api/access', accessRouter);
 
   const frontendCandidates = [
     path.join(process.cwd(), 'public'),
