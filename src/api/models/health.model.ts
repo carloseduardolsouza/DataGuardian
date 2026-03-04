@@ -49,7 +49,7 @@ export async function getSystemHealth() {
   const workers = getWorkersSnapshot();
   const redisAvailable = await ensureRedisAvailable();
   const redisStatus = redisAvailable ? 'ok' : 'error';
-  const queueDependentWorkers = new Set(['backup', 'restore', 'scheduler', 'db_sync']);
+  const queueDependentWorkers = new Set(['backup', 'restore', 'scheduler', 'db_sync', 'restore_drill']);
   const effectiveWorkers = Object.fromEntries(
     Object.entries(workers).map(([name, state]) => {
       if (!redisAvailable && queueDependentWorkers.has(name)) {
@@ -74,6 +74,7 @@ export async function getSystemHealth() {
         restore: effectiveWorkers.restore.status,
         scheduler: effectiveWorkers.scheduler.status,
         db_sync: effectiveWorkers.db_sync.status,
+        restore_drill: effectiveWorkers.restore_drill.status,
         health: effectiveWorkers.health.status,
         cleanup: effectiveWorkers.cleanup.status,
       },
@@ -94,6 +95,7 @@ export async function getSystemHealth() {
       restore: effectiveWorkers.restore,
       scheduler: effectiveWorkers.scheduler,
       db_sync: effectiveWorkers.db_sync,
+      restore_drill: effectiveWorkers.restore_drill,
       health: effectiveWorkers.health,
       cleanup: effectiveWorkers.cleanup,
     },

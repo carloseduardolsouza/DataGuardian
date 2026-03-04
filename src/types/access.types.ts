@@ -51,6 +51,7 @@ const scopeResourceTypeSchema = z.enum([
   'storage_location',
   'backup_job',
   'db_sync_job',
+  'restore_drill_job',
 ]);
 
 export const updateAccessScopesSchema = z.object({

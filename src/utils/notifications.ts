@@ -107,6 +107,8 @@ function typeEmoji(type: NotificationType) {
   if (type === 'storage_unreachable') return '📡';
   if (type === 'health_degraded') return '🩺';
   if (type === 'cleanup_completed') return '🧹';
+  if (type === 'restore_drill_success') return '🧪';
+  if (type === 'restore_drill_failed') return '💥';
   if (type === 'approval_requested') return '📝';
   if (type === 'approval_decided') return '✅';
   return '📣';

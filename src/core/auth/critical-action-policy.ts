@@ -9,6 +9,7 @@ export const CRITICAL_ACTION_PERMISSION_MAP = {
   'backup_job.run': PERMISSIONS.BACKUP_JOBS_RUN,
   'db_sync_job.delete': PERMISSIONS.DB_SYNC_JOBS_WRITE,
   'db_sync_job.run': PERMISSIONS.DB_SYNC_JOBS_RUN,
+  'restore_drill_job.run': PERMISSIONS.RESTORE_DRILL_JOBS_RUN,
   'execution.delete': PERMISSIONS.EXECUTIONS_CONTROL,
   'backup.restore': PERMISSIONS.BACKUPS_RESTORE,
   'backup.import_restore': PERMISSIONS.BACKUPS_RESTORE,

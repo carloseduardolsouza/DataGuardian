@@ -53,7 +53,7 @@ export async function getDashboardOverview() {
   const workers = getWorkersSnapshot();
   const redisAvailable = await ensureRedisAvailable();
   const redisStatus = redisAvailable ? 'ok' : 'error';
-  const queueDependentWorkers = new Set(['backup', 'restore', 'scheduler', 'db_sync']);
+  const queueDependentWorkers = new Set(['backup', 'restore', 'scheduler', 'db_sync', 'restore_drill']);
   const effectiveWorkers = Object.fromEntries(
     Object.entries(workers).map(([name, state]) => {
       if (!redisAvailable && queueDependentWorkers.has(name)) {
@@ -91,6 +91,8 @@ export async function getDashboardOverview() {
     datasourcesRaw,
     latestHealthChecks,
     weeklyExecutions,
+    drillLast30Days,
+    lastDrill,
   ] = await Promise.all([
     prisma.datasource.count(),
     prisma.datasource.count({ where: { status: 'healthy' } }),
@@ -145,12 +147,25 @@ export async function getDashboardOverview() {
       select: { createdAt: true, status: true },
       orderBy: { createdAt: 'asc' },
     }),
+    prisma.restoreDrillExecution.findMany({
+      where: { createdAt: { gte: addDays(new Date(), -30) } },
+      select: { status: true },
+    }),
+    prisma.restoreDrillExecution.findFirst({
+      orderBy: { createdAt: 'desc' },
+      select: { createdAt: true, status: true },
+    }),
   ]);
 
   const last24hTotal = executionsLast24h.length;
   const last24hSuccess = executionsLast24h.filter((e) => e.status === 'completed').length;
   const successRate24h = last24hTotal > 0
     ? Number(((last24hSuccess / last24hTotal) * 100).toFixed(1))
+    : 0;
+  const drill30dTotal = drillLast30Days.length;
+  const drill30dSuccess = drillLast30Days.filter((e) => e.status === 'completed').length;
+  const drill30dSuccessRate = drill30dTotal > 0
+    ? Number(((drill30dSuccess / drill30dTotal) * 100).toFixed(1))
     : 0;
 
   const healthCheckByDatasource = new Map<
@@ -223,6 +238,10 @@ export async function getDashboardOverview() {
       executions_failed_today: failedToday,
       success_rate_24h: successRate24h,
       executions_24h_total: last24hTotal,
+      restore_drill_30d_total: drill30dTotal,
+      restore_drill_30d_success_rate: drill30dSuccessRate,
+      restore_drill_last_execution_at: lastDrill?.createdAt.toISOString() ?? null,
+      restore_drill_last_status: lastDrill?.status ?? null,
     },
     services: {
       database: databaseStatus,
@@ -232,6 +251,7 @@ export async function getDashboardOverview() {
         restore: effectiveWorkers.restore.status,
         scheduler: effectiveWorkers.scheduler.status,
         db_sync: effectiveWorkers.db_sync.status,
+        restore_drill: effectiveWorkers.restore_drill.status,
         health: effectiveWorkers.health.status,
         cleanup: effectiveWorkers.cleanup.status,
       },

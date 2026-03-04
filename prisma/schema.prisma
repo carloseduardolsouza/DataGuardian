@@ -74,6 +74,8 @@ enum NotificationType {
   storage_unreachable
   health_degraded
   cleanup_completed
+  restore_drill_success
+  restore_drill_failed
   approval_requested
   approval_decided
 }
@@ -127,6 +129,15 @@ enum AccessScopeResourceType {
   storage_location
   backup_job
   db_sync_job
+  restore_drill_job
+}
+
+enum RestoreDrillExecutionStatus {
+  queued
+  running
+  completed
+  failed
+  cancelled
 }
 
 enum AccessScopeEffect {
@@ -157,6 +168,8 @@ model Datasource {
   targetSyncJobs   DatabaseSyncJob[]       @relation("SyncTargetDatasource")
   sourceSyncExecutions DatabaseSyncExecution[] @relation("SyncExecutionSourceDatasource")
   targetSyncExecutions DatabaseSyncExecution[] @relation("SyncExecutionTargetDatasource")
+  restoreDrillJobs RestoreDrillJob[]
+  restoreDrillExecutions RestoreDrillExecution[]
 
   @@map("datasources")
 }
@@ -176,6 +189,8 @@ model StorageLocation {
   backupExecutions BackupExecution[]
   healthChecks     StorageHealthCheck[]
   syncJobs         DatabaseSyncJob[]
+  restoreDrillJobs RestoreDrillJob[]
+  restoreDrillExecutions RestoreDrillExecution[]
 
   @@map("storage_locations")
 }
@@ -532,4 +547,56 @@ model DatabaseSyncExecution {
   @@index([backupExecutionId])
   @@index([restoreExecutionId])
   @@map("database_sync_executions")
+}
+
+model RestoreDrillJob {
+  id                 String   @id @default(uuid())
+  name               String   @db.VarChar(255)
+  datasourceId       String   @map("datasource_id")
+  storageLocationId  String?  @map("storage_location_id")
+  scheduleCron       String   @db.VarChar(100) @map("schedule_cron")
+  scheduleTimezone   String   @db.VarChar(50) @default("UTC") @map("schedule_timezone")
+  maxBackupAgeHours  Int      @default(168) @map("max_backup_age_hours")
+  runOnManual        Boolean  @default(true) @map("run_on_manual")
+  enabled            Boolean  @default(true)
+  lastExecutionAt    DateTime? @map("last_execution_at")
+  nextExecutionAt    DateTime? @map("next_execution_at")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  datasource       Datasource      @relation(fields: [datasourceId], references: [id])
+  storageLocation  StorageLocation? @relation(fields: [storageLocationId], references: [id], onDelete: SetNull)
+  executions       RestoreDrillExecution[]
+
+  @@index([nextExecutionAt])
+  @@index([datasourceId])
+  @@index([storageLocationId])
+  @@map("restore_drill_jobs")
+}
+
+model RestoreDrillExecution {
+  id                 String                     @id @default(uuid())
+  drillJobId         String                     @map("drill_job_id")
+  datasourceId       String                     @map("datasource_id")
+  storageLocationId  String?                    @map("storage_location_id")
+  status             RestoreDrillExecutionStatus @default(queued)
+  triggerSource      String                     @db.VarChar(20) @map("trigger_source")
+  startedAt          DateTime?                  @map("started_at")
+  finishedAt         DateTime?                  @map("finished_at")
+  durationSeconds    Int?                       @map("duration_seconds")
+  backupExecutionId  String?                    @map("backup_execution_id")
+  restoreExecutionId String?                    @map("restore_execution_id")
+  errorMessage       String?                    @map("error_message")
+  metadata           Json?
+  createdAt          DateTime                   @default(now()) @map("created_at")
+
+  drillJob         RestoreDrillJob  @relation(fields: [drillJobId], references: [id], onDelete: Cascade)
+  datasource       Datasource        @relation(fields: [datasourceId], references: [id])
+  storageLocation  StorageLocation?  @relation(fields: [storageLocationId], references: [id], onDelete: SetNull)
+
+  @@index([drillJobId, createdAt(sort: Desc)])
+  @@index([status])
+  @@index([restoreExecutionId])
+  @@index([backupExecutionId])
+  @@map("restore_drill_executions")
 }

@@ -113,6 +113,7 @@ export interface ApiSystemHealth {
       backup: string;
       restore: string;
       scheduler: string;
+      restore_drill: string;
       health: string;
       cleanup: string;
     };
@@ -233,6 +234,39 @@ export interface ApiDbSyncExecution {
   created_at: string;
 }
 
+export interface ApiRestoreDrillExecution {
+  id: string;
+  status: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';
+  trigger_source: 'manual' | 'scheduled';
+  started_at: string | null;
+  finished_at: string | null;
+  duration_seconds: number | null;
+  backup_execution_id: string | null;
+  restore_execution_id: string | null;
+  error_message: string | null;
+  metadata: Record<string, unknown> | null;
+  created_at: string;
+}
+
+export interface ApiRestoreDrillJob {
+  id: string;
+  name: string;
+  datasource_id: string;
+  storage_location_id: string | null;
+  schedule_cron: string;
+  schedule_timezone: string;
+  max_backup_age_hours: number;
+  run_on_manual: boolean;
+  enabled: boolean;
+  last_execution_at: string | null;
+  next_execution_at: string | null;
+  created_at: string;
+  updated_at: string;
+  datasource?: { id: string; name: string; type: DatasourceType };
+  storage_location?: { id: string; name: string; type: StorageLocationType };
+  last_drill_execution?: ApiRestoreDrillExecution;
+}
+
 export interface ApiDbSyncJob {
   id: string;
   name: string;
@@ -329,6 +363,8 @@ export interface ApiNotification {
     | 'storage_unreachable'
     | 'health_degraded'
     | 'cleanup_completed'
+    | 'restore_drill_success'
+    | 'restore_drill_failed'
     | 'approval_requested'
     | 'approval_decided';
   severity: 'info' | 'warning' | 'critical';
@@ -407,6 +443,10 @@ export interface ApiDashboardOverview {
     executions_failed_today: number;
     success_rate_24h: number;
     executions_24h_total: number;
+    restore_drill_30d_total: number;
+    restore_drill_30d_success_rate: number;
+    restore_drill_last_execution_at: string | null;
+    restore_drill_last_status: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled' | null;
   };
   services: {
     database: 'ok' | 'error';
@@ -415,6 +455,7 @@ export interface ApiDashboardOverview {
       backup: string;
       restore: string;
       scheduler: string;
+      restore_drill: string;
       health: string;
       cleanup: string;
     };
@@ -608,6 +649,7 @@ export type CriticalApprovalAction =
   | 'backup_job.run'
   | 'db_sync_job.delete'
   | 'db_sync_job.run'
+  | 'restore_drill_job.run'
   | 'execution.delete'
   | 'backup.restore'
   | 'backup.import_restore'
@@ -1217,6 +1259,66 @@ export const dbSyncJobsApi = {
     request<void>(`/db-sync-jobs/${id}`, {
       method: 'DELETE',
       headers: buildCriticalHeaders(auth),
+    }),
+};
+
+export const restoreDrillJobsApi = {
+  list: (params?: { page?: number; limit?: number }) => {
+    const qs = new URLSearchParams();
+    if (params?.page) qs.set('page', String(params.page));
+    if (params?.limit) qs.set('limit', String(params.limit));
+    const query = qs.toString();
+    return request<PaginatedResponse<ApiRestoreDrillJob>>(`/restore-drill-jobs${query ? `?${query}` : ''}`);
+  },
+
+  getById: (id: string) =>
+    request<ApiRestoreDrillJob>(`/restore-drill-jobs/${id}`),
+
+  create: (data: {
+    name: string;
+    datasource_id: string;
+    storage_location_id?: string | null;
+    schedule_cron: string;
+    schedule_timezone: string;
+    max_backup_age_hours?: number;
+    run_on_manual?: boolean;
+    enabled?: boolean;
+  }) =>
+    request<ApiRestoreDrillJob>('/restore-drill-jobs', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  update: (id: string, data: {
+    name?: string;
+    datasource_id?: string;
+    storage_location_id?: string | null;
+    schedule_cron?: string;
+    schedule_timezone?: string;
+    max_backup_age_hours?: number;
+    run_on_manual?: boolean;
+    enabled?: boolean;
+  }) =>
+    request<ApiRestoreDrillJob>(`/restore-drill-jobs/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  run: (id: string, auth?: CriticalAuthHeaders) =>
+    request<{ restore_drill_job_id: string; restore_drill_execution_id: string; status: string; message: string }>(
+      `/restore-drill-jobs/${id}/run`,
+      {
+        method: 'POST',
+        headers: buildCriticalHeaders(auth),
+      },
+    ),
+
+  executions: (id: string) =>
+    request<{ data: ApiRestoreDrillExecution[] }>(`/restore-drill-jobs/${id}/executions`),
+
+  remove: (id: string) =>
+    request<void>(`/restore-drill-jobs/${id}`, {
+      method: 'DELETE',
     }),
 };
 

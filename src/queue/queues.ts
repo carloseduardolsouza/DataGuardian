@@ -8,6 +8,7 @@ export const QueueName = {
   backup: 'backup-queue',
   restore: 'restore-queue',
   dbSync: 'db-sync-queue',
+  restoreDrill: 'restore-drill-queue',
   health: 'health-queue',
   cleanup: 'cleanup-queue',
   notification: 'notification-queue',
@@ -22,6 +23,9 @@ export interface RestoreQueueJobData {
 export interface DbSyncQueueJobData {
   syncExecutionId: string;
 }
+export interface RestoreDrillQueueJobData {
+  drillExecutionId: string;
+}
 
 let backupQueue: Queue<BackupQueueJobData, void, 'backup'> | null = null;
 let backupQueueEvents: QueueEvents | null = null;
@@ -29,6 +33,8 @@ let restoreQueue: Queue<RestoreQueueJobData, void, 'restore'> | null = null;
 let restoreQueueEvents: QueueEvents | null = null;
 let dbSyncQueue: Queue<DbSyncQueueJobData, void, 'db-sync'> | null = null;
 let dbSyncQueueEvents: QueueEvents | null = null;
+let restoreDrillQueue: Queue<RestoreDrillQueueJobData, void, 'restore-drill'> | null = null;
+let restoreDrillQueueEvents: QueueEvents | null = null;
 
 function getBackupQueue() {
   if (!backupQueue) {
@@ -84,6 +90,24 @@ function getDbSyncQueueEvents() {
   return dbSyncQueueEvents;
 }
 
+function getRestoreDrillQueue() {
+  if (!restoreDrillQueue) {
+    restoreDrillQueue = new Queue<RestoreDrillQueueJobData, void, 'restore-drill'>(QueueName.restoreDrill, {
+      connection: getBullConnection(),
+    });
+  }
+  return restoreDrillQueue;
+}
+
+function getRestoreDrillQueueEvents() {
+  if (!restoreDrillQueueEvents) {
+    restoreDrillQueueEvents = new QueueEvents(QueueName.restoreDrill, {
+      connection: getBullConnection(),
+    });
+  }
+  return restoreDrillQueueEvents;
+}
+
 const baseBackupOptions: JobsOptions = {
   attempts: 3,
   backoff: { type: 'exponential', delay: 30_000 },
@@ -99,6 +123,12 @@ const baseRestoreOptions: JobsOptions = {
 const baseDbSyncOptions: JobsOptions = {
   attempts: 2,
   backoff: { type: 'exponential', delay: 30_000 },
+  removeOnComplete: { count: 200 },
+  removeOnFail: { count: 300 },
+};
+const baseRestoreDrillOptions: JobsOptions = {
+  attempts: 2,
+  backoff: { type: 'exponential', delay: 20_000 },
   removeOnComplete: { count: 200 },
   removeOnFail: { count: 300 },
 };
@@ -206,6 +236,40 @@ export function onDbSyncQueueEvent(
   events.on(event, handler as never);
 }
 
+export async function enqueueRestoreDrillExecution(
+  drillExecutionId: string,
+  origin: 'manual' | 'scheduled',
+) {
+  const queue = getRestoreDrillQueue();
+  try {
+    return await queue.add(
+      'restore-drill',
+      { drillExecutionId },
+      {
+        ...baseRestoreDrillOptions,
+        priority: origin === 'manual' ? 1 : 5,
+        jobId: drillExecutionId,
+      },
+    );
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes('Job') && msg.includes('already exists')) {
+      logger.info({ drillExecutionId }, 'Execucao ja enfileirada no restore-drill-queue');
+      const existing = await queue.getJob(drillExecutionId);
+      if (existing) return existing;
+    }
+    throw err;
+  }
+}
+
+export function onRestoreDrillQueueEvent(
+  event: 'error' | 'failed',
+  handler: (...args: any[]) => void,
+) {
+  const events = getRestoreDrillQueueEvents();
+  events.on(event, handler as never);
+}
+
 export async function closeQueues() {
   const closeOps: Array<Promise<void>> = [];
   if (backupQueue) closeOps.push(backupQueue.close());
@@ -214,6 +278,8 @@ export async function closeQueues() {
   if (restoreQueueEvents) closeOps.push(restoreQueueEvents.close());
   if (dbSyncQueue) closeOps.push(dbSyncQueue.close());
   if (dbSyncQueueEvents) closeOps.push(dbSyncQueueEvents.close());
+  if (restoreDrillQueue) closeOps.push(restoreDrillQueue.close());
+  if (restoreDrillQueueEvents) closeOps.push(restoreDrillQueueEvents.close());
   await Promise.all(closeOps);
   backupQueue = null;
   backupQueueEvents = null;
@@ -221,6 +287,8 @@ export async function closeQueues() {
   restoreQueueEvents = null;
   dbSyncQueue = null;
   dbSyncQueueEvents = null;
+  restoreDrillQueue = null;
+  restoreDrillQueueEvents = null;
 }
 
 export function getBackupWorkerConcurrency() {

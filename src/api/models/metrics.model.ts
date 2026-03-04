@@ -28,12 +28,16 @@ export async function getPrometheusMetricsText() {
     lines.push(metricLine('dg_worker_status', worker.status === 'running' ? 1 : 0, { worker: workerName }));
   }
 
-  const [jobsByEnabled, executionsByStatus, storagesByStatusAndType, datasourcesByStatus, redisUp] = await Promise.all([
+  const [jobsByEnabled, executionsByStatus, restoreDrillByStatus, storagesByStatusAndType, datasourcesByStatus, redisUp] = await Promise.all([
     prisma.backupJob.groupBy({
       by: ['enabled'],
       _count: { _all: true },
     }),
     prisma.backupExecution.groupBy({
+      by: ['status'],
+      _count: { _all: true },
+    }),
+    prisma.restoreDrillExecution.groupBy({
       by: ['status'],
       _count: { _all: true },
     }),
@@ -58,6 +62,12 @@ export async function getPrometheusMetricsText() {
   lines.push('# TYPE dg_backup_executions_total gauge');
   for (const row of executionsByStatus) {
     lines.push(metricLine('dg_backup_executions_total', row._count._all, { status: row.status }));
+  }
+
+  lines.push('# HELP dg_restore_drill_executions_total Total restore drill executions grouped by status');
+  lines.push('# TYPE dg_restore_drill_executions_total gauge');
+  for (const row of restoreDrillByStatus) {
+    lines.push(metricLine('dg_restore_drill_executions_total', row._count._all, { status: row.status }));
   }
 
   lines.push('# HELP dg_storage_locations_total Total storage locations grouped by type and status');
@@ -86,7 +96,7 @@ export async function getPrometheusMetricsText() {
   lines.push('# TYPE dg_queue_jobs_failed gauge');
 
   if (redisUp) {
-    const queueNames = [QueueName.backup, QueueName.restore];
+    const queueNames = [QueueName.backup, QueueName.restore, QueueName.restoreDrill];
     for (const queueName of queueNames) {
       const queue = new Queue(queueName, { connection: getBullConnection() });
       try {
@@ -108,6 +118,10 @@ export async function getPrometheusMetricsText() {
     lines.push(metricLine('dg_queue_jobs_active', 0, { queue: QueueName.restore }));
     lines.push(metricLine('dg_queue_jobs_delayed', 0, { queue: QueueName.restore }));
     lines.push(metricLine('dg_queue_jobs_failed', 0, { queue: QueueName.restore }));
+    lines.push(metricLine('dg_queue_jobs_waiting', 0, { queue: QueueName.restoreDrill }));
+    lines.push(metricLine('dg_queue_jobs_active', 0, { queue: QueueName.restoreDrill }));
+    lines.push(metricLine('dg_queue_jobs_delayed', 0, { queue: QueueName.restoreDrill }));
+    lines.push(metricLine('dg_queue_jobs_failed', 0, { queue: QueueName.restoreDrill }));
   }
 
   return `${lines.join('\n')}\n`;

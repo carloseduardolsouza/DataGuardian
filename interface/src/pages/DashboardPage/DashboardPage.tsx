@@ -16,6 +16,7 @@ import DatasourcesPage from '../DatasourcesPage/DatasourcesPage';
 import StoragePage from '../StoragePage/StoragePage';
 import BackupJobsPage from '../BackupJobsPage/BackupJobsPage';
 import SyncPage from '../SyncPage/SyncPage';
+import RestoreDrillPage from '../RestoreDrillPage/RestoreDrillPage';
 import BackupsPage from '../BackupsPage/BackupsPage';
 import ExecutionsPage from '../ExecutionsPage/ExecutionsPage';
 import HealthPage from '../HealthPage/HealthPage';
@@ -48,6 +49,7 @@ const PAGE_TITLES: Record<NavKey, { title: string; sub: string }> = {
   storage: { title: 'Storage', sub: 'Locais de armazenamento' },
   'backup-jobs': { title: 'Backup Jobs', sub: 'Gerencie seus jobs de backup' },
   sync: { title: 'Sincronizacao', sub: 'Mantenha bancos pareados com backup + restore automatico' },
+  'restore-drill': { title: 'Restore Drill', sub: 'Valide periodicamente recuperabilidade com restore em modo verificacao' },
   backups: { title: 'Backups', sub: 'Explore backups por banco e execute restore' },
   executions: { title: 'Execucoes', sub: 'Historico de execucoes' },
   health: { title: 'Health', sub: 'Monitoramento de saude' },
@@ -153,6 +155,7 @@ export default function DashboardPage({
             || activePage === 'storage'
             || activePage === 'backup-jobs'
             || activePage === 'sync'
+            || activePage === 'restore-drill'
             || activePage === 'backups'
             || activePage === 'executions'
             || activePage === 'health'
@@ -170,6 +173,7 @@ export default function DashboardPage({
           {activePage === 'storage' && <StoragePage isAdmin={isAdmin} />}
           {activePage === 'backup-jobs' && <BackupJobsPage isAdmin={isAdmin} permissions={permissions} />}
           {activePage === 'sync' && <SyncPage permissions={permissions} />}
+          {activePage === 'restore-drill' && <RestoreDrillPage permissions={permissions} />}
           {activePage === 'backups' && <BackupsPage permissions={permissions} isAdmin={isAdmin} />}
           {activePage === 'executions' && <ExecutionsPage isAdmin={isAdmin} />}
           {activePage === 'health' && <HealthPage />}
@@ -180,7 +184,7 @@ export default function DashboardPage({
           {activePage === 'approvals' && <ApprovalsPage />}
           {activePage === 'access' && <AccessPage />}
           {activePage === 'settings' && <SettingsPage canManageAccess={false} />}
-          {activePage !== 'dashboard' && activePage !== 'datasources' && activePage !== 'storage' && activePage !== 'backup-jobs' && activePage !== 'sync' && activePage !== 'backups' && activePage !== 'executions' && activePage !== 'health' && activePage !== 'notifications' && activePage !== 'audit' && activePage !== 'approvals' && activePage !== 'access' && activePage !== 'settings' && (
+          {activePage !== 'dashboard' && activePage !== 'datasources' && activePage !== 'storage' && activePage !== 'backup-jobs' && activePage !== 'sync' && activePage !== 'restore-drill' && activePage !== 'backups' && activePage !== 'executions' && activePage !== 'health' && activePage !== 'notifications' && activePage !== 'audit' && activePage !== 'approvals' && activePage !== 'access' && activePage !== 'settings' && (
             <EmptyPage page={activePage} />
           )}
         </main>
@@ -343,6 +347,29 @@ function DashboardContent() {
             </div>
           </div>
         ))}
+      </div>
+
+      <div className={styles.section}>
+        <div className={styles.sectionHeader}>
+          <h2 className={styles.sectionTitle}>Restore Drill (30 dias)</h2>
+        </div>
+        <div className={styles.jobItem}>
+          <div className={styles.jobItemLeft}>
+            <span className={styles.jobItemName}>Taxa de sucesso</span>
+            <span className={styles.jobItemMeta}>
+              {(data?.stats.restore_drill_30d_success_rate ?? 0).toFixed(1)}% em {data?.stats.restore_drill_30d_total ?? 0} execucoes
+            </span>
+          </div>
+          <StatusBadge
+            status={(data?.stats.restore_drill_last_status ?? 'unknown') === 'completed' ? 'success' : (data?.stats.restore_drill_last_status ?? 'warning')}
+            label={data?.stats.restore_drill_last_status ? `Ultimo: ${data.stats.restore_drill_last_status}` : 'Sem execucoes'}
+          />
+        </div>
+        <div className={styles.jobItem}>
+          <span className={styles.textMuted}>
+            Ultima execucao: {data?.stats.restore_drill_last_execution_at ? new Date(data.stats.restore_drill_last_execution_at).toLocaleString('pt-BR') : 'nunca'}
+          </span>
+        </div>
       </div>
 
       <div className={styles.section}>

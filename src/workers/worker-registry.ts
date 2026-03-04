@@ -7,9 +7,9 @@ export interface WorkerState {
   lastError: string | null;
 }
 
-export type WorkerName = 'backup' | 'restore' | 'scheduler' | 'health' | 'cleanup' | 'db_sync';
+export type WorkerName = 'backup' | 'restore' | 'scheduler' | 'health' | 'cleanup' | 'db_sync' | 'restore_drill';
 
-const WORKER_NAMES: WorkerName[] = ['backup', 'restore', 'scheduler', 'health', 'cleanup', 'db_sync'];
+const WORKER_NAMES: WorkerName[] = ['backup', 'restore', 'scheduler', 'health', 'cleanup', 'db_sync', 'restore_drill'];
 
 const initialState = (): WorkerState => ({
   status: 'stopped',
@@ -59,6 +59,7 @@ export function getWorkersSnapshot() {
     health: initialState(),
     cleanup: initialState(),
     db_sync: initialState(),
+    restore_drill: initialState(),
   };
 
   for (const name of WORKER_NAMES) {

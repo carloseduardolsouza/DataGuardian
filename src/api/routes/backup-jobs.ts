@@ -59,10 +59,15 @@ backupJobsRouter.post(
   "/:id/run",
   requireScopedPermission(PERMISSIONS.BACKUP_JOBS_RUN, async (req) => {
     const jobId = String(req.params.id);
-    const job = await prisma.backupJob.findUnique({
-      where: { id: jobId },
-      select: { datasourceId: true, storageLocationId: true },
-    });
+    let job: { datasourceId: string; storageLocationId: string } | null = null;
+    try {
+      job = await prisma.backupJob.findUnique({
+        where: { id: jobId },
+        select: { datasourceId: true, storageLocationId: true },
+      });
+    } catch {
+      return [{ resource_type: 'backup_job', resource_id: jobId }];
+    }
     if (!job) return [{ resource_type: 'backup_job', resource_id: jobId }];
     return [
       { resource_type: 'backup_job', resource_id: jobId },

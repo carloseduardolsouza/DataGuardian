@@ -26,6 +26,7 @@ export type NavKey =
   | 'storage'
   | 'backup-jobs'
   | 'sync'
+  | 'restore-drill'
   | 'backups'
   | 'executions'
   | 'health'
@@ -41,6 +42,7 @@ export const ROUTE_PATHS: Record<NavKey, string> = {
   storage: '/storage',
   'backup-jobs': '/backup-jobs',
   sync: '/sync',
+  'restore-drill': '/restore-drill',
   backups: '/backups',
   executions: '/executions',
   health: '/health-check',
@@ -75,6 +77,7 @@ const mainNav: NavItem[] = [
   { key: 'storage', label: 'Storage', icon: <ServerIcon />, permission: PERMISSIONS.STORAGE_READ },
   { key: 'backup-jobs', label: 'Backup Jobs', icon: <JobsIcon />, permission: PERMISSIONS.BACKUP_JOBS_READ },
   { key: 'sync', label: 'Sincronizacao', icon: <PlugIcon />, permission: PERMISSIONS.DB_SYNC_JOBS_READ },
+  { key: 'restore-drill', label: 'Restore Drill', icon: <HealthIcon />, permission: PERMISSIONS.RESTORE_DRILL_JOBS_READ },
   { key: 'backups', label: 'Backups', icon: <FolderIcon />, permission: PERMISSIONS.BACKUPS_READ },
   { key: 'executions', label: 'Execucoes', icon: <PlayIcon />, permission: PERMISSIONS.EXECUTIONS_READ },
 ];

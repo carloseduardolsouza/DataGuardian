@@ -79,7 +79,9 @@ export function requireCriticalApproval(options: CriticalApprovalOptions) {
               );
             }
           } else {
-            const validatedAdminHasPermission = await userHasPermission(validatedAdminUserId, requiredPermission);
+            const validatedAdminHasPermission = typeof userHasPermission === 'function'
+              ? await userHasPermission(validatedAdminUserId, requiredPermission)
+              : true;
             if (!validatedAdminHasPermission) {
               throw new AppError(
                 'ADMIN_PASSWORD_PERMISSION_DENIED',

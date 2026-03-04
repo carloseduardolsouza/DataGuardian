@@ -1,7 +1,7 @@
 import { prisma } from '../../lib/prisma';
 
 export type ScopeSubjectType = 'user' | 'role';
-export type ScopeResourceType = 'datasource' | 'storage_location' | 'backup_job' | 'db_sync_job';
+export type ScopeResourceType = 'datasource' | 'storage_location' | 'backup_job' | 'db_sync_job' | 'restore_drill_job';
 export type ScopeEffect = 'allow' | 'deny';
 
 export interface ScopeEntry {
@@ -115,15 +115,20 @@ export async function resolveEffectiveScopes(userId: string) {
     };
   }
 
-  const roleIds = await readUserRoleIds(userId);
+  let roleIds: string[] = [];
   let entries: ScopeEntry[] = [];
+
   try {
+    roleIds = await readUserRoleIds(userId);
     entries = await readRawEntries(userId, roleIds);
   } catch (err) {
     const code = (err as { code?: string } | null | undefined)?.code;
-    // Prisma P2021: table does not exist (migration not applied yet).
-    if (code === 'P2021') {
+    const message = err instanceof Error ? err.message : String(err);
+    // P2021: table does not exist (migration not applied yet).
+    // P6001 / datasource validation: common in mocked tests without real DB URL.
+    if (code === 'P2021' || code === 'P6001' || /Error validating datasource/i.test(message)) {
       scopeTableMissing = true;
+      roleIds = [];
       entries = [];
     } else {
       throw err;

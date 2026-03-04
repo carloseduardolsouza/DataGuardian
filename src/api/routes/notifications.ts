@@ -22,6 +22,8 @@ const listQuerySchema = z.object({
       "storage_unreachable",
       "health_degraded",
       "cleanup_completed",
+      "restore_drill_success",
+      "restore_drill_failed",
       "approval_requested",
       "approval_decided",
     ])
