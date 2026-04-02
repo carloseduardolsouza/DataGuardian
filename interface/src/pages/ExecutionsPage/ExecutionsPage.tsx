@@ -325,7 +325,7 @@ export default function ExecutionsPage({ isAdmin = false }: { isAdmin?: boolean 
             ['all', 'Todas', counts.all],
             ['running', 'Executando', counts.running],
             ['queued', 'Na fila', counts.queued],
-            ['completed', 'ConcluÃ­das', counts.completed],
+            ['completed', 'Concluídas', counts.completed],
             ['failed', 'Com erro', counts.failed],
             ['cancelled', 'Canceladas', counts.cancelled],
           ] as [StatusFilter, string, number][]).map(([status, label, count]) => (

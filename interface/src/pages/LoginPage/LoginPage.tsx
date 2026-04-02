@@ -64,7 +64,7 @@ export default function LoginPage({ onLogin, theme, onToggleTheme }: Props) {
               type="text"
               value={username}
               onChange={(event) => setUsername(event.target.value)}
-              placeholder="admin"
+              placeholder="Username"
               autoComplete="username"
               autoFocus
               disabled={loading}
@@ -79,7 +79,7 @@ export default function LoginPage({ onLogin, theme, onToggleTheme }: Props) {
               type="password"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
-              placeholder="••••••••"
+              placeholder="Senha"
               autoComplete="current-password"
               disabled={loading}
             />
