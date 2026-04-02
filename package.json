@@ -1,10 +1,10 @@
 {
   "name": "dataguardian",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Self-hosted open-source backup manager for databases and files",
   "main": "dist/index.js",
   "scripts": {
-    "dev": "concurrently --names \"API,UI\" --prefix-colors \"blue,magenta\" --kill-others-on-fail \"tsx watch --env-file=.env src/index.ts\" \"npm run dev --prefix interface\"",
+    "dev": "concurrently --names \"API,UI\" --prefix-colors \"blue,magenta\" --kill-others-on-fail \"tsx watch --env-file=.env src/index.ts\" \"node scripts/dev-ui.cjs\"",
     "build": "npm run build:api && npm run build:ui",
     "build:api": "tsc",
     "build:ui": "npm run build --prefix interface",

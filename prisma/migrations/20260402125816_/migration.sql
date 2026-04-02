@@ -1,0 +1,2 @@
+-- RenameIndex
+ALTER INDEX "access_scopes_subject_type_subject_id_permission_key_resourc_ke" RENAME TO "access_scopes_subject_type_subject_id_permission_key_resour_key";

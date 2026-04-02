@@ -25,6 +25,8 @@ COPY interface ./interface
 
 RUN npm run db:generate
 RUN npm run build:api
+ARG SUB_PATH=
+ENV SUB_PATH=${SUB_PATH}
 ENV VITE_ROUTER_MODE=browser
 RUN npm run build:ui
 RUN test -f /app/interface/dist/index.html

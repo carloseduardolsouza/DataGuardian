@@ -697,9 +697,19 @@ export class ApiRequestError extends Error {
   }
 }
 
-// Ã¢â€â‚¬Ã¢â€â‚¬ Base request Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+declare const __APP_SUB_PATH__: string;
 
-const BASE = '/api';
+declare global {
+  interface Window {
+    __APP_CONFIG__?: {
+      subPath?: string;
+    };
+  }
+}
+
+const subPath = (window.__APP_CONFIG__?.subPath || __APP_SUB_PATH__ || '').trim();
+const normalizedSubPath = subPath && subPath !== '/' ? subPath.replace(/\/+$/, '') : '';
+const BASE = `${normalizedSubPath}/api`;
 
 type RequestOptions = RequestInit & { skipErrorToast?: boolean };
 

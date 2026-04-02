@@ -41,6 +41,8 @@ npm run db:generate
 npm run dev
 ```
 
+O script aguarda o endpoint `/health` da API antes de subir o Vite, evitando erros de proxy durante o boot inicial.
+
 ## :bookmark: Scripts principais (`package.json`)
 
 - `npm run dev`

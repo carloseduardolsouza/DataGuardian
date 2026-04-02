@@ -31,6 +31,8 @@ import { getPrometheusMetricsText } from './models/metrics.model';
 
 export function createApp() {
   const app = express();
+  const scopedApp = express();
+  const subPath = config.subPath;
   const corsOrigins = config.cors.origins
     .split(',')
     .map((origin) => origin.trim())
@@ -74,24 +76,32 @@ export function createApp() {
     }
   });
 
-  app.use('/api/integrations', integrationsRouter);
-  app.use('/api', auditTrailMiddleware);
-  app.use('/api/auth', authRouter);
-  app.use('/api', requireAuth);
-  app.use('/api/datasources', datasourcesRouter);
-  app.use('/api/storage-locations', storageLocationsRouter);
-  app.use('/api/backup-jobs', backupJobsRouter);
-  app.use('/api/db-sync-jobs', dbSyncJobsRouter);
-  app.use('/api/restore-drill-jobs', restoreDrillJobsRouter);
-  app.use('/api/executions', executionsRouter);
-  app.use('/api/health', healthRouter);
-  app.use('/api/notifications', notificationsRouter);
-  app.use('/api/system', systemRouter);
-  app.use('/api/dashboard', dashboardRouter);
-  app.use('/api/backups', backupsRouter);
-  app.use('/api/audit-logs', auditLogsRouter);
-  app.use('/api/critical-approvals', criticalApprovalsRouter);
-  app.use('/api/access', accessRouter);
+  scopedApp.get('/app-config.js', (_req: Request, res: Response) => {
+    res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-store');
+    res.status(200).send(
+      `window.__APP_CONFIG__ = ${JSON.stringify({ subPath })};`,
+    );
+  });
+
+  scopedApp.use('/api/integrations', integrationsRouter);
+  scopedApp.use('/api', auditTrailMiddleware);
+  scopedApp.use('/api/auth', authRouter);
+  scopedApp.use('/api', requireAuth);
+  scopedApp.use('/api/datasources', datasourcesRouter);
+  scopedApp.use('/api/storage-locations', storageLocationsRouter);
+  scopedApp.use('/api/backup-jobs', backupJobsRouter);
+  scopedApp.use('/api/db-sync-jobs', dbSyncJobsRouter);
+  scopedApp.use('/api/restore-drill-jobs', restoreDrillJobsRouter);
+  scopedApp.use('/api/executions', executionsRouter);
+  scopedApp.use('/api/health', healthRouter);
+  scopedApp.use('/api/notifications', notificationsRouter);
+  scopedApp.use('/api/system', systemRouter);
+  scopedApp.use('/api/dashboard', dashboardRouter);
+  scopedApp.use('/api/backups', backupsRouter);
+  scopedApp.use('/api/audit-logs', auditLogsRouter);
+  scopedApp.use('/api/critical-approvals', criticalApprovalsRouter);
+  scopedApp.use('/api/access', accessRouter);
 
   const frontendCandidates = [
     path.join(process.cwd(), 'public'),
@@ -104,16 +114,25 @@ export function createApp() {
   const hasFrontendBuild = Boolean(frontendDistPath && frontendIndexPath && existsSync(frontendIndexPath));
 
   if (hasFrontendBuild && frontendDistPath && frontendIndexPath) {
-    app.use(express.static(frontendDistPath));
+    scopedApp.use(express.static(frontendDistPath));
 
-    app.get('*', (req: Request, res: Response, next) => {
+    scopedApp.get('*', (req: Request, res: Response, next) => {
       if (req.path.startsWith('/api/')) return next();
       if (req.path === '/api') return next();
-      if (req.path === '/health' || req.path === '/metrics') return next();
       if (req.path.startsWith('/assets/')) return next();
       if (/\.[a-zA-Z0-9]+$/.test(req.path)) return next();
       res.sendFile(frontendIndexPath);
     });
+  }
+
+  if (subPath) {
+    app.use(subPath, scopedApp);
+
+    app.get('/', (_req: Request, res: Response) => {
+      res.redirect(subPath);
+    });
+  } else {
+    app.use(scopedApp);
   }
 
   app.use((_req: Request, res: Response) => {

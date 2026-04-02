@@ -21,12 +21,17 @@ function buildRedisUrl(rawUrl: string, password?: string) {
 const redisPassword = process.env.REDIS_PASSWORD?.trim();
 const redisUrl = buildRedisUrl(process.env.REDIS_URL ?? 'redis://localhost:6379', redisPassword);
 const cpuCount = Math.max(1, cpus().length);
+const rawSubPath = process.env.SUB_PATH?.trim() ?? '';
+const normalizedSubPath = rawSubPath
+  ? `/${rawSubPath.replace(/^\/+|\/+$/g, '')}`
+  : '';
 
 export const config = {
   env: (process.env.NODE_ENV ?? 'development') as 'development' | 'production' | 'test',
   host: process.env.HOST ?? '0.0.0.0',
   port: parseInt(process.env.PORT ?? '3000', 10),
   logLevel: process.env.LOG_LEVEL ?? 'info',
+  subPath: normalizedSubPath,
 
   database: {
     url: process.env.DATABASE_URL ?? '',
