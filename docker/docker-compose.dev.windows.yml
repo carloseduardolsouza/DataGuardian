@@ -1,0 +1,32 @@
+﻿services:
+  postgres:
+    image: postgres:16
+    container_name: dataguardian-dev-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: backup_manager
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: DataGuardian123!
+    ports:
+      - "5432:5432"
+
+  redis:
+    image: redis:7-alpine
+    container_name: dataguardian-dev-redis
+    restart: unless-stopped
+    command: >
+      sh -c "
+      redis-server
+      --requirepass ${REDIS_PASSWORD:-redis123}
+      --save 60 1
+      --loglevel warning
+      "
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - "${REDIS_DATA_PATH:-./docker-data/redis}:/data"
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a ${REDIS_PASSWORD:-redis123} ping | grep PONG"]
+      interval: 10s
+      timeout: 3s
+      retries: 5

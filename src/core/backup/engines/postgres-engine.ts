@@ -1,6 +1,8 @@
 import { BackupEngine, EngineRunCallbacks, getNumber, getRequiredString, spawnCommandToFile } from './base-engine';
 import { Client as PostgresClient } from 'pg';
+import * as path from 'node:path';
 import { buildPostgresDumpRecoveryMessage, listContainerRuntimeCandidates } from './postgres-dump-strategy';
+import { tryAutoInstallBinary } from '../../../utils/binary-installer';
 
 function parseServerMajorFromVersionNum(value: string) {
   const parsed = Number.parseInt(value, 10);
@@ -72,6 +74,7 @@ export class PostgresBackupEngine implements BackupEngine {
     ];
     let lastContainerError: string | undefined;
     let hasContainerRuntime = false;
+    const runtimeInstallAttempted = new Set<string>();
 
     for (const runtime of runtimes) {
       callbacks?.onEngineLog?.(`[engine] Executando pg_dump via container runtime '${runtime}' (postgres:${dockerTag})`);
@@ -87,6 +90,37 @@ export class PostgresBackupEngine implements BackupEngine {
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         if (message.includes(`Binario '${runtime}' nao encontrado no PATH`)) {
+          const runtimeName = path.basename(runtime).replace(/\.exe$/i, '').toLowerCase();
+          if (!runtimeInstallAttempted.has(runtimeName)) {
+            runtimeInstallAttempted.add(runtimeName);
+            callbacks?.onEngineLog?.(
+              `[engine] Runtime '${runtime}' ausente. Tentando instalacao automatica de '${runtimeName}'...`,
+            );
+            const installed = await tryAutoInstallBinary(
+              runtime,
+              (line) => callbacks?.onEngineLog?.(`[installer] ${line}`),
+            );
+            if (installed) {
+              callbacks?.onEngineLog?.(
+                `[engine] Instalacao de runtime '${runtimeName}' concluida. Repetindo tentativa com '${runtime}'.`,
+              );
+              try {
+                await spawnCommandToFile({
+                  command: runtime,
+                  args: containerArgs,
+                  outputFile,
+                  allowAutoInstall: false,
+                  callbacks,
+                });
+                return { extension: '.dump' };
+              } catch (retryErr) {
+                const retryMessage = retryErr instanceof Error ? retryErr.message : String(retryErr);
+                hasContainerRuntime = true;
+                lastContainerError = retryMessage;
+                callbacks?.onEngineLog?.(`[engine] Runtime '${runtime}' falhou apos instalacao: ${retryMessage}`);
+              }
+            }
+          }
           continue;
         }
         hasContainerRuntime = true;

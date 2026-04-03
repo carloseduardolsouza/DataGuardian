@@ -3,12 +3,7 @@ FROM node:20-bookworm-slim AS builder
 WORKDIR /app
 
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends openssl ca-certificates wget gnupg \
-  && install -d /etc/apt/keyrings \
-  && wget -qO- https://www.postgresql.org/media/keys/ACCC4CF8.asc | gpg --dearmor -o /etc/apt/keyrings/postgresql.gpg \
-  && echo "deb [signed-by=/etc/apt/keyrings/postgresql.gpg] http://apt.postgresql.org/pub/repos/apt bookworm-pgdg main" > /etc/apt/sources.list.d/pgdg.list \
-  && apt-get update \
-  && apt-get install -y --no-install-recommends postgresql-client-16 \
+  && apt-get install -y --no-install-recommends openssl ca-certificates curl wget gnupg \
   && rm -rf /var/lib/apt/lists/*
 
 COPY package*.json ./
@@ -38,7 +33,21 @@ WORKDIR /app
 ENV NODE_ENV=production
 
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends openssl ca-certificates wget \
+  && apt-get install -y --no-install-recommends openssl ca-certificates curl wget gnupg tar gzip zstd lz4 default-mysql-client \
+  && install -d /etc/apt/keyrings \
+  && curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | gpg --dearmor --yes -o /etc/apt/keyrings/postgresql.gpg \
+  && echo "deb [signed-by=/etc/apt/keyrings/postgresql.gpg] https://apt.postgresql.org/pub/repos/apt bookworm-pgdg main" > /etc/apt/sources.list.d/pgdg.list \
+  && apt-get update \
+  && apt-get install -y --no-install-recommends postgresql-client-16 \
+  && ln -sf /usr/lib/postgresql/16/bin/pg_dump /usr/local/bin/pg_dump \
+  && ln -sf /usr/lib/postgresql/16/bin/pg_restore /usr/local/bin/pg_restore \
+  && pg_dump --version \
+  && pg_restore --version \
+  && mysqldump --version \
+  && mysql --version \
+  && zstd --version \
+  && lz4 --version \
+  && tar --version >/dev/null \
   && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /app/package*.json ./

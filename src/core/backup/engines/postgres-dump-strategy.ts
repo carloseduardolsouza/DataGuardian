@@ -27,6 +27,7 @@ export function buildPostgresDumpRecoveryMessage(params: {
   const lines = [
     `Nenhum mecanismo compativel para dump PostgreSQL ${params.serverMajor} foi encontrado.`,
     `Runtimes tentados: ${runtimeList}`,
+    `A aplicacao tentou instalacao automatica de runtime/pg_dump quando possivel.`,
     `Solucoes:`,
     `1) Instale um runtime de container e deixe no PATH (docker/podman/nerdctl).`,
     `2) Ou instale pg_dump ${params.serverMajor} no host (ex.: postgresql-client-${params.serverMajor}).`,

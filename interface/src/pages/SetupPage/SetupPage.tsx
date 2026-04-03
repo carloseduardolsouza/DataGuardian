@@ -88,7 +88,7 @@ export default function SetupPage({ onSetup, theme, onToggleTheme }: Props) {
               type="password"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
-              placeholder="••••••••"
+              placeholder="Senha"
               autoComplete="new-password"
               disabled={loading}
             />
@@ -102,7 +102,7 @@ export default function SetupPage({ onSetup, theme, onToggleTheme }: Props) {
               type="password"
               value={confirmPassword}
               onChange={(event) => setConfirmPassword(event.target.value)}
-              placeholder="••••••••"
+              placeholder="Senha"
               autoComplete="new-password"
               disabled={loading}
             />
