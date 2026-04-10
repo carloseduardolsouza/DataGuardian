@@ -21,6 +21,12 @@
   margin-bottom: var(--space-3);
 }
 
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
 .title {
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-semi);
@@ -44,6 +50,26 @@
 .addBtn:hover {
   background: var(--color-primary);
   color: white;
+}
+
+.addBtnSecondary {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-surface-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  color: var(--color-text-muted);
+  transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
+}
+
+.addBtnSecondary:hover {
+  background: var(--color-primary-muted);
+  border-color: var(--color-primary);
+  color: var(--color-primary);
 }
 
 .addBtn svg {
@@ -139,6 +165,114 @@
   padding: var(--space-2);
 }
 
+.tree {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.rootItems {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-height: 12px;
+}
+
+.rootDropActive {
+  border-radius: var(--radius-md);
+  box-shadow: inset 0 0 0 2px var(--color-primary);
+  background: var(--color-primary-muted);
+}
+
+.folderSection {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+  overflow: hidden;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast), background var(--transition-fast);
+}
+
+.folderDropActive {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-primary-muted);
+  background: color-mix(in srgb, var(--color-primary-muted) 55%, var(--color-bg));
+}
+
+.folderHeader,
+.folderHeaderBtn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  background: transparent;
+  border: none;
+  color: var(--color-text);
+}
+
+.folderHeaderBtn {
+  cursor: pointer;
+  text-align: left;
+}
+
+.folderTitleWrap {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.folderTitle {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semi);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.folderHeaderActions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.folderCount {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  background: var(--color-surface-elevated);
+}
+
+.folderChevron {
+  color: var(--color-text-muted);
+  transition: transform var(--transition-fast);
+}
+
+.folderChevronOpen {
+  transform: rotate(0deg);
+}
+
+.folderHeaderBtn .folderChevron {
+  transform: rotate(-90deg);
+}
+
+.folderHeaderBtn .folderChevronOpen {
+  transform: rotate(0deg);
+}
+
+.folderItems {
+  padding: 0 var(--space-2) var(--space-2);
+}
+
+.folderEmpty {
+  padding: var(--space-3);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  border-top: 1px dashed var(--color-border);
+}
+
 /* ── Card de datasource ───────────────────────── */
 .card {
   padding: var(--space-3);
@@ -149,6 +283,7 @@
     background var(--transition-fast),
     border-color var(--transition-fast);
   margin-bottom: var(--space-1);
+  background: transparent;
 }
 
 .card:hover {
@@ -338,6 +473,30 @@
     background var(--transition-fast),
     color var(--transition-fast),
     border-color var(--transition-fast);
+}
+
+.orderBtn {
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  color: var(--color-text-muted);
+  transition: background var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
+}
+
+.orderBtn:hover:not(:disabled) {
+  background: var(--color-surface-elevated);
+  color: var(--color-text);
+}
+
+.orderBtn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .actionBtn:hover {

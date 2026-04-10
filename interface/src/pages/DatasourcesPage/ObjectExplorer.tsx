@@ -12,10 +12,11 @@ interface Props {
   onSelectTable: (table: ApiSchemaTable) => void;
   onRefresh:     () => void;
   onCreateTable?: (schemaName?: string) => void;
+  onCreateFolder?: () => void;
 }
 
 export default function ObjectExplorer({
-  datasource, schemas, loading, error, selectedTable, onSelectTable, onRefresh, onCreateTable,
+  datasource, schemas, loading, error, selectedTable, onSelectTable, onRefresh, onCreateTable, onCreateFolder,
 }: Props) {
   const [openSchemas, setOpenSchemas] = useState<Record<string, boolean>>({});
   const [openTables,  setOpenTables]  = useState<Record<string, boolean>>({});
@@ -35,7 +36,8 @@ export default function ObjectExplorer({
 
   const openMenu = (x: number, y: number, schemaName?: string) => {
     const menuWidth = 190;
-    const menuHeight = 46;
+    const actions = [onCreateFolder, onCreateTable].filter(Boolean).length || 1;
+    const menuHeight = 10 + (actions * 38);
     const nextX = Math.min(x, window.innerWidth - menuWidth - 8);
     const nextY = Math.min(y, window.innerHeight - menuHeight - 8);
     setMenu({ x: Math.max(8, nextX), y: Math.max(8, nextY), schemaName });
@@ -57,7 +59,7 @@ export default function ObjectExplorer({
   if (loading) {
     return (
       <div className={styles.panel}>
-        <ExplorerHeader datasource={datasource} onRefresh={onRefresh} />
+        <ExplorerHeader datasource={datasource} onRefresh={onRefresh} onCreateFolder={onCreateFolder} />
         <div className={styles.empty}>
           <SpinnerIcon width={24} height={24} />
           <p className={styles.emptyText}>Carregando schema...</p>
@@ -70,7 +72,7 @@ export default function ObjectExplorer({
   if (error) {
     return (
       <div className={styles.panel}>
-        <ExplorerHeader datasource={datasource} onRefresh={onRefresh} />
+        <ExplorerHeader datasource={datasource} onRefresh={onRefresh} onCreateFolder={onCreateFolder} />
         <div className={styles.empty}>
           <svg className={styles.emptyIcon} width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
             <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
@@ -86,7 +88,7 @@ export default function ObjectExplorer({
   if (schemas.length === 0) {
     return (
       <div className={styles.panel}>
-        <ExplorerHeader datasource={datasource} onRefresh={onRefresh} />
+        <ExplorerHeader datasource={datasource} onRefresh={onRefresh} onCreateFolder={onCreateFolder} />
         <div className={styles.empty}>
           <svg className={styles.emptyIcon} width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
             <ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4.03 3 9 3s9-1.34 9-3V5"/>
@@ -101,7 +103,7 @@ export default function ObjectExplorer({
   // ── Tree ─────────────────────────────────────────────────────────
   return (
     <div className={styles.panel}>
-      <ExplorerHeader datasource={datasource} onRefresh={onRefresh} />
+      <ExplorerHeader datasource={datasource} onRefresh={onRefresh} onCreateFolder={onCreateFolder} />
       <div className={styles.tree}>
         {schemas.map((schema, idx) => (
           <div key={schema.name}>
@@ -180,6 +182,16 @@ export default function ObjectExplorer({
           <button
             className={styles.contextAction}
             onClick={() => {
+              onCreateFolder?.();
+              setMenu(null);
+            }}
+            disabled={!onCreateFolder}
+          >
+            Criar pasta
+          </button>
+          <button
+            className={styles.contextAction}
+            onClick={() => {
               onCreateTable?.(menu.schemaName);
               setMenu(null);
             }}
@@ -193,16 +205,31 @@ export default function ObjectExplorer({
   );
 }
 
-function ExplorerHeader({ datasource, onRefresh }: { datasource: ApiDatasource; onRefresh: () => void }) {
+function ExplorerHeader({
+  datasource,
+  onRefresh,
+  onCreateFolder,
+}: {
+  datasource: ApiDatasource;
+  onRefresh: () => void;
+  onCreateFolder?: () => void;
+}) {
   return (
     <div className={styles.header}>
       <div className={styles.headerLeft}>
         <span className={styles.title}>Explorer</span>
         <span className={styles.dbName}>{datasource.name}</span>
       </div>
-      <button className={styles.refreshBtn} title="Atualizar schema" onClick={onRefresh}>
-        <RefreshIcon />
-      </button>
+      <div className={styles.headerActions}>
+        {onCreateFolder && (
+          <button className={styles.refreshBtn} title="Criar pasta" onClick={onCreateFolder}>
+            <CreateFolderIcon />
+          </button>
+        )}
+        <button className={styles.refreshBtn} title="Atualizar schema" onClick={onRefresh}>
+          <RefreshIcon />
+        </button>
+      </div>
     </div>
   );
 }
@@ -242,6 +269,16 @@ function RefreshIcon() {
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <polyline points="23 4 23 10 17 10"/>
       <path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/>
+    </svg>
+  );
+}
+
+function CreateFolderIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z" />
+      <path d="M12 11v6" />
+      <path d="M9 14h6" />
     </svg>
   );
 }

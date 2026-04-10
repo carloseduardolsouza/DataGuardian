@@ -1,7 +1,5 @@
 import { notifyError } from '../ui/feedback/Toast/notify';
 
-// Ã¢â€â‚¬Ã¢â€â‚¬ Types Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
-
 export type DatasourceType   = 'postgres' | 'mysql' | 'mariadb' | 'mongodb' | 'sqlserver' | 'sqlite' | 'files';
 export type DatasourceStatus = 'healthy' | 'warning' | 'critical' | 'unknown';
 export type DatasourceClassification = 'production' | 'staging' | 'homolog' | 'test' | 'development' | 'critical';
@@ -15,6 +13,9 @@ export interface ApiDatasource {
   status: DatasourceStatus;
   enabled: boolean;
   tags: string[];
+  folder_id: string | null;
+  folder_name: string | null;
+  sort_order: number;
   classification: DatasourceClassification | null;
   last_health_check_at: string | null;
   created_at: string;
@@ -23,6 +24,15 @@ export interface ApiDatasource {
 
 export interface ApiDatasourceDetail extends ApiDatasource {
   connection_config: Record<string, unknown>;
+}
+
+export interface ApiDatasourceFolder {
+  id: string;
+  name: string;
+  sort_order: number;
+  datasource_count: number;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface ApiStorageLocation {
@@ -90,6 +100,11 @@ export interface ApiCreateTableInput {
   schema_name?: string;
   if_not_exists?: boolean;
   columns: ApiCreateTableColumnInput[];
+}
+
+export interface ApiCreateFolderInput {
+  folder_name: string;
+  if_not_exists?: boolean;
 }
 
 export interface PaginatedResponse<T> {
@@ -822,6 +837,52 @@ export const datasourceApi = {
       method: 'POST',
       body: JSON.stringify(data),
     }),
+
+  createFolder: (id: string, data: ApiCreateFolderInput) =>
+    request<{ message: string; sql: string }>(`/datasources/${id}/folders`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  assignFolder: (id: string, folder_id: string | null) =>
+    request<ApiDatasource>(`/datasources/${id}/folder`, {
+      method: 'PUT',
+      body: JSON.stringify({ folder_id }),
+    }),
+
+  reorder: (data: { folder_id: string | null; ordered_ids: string[] }) =>
+    request<PaginatedResponse<ApiDatasource>>('/datasources/reorder/group', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+};
+
+export const datasourceFoldersApi = {
+  list: () =>
+    request<{ data: ApiDatasourceFolder[] }>('/datasource-folders'),
+
+  create: (data: { name: string }) =>
+    request<ApiDatasourceFolder>('/datasource-folders', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  update: (id: string, data: { name: string }) =>
+    request<ApiDatasourceFolder>(`/datasource-folders/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  remove: (id: string) =>
+    request<{ message: string }>(`/datasource-folders/${id}`, {
+      method: 'DELETE',
+    }),
+
+  reorder: (ordered_ids: string[]) =>
+    request<{ data: ApiDatasourceFolder[] }>('/datasource-folders/reorder', {
+      method: 'PUT',
+      body: JSON.stringify({ ordered_ids }),
+    }),
 };
 
 // Ã¢â€â‚¬Ã¢â€â‚¬ Storage Locations API Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
@@ -1496,8 +1557,6 @@ export const criticalApprovalsApi = {
       body: JSON.stringify(data ?? {}),
     }),
 };
-
-// Ã¢â€â‚¬Ã¢â€â‚¬ System Settings API Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
 export const systemApi = {
   list: () =>

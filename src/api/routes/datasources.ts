@@ -34,8 +34,22 @@ const createDatasourceTableSchema = z.object({
   ).min(1),
 });
 
+const createDatasourceFolderSchema = z.object({
+  folder_name: z.string().min(1).max(128),
+  if_not_exists: z.boolean().optional(),
+});
+
 const executeDatasourceQuerySchema = z.object({
   sql: z.string().trim().min(1),
+});
+
+const updateDatasourceFolderSchema = z.object({
+  folder_id: z.string().uuid().nullable(),
+});
+
+const reorderDatasourcesSchema = z.object({
+  folder_id: z.string().uuid().nullable(),
+  ordered_ids: z.array(z.string().uuid()).min(1),
 });
 
 datasourcesRouter.get(
@@ -88,4 +102,22 @@ datasourcesRouter.post(
   requireScopedPermission(PERMISSIONS.DATASOURCES_QUERY, (req) => ({ resource_type: 'datasource', resource_id: String(req.params.id) })),
   validate(createDatasourceTableSchema),
   DatasourceController.createTable,
+);
+datasourcesRouter.post(
+  '/:id/folders',
+  requireScopedPermission(PERMISSIONS.DATASOURCES_QUERY, (req) => ({ resource_type: 'datasource', resource_id: String(req.params.id) })),
+  validate(createDatasourceFolderSchema),
+  DatasourceController.createFolder,
+);
+datasourcesRouter.put(
+  '/:id/folder',
+  requireScopedPermission(PERMISSIONS.DATASOURCES_WRITE, (req) => ({ resource_type: 'datasource', resource_id: String(req.params.id) })),
+  validate(updateDatasourceFolderSchema),
+  DatasourceController.updateFolder,
+);
+datasourcesRouter.put(
+  '/reorder/group',
+  requirePermission(PERMISSIONS.DATASOURCES_WRITE),
+  validate(reorderDatasourcesSchema),
+  DatasourceController.reorder,
 );

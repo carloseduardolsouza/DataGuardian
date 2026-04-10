@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { backupsApi, datasourceApi } from '../../services/api';
+import { backupsApi, datasourceApi, datasourceFoldersApi } from '../../services/api';
 import type {
   ApiBackupDatasourceSummary,
   ApiBackupEntry,
   ApiDatasource,
   ApiDatasourceDetail,
+  ApiDatasourceFolder,
   ApiSchema,
   ApiSchemaTable,
 } from '../../services/api';
@@ -14,6 +15,8 @@ import { useCriticalAction } from '../../hooks/useCriticalAction';
 import DatasourceList from './DatasourceList';
 import AddDatasourceModal from './AddDatasourceModal';
 import CreateTableModal from './CreateTableModal';
+import CreateFolderModal from './CreateFolderModal';
+import CreateDatasourceFolderModal from './CreateDatasourceFolderModal';
 import ObjectExplorer from './ObjectExplorer';
 import MainPanel from './MainPanel';
 import ConfirmDialog from '../../ui/dialogs/ConfirmDialog/ConfirmDialog';
@@ -302,6 +305,7 @@ export default function DatasourcesPage({ isAdmin = false }: { isAdmin?: boolean
   const navigate = useNavigate();
   const [isDesktop, setIsDesktop] = useState(() => window.innerWidth > 1200);
   const [datasources, setDatasources] = useState<ApiDatasource[]>([]);
+  const [folders, setFolders] = useState<ApiDatasourceFolder[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -310,9 +314,13 @@ export default function DatasourcesPage({ isAdmin = false }: { isAdmin?: boolean
   const [loadingDetail, setLoadingDetail] = useState(false);
 
   const [showModal, setShowModal] = useState(false);
+  const [showDatasourceFolderModal, setShowDatasourceFolderModal] = useState(false);
+  const [editingFolder, setEditingFolder] = useState<ApiDatasourceFolder | null>(null);
+  const [deletingFolder, setDeletingFolder] = useState<ApiDatasourceFolder | null>(null);
   const [editData, setEditData] = useState<ApiDatasourceDetail | null>(null);
   const [tableModalDs, setTableModalDs] = useState<ApiDatasource | null>(null);
   const [tableModalSchema, setTableModalSchema] = useState<string | null>(null);
+  const [folderModalDs, setFolderModalDs] = useState<ApiDatasource | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<ApiDatasource | null>(null);
   const [deleting, setDeleting] = useState(false);
 
@@ -376,8 +384,12 @@ export default function DatasourcesPage({ isAdmin = false }: { isAdmin?: boolean
     try {
       setLoading(true);
       setError(null);
-      const res = await datasourceApi.list();
-      setDatasources(res.data);
+      const [datasourceRes, folderRes] = await Promise.all([
+        datasourceApi.list(),
+        datasourceFoldersApi.list(),
+      ]);
+      setDatasources(datasourceRes.data);
+      setFolders(folderRes.data);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao carregar datasources');
     } finally {
@@ -517,6 +529,20 @@ export default function DatasourcesPage({ isAdmin = false }: { isAdmin?: boolean
     setShowModal(true);
   };
 
+  const handleOpenDatasourceFolderModal = () => {
+    setEditingFolder(null);
+    setShowDatasourceFolderModal(true);
+  };
+
+  const handleEditFolder = (folder: ApiDatasourceFolder) => {
+    setEditingFolder(folder);
+    setShowDatasourceFolderModal(true);
+  };
+
+  const handleDeleteFolder = (folder: ApiDatasourceFolder) => {
+    setDeletingFolder(folder);
+  };
+
   const handleEdit = useCallback(
     async (ds: ApiDatasource) => {
       try {
@@ -616,6 +642,82 @@ export default function DatasourcesPage({ isAdmin = false }: { isAdmin?: boolean
     setTableModalDs(ds);
     setTableModalSchema(schemaName ?? null);
   }, []);
+
+  const handleOpenCreateFolder = useCallback((ds: ApiDatasource) => {
+    if (ds.type !== 'postgres') {
+      alert(`Criacao de pasta nao suportada para datasource do tipo '${ds.type}'.`);
+      return;
+    }
+    setFolderModalDs(ds);
+  }, []);
+
+  const handleMoveDatasource = useCallback(async (datasourceId: string, folderId: string | null) => {
+    try {
+      setError(null);
+      await datasourceApi.assignFolder(datasourceId, folderId);
+      if (selectedDs?.id === datasourceId) {
+        const nextSelected = datasources.find((item) => item.id === datasourceId);
+        if (nextSelected) setSelectedDs({ ...nextSelected, folder_id: folderId });
+      }
+      await loadDatasources();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao mover datasource');
+      await loadDatasources();
+    }
+  }, [datasources, loadDatasources, selectedDs?.id]);
+
+  const handleReorderFolder = useCallback(async (folderId: string, direction: 'up' | 'down') => {
+    const index = folders.findIndex((folder) => folder.id === folderId);
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    if (index < 0 || targetIndex < 0 || targetIndex >= folders.length) return;
+
+    const ordered = [...folders];
+    const [item] = ordered.splice(index, 1);
+    ordered.splice(targetIndex, 0, item);
+
+    try {
+      setError(null);
+      await datasourceFoldersApi.reorder(ordered.map((folder) => folder.id));
+      await loadDatasources();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao reordenar pasta');
+    }
+  }, [folders, loadDatasources]);
+
+  const handleReorderDatasource = useCallback(async (
+    datasourceId: string,
+    folderId: string | null,
+    direction: 'up' | 'down',
+  ) => {
+    const group = datasources.filter((item) => item.folder_id === folderId);
+    const index = group.findIndex((item) => item.id === datasourceId);
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    if (index < 0 || targetIndex < 0 || targetIndex >= group.length) return;
+
+    const ordered = [...group];
+    const [item] = ordered.splice(index, 1);
+    ordered.splice(targetIndex, 0, item);
+
+    try {
+      setError(null);
+      await datasourceApi.reorder({ folder_id: folderId, ordered_ids: ordered.map((entry) => entry.id) });
+      await loadDatasources();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao reordenar datasource');
+    }
+  }, [datasources, loadDatasources]);
+
+  const confirmDeleteFolder = useCallback(async () => {
+    if (!deletingFolder) return;
+    try {
+      setError(null);
+      await datasourceFoldersApi.remove(deletingFolder.id);
+      setDeletingFolder(null);
+      await loadDatasources();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao excluir pasta');
+    }
+  }, [deletingFolder, loadDatasources]);
 
   const closeRestoreModal = () => {
     if (restoreSubmitting) return;
@@ -781,14 +883,21 @@ export default function DatasourcesPage({ isAdmin = false }: { isAdmin?: boolean
       <div className={styles.leftPanel} style={isDesktop ? { width: listPane.width } : undefined}>
         <DatasourceList
           datasources={datasources}
+          folders={folders}
           selectedId={selectedDs?.id ?? null}
           onSelect={handleSelect}
           onContextMenu={(datasource, x, y) => {
             setContextMenu({ datasource, x, y });
           }}
           onAddNew={handleAddNew}
+          onAddFolder={handleOpenDatasourceFolderModal}
           onEdit={handleEdit}
           onDelete={handleDelete}
+          onEditFolder={handleEditFolder}
+          onDeleteFolder={handleDeleteFolder}
+          onMoveDatasource={handleMoveDatasource}
+          onReorderFolder={handleReorderFolder}
+          onReorderDatasource={handleReorderDatasource}
           loading={loading}
           error={error}
         />
@@ -850,6 +959,7 @@ export default function DatasourcesPage({ isAdmin = false }: { isAdmin?: boolean
                 selectedTable={selectedTable}
                 onSelectTable={setSelectedTable}
                 onRefresh={() => void loadSchema(selectedDs, detail, true)}
+                onCreateFolder={selectedDs.type === 'postgres' ? () => handleOpenCreateFolder(selectedDs) : undefined}
                 onCreateTable={(schemaName) => handleOpenCreateTable(selectedDs, schemaName)}
               />
             </div>
@@ -889,6 +999,17 @@ export default function DatasourcesPage({ isAdmin = false }: { isAdmin?: boolean
         />
       )}
 
+      {showDatasourceFolderModal && (
+        <CreateDatasourceFolderModal
+          folder={editingFolder}
+          onClose={() => {
+            setShowDatasourceFolderModal(false);
+            setEditingFolder(null);
+          }}
+          onCreated={loadDatasources}
+        />
+      )}
+
       {tableModalDs && (
         <CreateTableModal
           datasource={tableModalDs}
@@ -908,6 +1029,21 @@ export default function DatasourcesPage({ isAdmin = false }: { isAdmin?: boolean
         />
       )}
 
+      {folderModalDs && (
+        <CreateFolderModal
+          datasource={folderModalDs}
+          onClose={() => setFolderModalDs(null)}
+          onCreated={async () => {
+            if (selectedDs?.id === folderModalDs.id) {
+              await loadSchema(selectedDs, detail, true);
+            }
+            if (selectedDs?.id !== folderModalDs.id) {
+              await handleSelect(folderModalDs);
+            }
+          }}
+        />
+      )}
+
       <ConfirmDialog
         open={Boolean(deleteTarget)}
         title="Confirmar exclusao de datasource"
@@ -918,6 +1054,15 @@ export default function DatasourcesPage({ isAdmin = false }: { isAdmin?: boolean
           if (!deleting) setDeleteTarget(null);
         }}
         onConfirm={() => void confirmDelete()}
+      />
+
+      <ConfirmDialog
+        open={Boolean(deletingFolder)}
+        title="Confirmar exclusao de pasta"
+        message={deletingFolder ? `Deseja excluir a pasta "${deletingFolder.name}"? Todos os bancos dentro dela voltarao para a raiz.` : ''}
+        confirmLabel="Excluir pasta"
+        onClose={() => setDeletingFolder(null)}
+        onConfirm={() => void confirmDeleteFolder()}
       />
 
       {contextMenu && (

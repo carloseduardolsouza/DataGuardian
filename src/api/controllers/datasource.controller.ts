@@ -9,6 +9,9 @@ import {
   getDatasourceSchema,
   executeDatasourceQuery,
   createDatasourceTable,
+  createDatasourceFolder,
+  assignDatasourceFolder,
+  reorderDatasources,
 } from '../models/datasource.model';
 import { getPaginationParams, buildPaginatedResponse } from '../../utils/config';
 import { getScopedFilter } from '../middlewares/auth';
@@ -95,6 +98,34 @@ export const DatasourceController = {
     try {
       const table = await createDatasourceTable(String(req.params.id), req.body);
       res.status(201).json(table);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async createFolder(req: Request, res: Response, next: NextFunction) {
+    try {
+      const folder = await createDatasourceFolder(String(req.params.id), req.body);
+      res.status(201).json(folder);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async updateFolder(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { folder_id } = req.body as { folder_id: string | null };
+      const datasource = await assignDatasourceFolder(String(req.params.id), folder_id ?? null);
+      res.json(datasource);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async reorder(req: Request, res: Response, next: NextFunction) {
+    try {
+      const result = await reorderDatasources(req.body);
+      res.json(result);
     } catch (err) {
       next(err);
     }

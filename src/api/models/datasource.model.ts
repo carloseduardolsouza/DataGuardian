@@ -28,6 +28,9 @@ export function formatDatasource(ds: {
   status: DatasourceStatus;
   enabled: boolean;
   tags: string[];
+  folderId?: string | null;
+  folder?: { id: string; name: string } | null;
+  sortOrder?: number;
   lastHealthCheckAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
@@ -40,6 +43,9 @@ export function formatDatasource(ds: {
     status:               ds.status,
     enabled:              ds.enabled,
     tags:                 normalizedTags,
+    folder_id:            ds.folder?.id ?? ds.folderId ?? null,
+    folder_name:          ds.folder?.name ?? null,
+    sort_order:           ds.sortOrder ?? 0,
     classification:       resolveDatasourceClassification(normalizedTags),
     last_health_check_at: ds.lastHealthCheckAt?.toISOString() ?? null,
     created_at:           ds.createdAt.toISOString(),
@@ -87,6 +93,11 @@ export interface CreateDatasourceTableData {
   schema_name?: string;
   if_not_exists?: boolean;
   columns: CreateDatasourceTableColumnData[];
+}
+
+export interface CreateDatasourceFolderData {
+  folder_name: string;
+  if_not_exists?: boolean;
 }
 
 type JsonMap = Record<string, unknown>;
@@ -438,6 +449,26 @@ function buildCreateTableSql(
   return `CREATE TABLE${ifNotExists ? ' IF NOT EXISTS' : ''} ${qualifiedTableName} (${columnSql.join(', ')});`;
 }
 
+function buildCreateFolderSql(
+  datasourceType: string,
+  payload: CreateDatasourceFolderData,
+) {
+  if (datasourceType !== 'postgres') {
+    throw new AppError(
+      'FOLDER_CREATE_NOT_SUPPORTED',
+      422,
+      `Criacao de pasta nao suportada para datasource '${datasourceType}'.`,
+    );
+  }
+
+  const folderName = payload.folder_name.trim();
+  if (!folderName) {
+    throw new AppError('INVALID_FOLDER_NAME', 422, 'Nome da pasta nao pode ser vazio');
+  }
+
+  return `CREATE SCHEMA${payload.if_not_exists !== false ? ' IF NOT EXISTS' : ''} ${quoteIdentifier(folderName, datasourceType)};`;
+}
+
 // ──────────────────────────────────────────
 // Model functions
 // ──────────────────────────────────────────
@@ -464,11 +495,14 @@ export async function listDatasources(
       where,
       skip,
       take: limit,
-      orderBy: { createdAt: 'desc' },
+      orderBy: [{ folderId: 'asc' }, { sortOrder: 'asc' }, { name: 'asc' }],
       select: {
         id: true, name: true, type: true, status: true,
         enabled: true, tags: true, lastHealthCheckAt: true,
+        sortOrder: true,
         createdAt: true, updatedAt: true,
+        folderId: true,
+        folder: { select: { id: true, name: true } },
       },
     }),
     prisma.datasource.count({ where }),
@@ -479,6 +513,7 @@ export async function listDatasources(
 
 export async function createDatasource(data: CreateDatasourceData) {
   const normalizedTags = normalizeDatasourceTags(data.tags ?? []);
+  const sortOrder = await prisma.datasource.count({ where: { folderId: null } });
   const datasource = await prisma.datasource.create({
     data: {
       name:             data.name,
@@ -487,6 +522,7 @@ export async function createDatasource(data: CreateDatasourceData) {
       status:           'unknown',
       enabled:          data.enabled,
       tags:             normalizedTags,
+      sortOrder,
     },
   });
 
@@ -494,7 +530,10 @@ export async function createDatasource(data: CreateDatasourceData) {
 }
 
 export async function findDatasourceById(id: string) {
-  const datasource = await prisma.datasource.findUniqueOrThrow({ where: { id } });
+  const datasource = await prisma.datasource.findUniqueOrThrow({
+    where: { id },
+    include: { folder: { select: { id: true, name: true } } },
+  });
   return {
     ...formatDatasource(datasource),
     connection_config: maskCredentials(datasource.connectionConfig as Record<string, unknown>),
@@ -526,6 +565,7 @@ export async function updateDatasource(id: string, data: UpdateDatasourceData) {
       ...(data.enabled           !== undefined && { enabled: data.enabled }),
       ...(data.tags              !== undefined && { tags: normalizeDatasourceTags(data.tags) }),
     },
+    include: { folder: { select: { id: true, name: true } } },
   });
 
   return formatDatasource(updated);
@@ -667,4 +707,70 @@ export async function createDatasourceTable(id: string, data: CreateDatasourceTa
     message: `Tabela '${data.table_name}' criada com sucesso`,
     sql,
   };
+}
+
+export async function createDatasourceFolder(id: string, data: CreateDatasourceFolderData) {
+  const datasource = await prisma.datasource.findUniqueOrThrow({ where: { id } });
+  const datasourceType = String(datasource.type);
+  const sql = buildCreateFolderSql(datasourceType, data);
+
+  try {
+    await executeDatasourceQuery(id, sql);
+  } catch (err) {
+    throw mapDatasourceRuntimeError(err, datasourceType, 'query');
+  }
+
+  return {
+    message: `Pasta '${data.folder_name}' criada com sucesso`,
+    sql,
+  };
+}
+
+export async function assignDatasourceFolder(datasourceId: string, folderId: string | null) {
+  if (folderId) {
+    await prisma.datasourceFolder.findUniqueOrThrow({ where: { id: folderId } });
+  }
+
+  const datasource = await prisma.$transaction(async (tx) => {
+    const current = await tx.datasource.findUniqueOrThrow({
+      where: { id: datasourceId },
+      select: { id: true, folderId: true },
+    });
+    const nextSortOrder = await tx.datasource.count({ where: { folderId } });
+
+    return tx.datasource.update({
+      where: { id: datasourceId },
+      data: {
+        folderId,
+        sortOrder: nextSortOrder,
+      },
+      include: { folder: { select: { id: true, name: true } } },
+    });
+  });
+
+  return formatDatasource(datasource);
+}
+
+export async function reorderDatasources(input: { folder_id: string | null; ordered_ids: string[] }) {
+  const orderedIds = [...new Set(input.ordered_ids.map((id) => id.trim()).filter(Boolean))];
+  const where = { folderId: input.folder_id };
+  const datasources = await prisma.datasource.findMany({
+    where,
+    select: { id: true },
+    orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+  });
+
+  if (orderedIds.length !== datasources.length || orderedIds.some((id) => !datasources.find((item) => item.id === id))) {
+    throw new AppError('VALIDATION_ERROR', 422, 'ordered_ids deve conter todos os datasources do grupo exatamente uma vez');
+  }
+
+  await prisma.$transaction(
+    orderedIds.map((id, index) =>
+      prisma.datasource.update({
+        where: { id },
+        data: { sortOrder: index },
+      })),
+  );
+
+  return listDatasources({}, 0, 1000);
 }

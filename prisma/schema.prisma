@@ -158,9 +158,12 @@ model Datasource {
   lastHealthCheckAt  DateTime?        @map("last_health_check_at")
   enabled            Boolean          @default(true)
   tags               String[]
+  folderId           String?          @map("folder_id")
+  sortOrder          Int              @default(0) @map("sort_order")
   createdAt          DateTime         @default(now()) @map("created_at")
   updatedAt          DateTime         @updatedAt @map("updated_at")
 
+  folder           DatasourceFolder? @relation(fields: [folderId], references: [id], onDelete: SetNull)
   backupJobs       BackupJob[]
   healthChecks     HealthCheck[]
   backupExecutions BackupExecution[]
@@ -171,7 +174,20 @@ model Datasource {
   restoreDrillJobs RestoreDrillJob[]
   restoreDrillExecutions RestoreDrillExecution[]
 
+  @@index([folderId])
   @@map("datasources")
+}
+
+model DatasourceFolder {
+  id        String       @id @default(uuid())
+  name      String       @db.VarChar(120)
+  sortOrder Int          @default(0) @map("sort_order")
+  createdAt DateTime     @default(now()) @map("created_at")
+  updatedAt DateTime     @updatedAt @map("updated_at")
+
+  datasources Datasource[]
+
+  @@map("datasource_folders")
 }
 
 model StorageLocation {

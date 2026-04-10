@@ -10,6 +10,7 @@ import { requestLogger } from './middlewares/logger';
 import { errorHandler } from './middlewares/error-handler';
 
 import { datasourcesRouter } from './routes/datasources';
+import { datasourceFoldersRouter } from './routes/datasource-folders';
 import { storageLocationsRouter } from './routes/storage-locations';
 import { backupJobsRouter } from './routes/backup-jobs';
 import { dbSyncJobsRouter } from './routes/db-sync-jobs';
@@ -89,6 +90,7 @@ export function createApp() {
   scopedApp.use('/api/auth', authRouter);
   scopedApp.use('/api', requireAuth);
   scopedApp.use('/api/datasources', datasourcesRouter);
+  scopedApp.use('/api/datasource-folders', datasourceFoldersRouter);
   scopedApp.use('/api/storage-locations', storageLocationsRouter);
   scopedApp.use('/api/backup-jobs', backupJobsRouter);
   scopedApp.use('/api/db-sync-jobs', dbSyncJobsRouter);
